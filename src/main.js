@@ -154,8 +154,8 @@ function registerAtlasSprites(atlas) {
     g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#7da8ff');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + r, y + r, r, 0, Math.PI * 2); ctx.fill();
   });
-  atlas.pack('flipper', 108, 22, (ctx, x, y) => {
-    ctx.fillStyle = '#54d9ff'; ctx.beginPath(); ctx.roundRect(x, y, 108, 22, 11); ctx.fill();
+  atlas.pack('flipper', 84, 20, (ctx, x, y) => {
+    ctx.fillStyle = '#54d9ff'; ctx.beginPath(); ctx.roundRect(x, y, 84, 20, 10); ctx.fill();
   });
   atlas.pack('wall', 20, 20, (ctx, x, y) => {
     ctx.fillStyle = '#5476cb'; ctx.fillRect(x, y, 20, 20);
@@ -163,7 +163,8 @@ function registerAtlasSprites(atlas) {
 }
 
 const state = { mode: 'ready', balls: 3, ballLostTimer: 0, fps: 0, fpsS: 0, fpsN: 0 };
-const ball = { x: 450, y: 718, vx: 0, vy: 0, r: 13, active: false };
+const START_POS = { x: 430, y: 150 };
+const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: 13, active: false };
 
 const walls = [
   { x: 25, y: 25, w: 10, h: 740 },
@@ -172,20 +173,20 @@ const walls = [
 ];
 
 const rails = [
-  { x1: 25, y1: 620, x2: 170, y2: 700, r: 10, restitution: 0.45, friction: 0.985 },
-  { x1: 475, y1: 620, x2: 330, y2: 700, r: 10, restitution: 0.45, friction: 0.985 },
+  { x1: 25, y1: 640, x2: 135, y2: 700, r: 10, restitution: 0.45, friction: 0.985 },
+  { x1: 475, y1: 640, x2: 365, y2: 700, r: 10, restitution: 0.45, friction: 0.985 },
 ];
 
 const flippers = {
-  left: { pivot: { x: 180, y: 715 }, length: 105, radius: 9, base: 0.22, active: -0.45, angle: 0.22, prev: 0.22, upImpulse: 250 },
-  right: { pivot: { x: 320, y: 715 }, length: 105, radius: 9, base: Math.PI - 0.22, active: Math.PI + 0.45, angle: Math.PI - 0.22, prev: Math.PI - 0.22, upImpulse: 250 },
+  left: { pivot: { x: 195, y: 715 }, length: 82, radius: 9, base: 0.22, active: -0.45, angle: 0.22, prev: 0.22, upImpulse: 250 },
+  right: { pivot: { x: 305, y: 715 }, length: 82, radius: 9, base: Math.PI - 0.22, active: Math.PI + 0.45, angle: Math.PI - 0.22, prev: Math.PI - 0.22, upImpulse: 250 },
 };
 
 const drain = { x0: 220, x1: 280, y: 760 };
 const input = { left: false, right: false, launchTap: false, pointerSide: 0 };
 
-function resetToReady() { ball.x = 450; ball.y = 718; ball.vx = 0; ball.vy = 0; ball.active = false; state.mode = 'ready'; }
-function launchBall() { ball.active = true; ball.vx = -70; ball.vy = -760; state.mode = 'playing'; }
+function resetToReady() { ball.x = START_POS.x; ball.y = START_POS.y; ball.vx = 0; ball.vy = 0; ball.active = false; state.mode = 'ready'; }
+function launchBall() { ball.active = true; ball.vx = -170; ball.vy = 90; state.mode = 'playing'; }
 function restartGame() { state.balls = 3; state.mode = 'ready'; state.ballLostTimer = 0; resetToReady(); }
 
 addEventListener('keydown', (e) => {
@@ -291,7 +292,7 @@ function update(dt) {
   flippers.right.angle += ((input.right ? flippers.right.active : flippers.right.base) - flippers.right.angle) * 0.4;
 
   if (state.mode === 'ready') {
-    ball.x = 450; ball.y = 718;
+    ball.x = START_POS.x; ball.y = START_POS.y;
     if (input.launchTap) launchBall();
   } else if (state.mode === 'playing' && ball.active) {
     const speed = len2(ball.vx, ball.vy);
