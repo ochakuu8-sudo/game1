@@ -68,7 +68,7 @@ function registerAtlasSprites(atlas) {
 }
 
 const state = { mode: 'ready', balls: 3, ballLostTimer: 0, fps: 0, fpsS: 0, fpsN: 0, round: 1, quota: 3000, totalScore: 0, roundScore: 0, exp: 0, level: 1, levelUpsPending: 0 };
-const START_POS = { x: 430, y: 720 };
+const START_POS = { x: 430, y: 690 };
 const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: 13, active: false };
 const input = { left: false, right: false, launchTap: false, pointerSide: 0 };
 
@@ -87,7 +87,28 @@ for (let r = 0; r < GRID.rows; r += 1) { const row = []; for (let c = 0; c < GRI
 
 const walls = [{ x: 25, y: 25, w: 10, h: 740 }, { x: 465, y: 25, w: 10, h: 740 }, { x: 25, y: 25, w: 450, h: 10 }];
 const rails = [{ x1: 25, y1: 620, x2: 180, y2: 715, r: 10, restitution: 0.45, friction: 0.985 }, { x1: 475, y1: 620, x2: 320, y2: 715, r: 10, restitution: 0.45, friction: 0.985 }];
-const flippers = { left: { pivot: { x: 180, y: 715 }, length: 110, radius: 9, base: 0.22, active: -0.55, angle: 0.22, prev: 0.22, upImpulse: 900 }, right: { pivot: { x: 320, y: 715 }, length: 110, radius: 9, base: Math.PI - 0.22, active: Math.PI + 0.55, angle: Math.PI - 0.22, prev: Math.PI - 0.22, upImpulse: 900 } };
+const flippers = {
+  left: {
+    pivot: { x: 185, y: 720 },
+    length: 90,
+    radius: 9,
+    base: 0.18,
+    active: -0.70,
+    angle: 0.18,
+    prev: 0.18,
+    upImpulse: 900,
+  },
+  right: {
+    pivot: { x: 315, y: 720 },
+    length: 90,
+    radius: 9,
+    base: Math.PI - 0.18,
+    active: Math.PI + 0.70,
+    angle: Math.PI - 0.18,
+    prev: Math.PI - 0.18,
+    upImpulse: 900,
+  },
+};
 const drain = { x0: 220, x1: 280, y: 760 };
 const maxBuildings = 8;
 
@@ -95,7 +116,7 @@ function getNextExp() { return 5 + state.level * 3; }
 function updateQuota() { state.quota = Math.floor(3000 * Math.pow(1.75, state.round - 1)); }
 function resetGridOccupancy() { for (const row of grid) for (const cell of row) cell.occupiedBy = null; buildings.length = 0; orbs.length = 0; }
 function resetToReady() { ball.x = START_POS.x; ball.y = START_POS.y; ball.vx = 0; ball.vy = 0; ball.active = false; state.mode = 'ready'; }
-function launchBall() { ball.active = true; ball.vx = -110; ball.vy = -900; state.mode = 'playing'; }
+function launchBall() { ball.active = true; ball.vx = -90; ball.vy = -820; state.mode = 'playing'; }
 function clearRound() { resetGridOccupancy(); for (const card of ownedCards) card.cooldownTimer = randRange(card.cooldownSec * 0.7, card.cooldownSec * 1.2); trySpawnFromCard(ownedCards.find((c) => c.id === 'house') || ownedCards[0], true); trySpawnFromCard(ownedCards.find((c) => c.id === 'convenience') || ownedCards[0], true); }
 function beginRound(round) { state.round = round; state.roundScore = 0; state.balls = 3; updateQuota(); clearRound(); resetToReady(); }
 function restartRun() { state.totalScore = 0; state.exp = 0; state.level = 1; state.levelUpsPending = 0; ownedCards.length = 0; ownedCards.push(structuredClone(cardPool.get('house')), structuredClone(cardPool.get('convenience'))); beginRound(1); }
