@@ -5,13 +5,39 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Hybrid Pinball (Canvas2D + WebGL Atlas)</title>
     <style>
-      :root { color-scheme: dark; }
-      body { margin: 0; background: #0b1020; display: grid; place-items: center; min-height: 100vh; font-family: system-ui, sans-serif; }
-      #wrap { position: relative; width: min(92vw, 520px); aspect-ratio: 10 / 16; border: 1px solid #2f3a67; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
-      canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        background-color: #0876b9;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, .08) 2px, transparent 2px),
+          linear-gradient(90deg, rgba(255, 255, 255, .08) 2px, transparent 2px),
+          radial-gradient(circle at 50% 20%, rgba(104, 228, 255, .42), transparent 36vw),
+          linear-gradient(180deg, #16a8df, #0767a8 68%, #034b82);
+        background-size: 32px 32px, 32px 32px, auto, auto;
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      }
+      #wrap {
+        position: relative;
+        width: min(92vw, 520px);
+        aspect-ratio: 10 / 16;
+        overflow: hidden;
+        background: #123452;
+        border: 8px solid #f8deb0;
+        border-radius: 0;
+        box-shadow:
+          0 0 0 4px #123452,
+          0 0 0 8px #176aa3,
+          0 24px 0 rgba(4, 25, 42, .30),
+          0 34px 72px rgba(2, 25, 45, .44),
+          inset 0 0 0 4px #fff5cf;
+      }
+      canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: auto; }
       #gl { z-index: 1; }
       #ui { z-index: 2; pointer-events: none; }
-      #hint { position: fixed; bottom: 12px; color: #adb7ff; opacity: .9; font-size: 12px; }
     </style>
   </head>
   <body>
@@ -19,7 +45,6 @@
       <canvas id="gl"></canvas>
       <canvas id="ui"></canvas>
     </div>
-    <div id="hint">←/→ or A/D でフリッパー。Space で打ち出し。</div>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>
