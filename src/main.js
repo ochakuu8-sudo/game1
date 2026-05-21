@@ -68,7 +68,7 @@ function registerAtlasSprites(atlas) {
 }
 
 const state = { mode: 'ready', balls: 3, ballLostTimer: 0, fps: 0, fpsS: 0, fpsN: 0, round: 1, quota: 3000, totalScore: 0, roundScore: 0, exp: 0, level: 1, levelUpsPending: 0 };
-const START_POS = { x: 430, y: 150 };
+const START_POS = { x: 430, y: 720 };
 const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: 13, active: false };
 const input = { left: false, right: false, launchTap: false, pointerSide: 0 };
 
@@ -86,17 +86,17 @@ const grid = []; let nextBuildingId = 1; const buildings = []; const orbs = []; 
 for (let r = 0; r < GRID.rows; r += 1) { const row = []; for (let c = 0; c < GRID.cols; c += 1) row.push({ tags: [ZONE_TEMPLATE[r][c]], occupiedBy: null }); grid.push(row); }
 
 const walls = [{ x: 25, y: 25, w: 10, h: 740 }, { x: 465, y: 25, w: 10, h: 740 }, { x: 25, y: 25, w: 450, h: 10 }];
-const rails = [{ x1: 25, y1: 640, x2: 135, y2: 700, r: 10, restitution: 0.45, friction: 0.985 }, { x1: 475, y1: 640, x2: 365, y2: 700, r: 10, restitution: 0.45, friction: 0.985 }];
-const flippers = { left: { pivot: { x: 195, y: 715 }, length: 82, radius: 9, base: 0.22, active: -0.45, angle: 0.22, prev: 0.22, upImpulse: 250 }, right: { pivot: { x: 305, y: 715 }, length: 82, radius: 9, base: Math.PI - 0.22, active: Math.PI + 0.45, angle: Math.PI - 0.22, prev: Math.PI - 0.22, upImpulse: 250 } };
+const rails = [{ x1: 25, y1: 620, x2: 180, y2: 715, r: 10, restitution: 0.45, friction: 0.985 }, { x1: 475, y1: 620, x2: 320, y2: 715, r: 10, restitution: 0.45, friction: 0.985 }];
+const flippers = { left: { pivot: { x: 180, y: 715 }, length: 110, radius: 9, base: 0.22, active: -0.55, angle: 0.22, prev: 0.22, upImpulse: 780 }, right: { pivot: { x: 320, y: 715 }, length: 110, radius: 9, base: Math.PI - 0.22, active: Math.PI + 0.55, angle: Math.PI - 0.22, prev: Math.PI - 0.22, upImpulse: 780 } };
 const drain = { x0: 220, x1: 280, y: 760 };
-const maxBuildings = 18;
+const maxBuildings = 12;
 
 function getNextExp() { return 5 + state.level * 3; }
 function updateQuota() { state.quota = Math.floor(3000 * Math.pow(1.75, state.round - 1)); }
 function resetGridOccupancy() { for (const row of grid) for (const cell of row) cell.occupiedBy = null; buildings.length = 0; orbs.length = 0; }
 function resetToReady() { ball.x = START_POS.x; ball.y = START_POS.y; ball.vx = 0; ball.vy = 0; ball.active = false; state.mode = 'ready'; }
-function launchBall() { ball.active = true; ball.vx = -170; ball.vy = 90; state.mode = 'playing'; }
-function clearRound() { resetGridOccupancy(); for (const card of ownedCards) card.cooldownTimer = randRange(0, card.cooldownSec); for (let i = 0; i < 3; i += 1) trySpawnFromCard(ownedCards.find((c) => c.id === 'house') || ownedCards[0], true); trySpawnFromCard(ownedCards.find((c) => c.id === 'convenience') || ownedCards[0], true); }
+function launchBall() { ball.active = true; ball.vx = -110; ball.vy = -900; state.mode = 'playing'; }
+function clearRound() { resetGridOccupancy(); for (const card of ownedCards) card.cooldownTimer = randRange(card.cooldownSec * 0.35, card.cooldownSec); for (let i = 0; i < 2; i += 1) trySpawnFromCard(ownedCards.find((c) => c.id === 'house') || ownedCards[0], true); trySpawnFromCard(ownedCards.find((c) => c.id === 'convenience') || ownedCards[0], true); }
 function beginRound(round) { state.round = round; state.roundScore = 0; state.balls = 3; updateQuota(); clearRound(); resetToReady(); }
 function restartRun() { state.totalScore = 0; state.exp = 0; state.level = 1; state.levelUpsPending = 0; ownedCards.length = 0; ownedCards.push(structuredClone(cardPool.get('house')), structuredClone(cardPool.get('convenience'))); beginRound(1); }
 
@@ -112,8 +112,9 @@ function gainExp(v) { state.exp += v; while (state.exp >= getNextExp()) { state.
 function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; state.roundScore += building.score; state.totalScore += building.score; spawnOrbs(building, Math.max(1, building.exp)); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
 
 function resolveAABB(b, w, restitution = 0.1) { const nx = clamp(b.x, w.x, w.x + w.w); const ny = clamp(b.y, w.y, w.y + w.h); const dx = b.x - nx; const dy = b.y - ny; const d2 = dx * dx + dy * dy; if (d2 >= b.r * b.r) return false; const d = Math.max(0.0001, Math.sqrt(d2)); const nxn = dx / d; const nyn = dy / d; const pen = b.r - d; b.x += nxn * pen; b.y += nyn * pen; const vn = b.vx * nxn + b.vy * nyn; if (vn < 0) { b.vx -= (1 + restitution) * vn * nxn; b.vy -= (1 + restitution) * vn * nyn; } return true; }
-function segmentCapsuleHit(b, seg, impulse = 0) { const abx = seg.x2 - seg.x1; const aby = seg.y2 - seg.y1; const apx = b.x - seg.x1; const apy = b.y - seg.y1; const ab2 = abx * abx + aby * aby; const t = clamp((apx * abx + apy * aby) / ab2, 0, 1); const cx = seg.x1 + abx * t; const cy = seg.y1 + aby * t; const dx = b.x - cx; const dy = b.y - cy; const rr = b.r + seg.r; const d2 = dx * dx + dy * dy; if (d2 >= rr * rr) return; const d = Math.max(0.0001, Math.sqrt(d2)); const nx = dx / d; const ny = dy / d; const pen = rr - d; b.x += nx * pen; b.y += ny * pen; const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= (1 + seg.restitution) * vn * nx; b.vy -= (1 + seg.restitution) * vn * ny; } b.vx *= seg.friction; b.vy *= seg.friction; if (impulse > 0) { b.vx += nx * impulse; b.vy += ny * impulse; } }
+function segmentCapsuleHit(b, seg, impulse = 0) { const abx = seg.x2 - seg.x1; const aby = seg.y2 - seg.y1; const apx = b.x - seg.x1; const apy = b.y - seg.y1; const ab2 = abx * abx + aby * aby; const t = clamp((apx * abx + apy * aby) / ab2, 0, 1); const cx = seg.x1 + abx * t; const cy = seg.y1 + aby * t; const dx = b.x - cx; const dy = b.y - cy; const rr = b.r + seg.r; const d2 = dx * dx + dy * dy; if (d2 >= rr * rr) return null; const d = Math.max(0.0001, Math.sqrt(d2)); const nx = dx / d; const ny = dy / d; const pen = rr - d; b.x += nx * pen; b.y += ny * pen; const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= (1 + seg.restitution) * vn * nx; b.vy -= (1 + seg.restitution) * vn * ny; } b.vx *= seg.friction; b.vy *= seg.friction; if (impulse > 0) { b.vx += nx * impulse; b.vy += ny * impulse; } return { nx, ny }; }
 function flipperSegment(f) { return { x1: f.pivot.x, y1: f.pivot.y, x2: f.pivot.x + Math.cos(f.angle) * f.length, y2: f.pivot.y + Math.sin(f.angle) * f.length, r: f.radius, restitution: 0.5, friction: 0.985 }; }
+function clampBallSpeed() { const max = 1300; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
 
 function makeLevelUpChoices() { const choices = []; const unowned = allCards.filter((c) => !ownedCards.some((o) => o.id === c.id)); if (unowned.length) choices.push({ type: 'new', cardId: unowned[Math.floor(Math.random() * unowned.length)].id }); const up = ownedCards.filter((c) => c.level < 5); while (choices.length < 3 && up.length) { const p = up[Math.floor(Math.random() * up.length)]; choices.push({ type: 'up', cardId: p.id }); } while (choices.length < 3) choices.push({ type: 'up', cardId: ownedCards[Math.floor(Math.random() * ownedCards.length)].id }); return choices.slice(0, 3); }
 function applyChoice(i) { const ch = levelUpChoices[i]; if (!ch) return; if (ch.type === 'new') ownedCards.push(structuredClone(cardPool.get(ch.cardId))); else { const card = ownedCards.find((c) => c.id === ch.cardId); if (!card) return; card.level = Math.min(5, card.level + 1); card.score = Math.floor(card.score * 1.25); card.exp += 1; card.cooldownSec = Math.max(2.4, card.cooldownSec * 0.9); if (['apartment', 'tower'].includes(card.id)) card.hp += 1; if ([3, 5].includes(card.level)) card.maxActive += 1; }
@@ -142,13 +143,26 @@ function update(dt) {
 
   if (state.mode === 'ready') { ball.x = START_POS.x; ball.y = START_POS.y; if (input.launchTap) launchBall(); }
   else if (state.mode === 'playing' && ball.active) {
-    const speed = len2(ball.vx, ball.vy); const substeps = clamp(Math.ceil((speed * dt) / (ball.r * 0.45)), 1, 6); const sdt = dt / substeps;
+    const speed = len2(ball.vx, ball.vy); const substeps = clamp(Math.ceil((speed * dt) / (ball.r * 0.4)), 1, 8); const sdt = dt / substeps;
     for (let s = 0; s < substeps; s += 1) {
-      ball.vy += 840 * sdt; ball.x += ball.vx * sdt; ball.y += ball.vy * sdt;
-      for (const w of walls) resolveAABB(ball, w, 0.1);
+      ball.vy += 900 * sdt; ball.x += ball.vx * sdt; ball.y += ball.vy * sdt; clampBallSpeed();
+      for (const w of walls) resolveAABB(ball, w, 0.62);
       for (const seg of rails) segmentCapsuleHit(ball, seg, 0);
-      for (const key of ['left', 'right']) { const f = flippers[key]; const seg = flipperSegment(f); const rise = Math.max(0, Math.abs(f.prev - f.angle) - 0.04); segmentCapsuleHit(ball, seg, rise > 0 ? f.upImpulse * rise : 0); }
-      for (const b of buildings) if (b.active && b.hitCooldown <= 0 && resolveAABB(ball, b, 0.25)) { b.hp -= 1; b.hitCooldown = 0.08; if (b.hp <= 0) destroyBuilding(b); }
+      for (const key of ['left', 'right']) {
+        const f = flippers[key]; const seg = flipperSegment(f); const hit = segmentCapsuleHit(ball, seg, 0);
+        const pressed = key === 'left' ? input.left : input.right;
+        const movingUp = pressed && Math.abs(f.prev - f.angle) > 0.01;
+        if (hit && movingUp) {
+          const impulse = clamp(Math.abs(f.prev - f.angle) * 9000, 0, f.upImpulse);
+          ball.vx += hit.nx * impulse;
+          ball.vy += hit.ny * impulse;
+          ball.vy -= impulse * 0.65;
+          if (key === 'left') ball.vx += impulse * 0.25;
+          if (key === 'right') ball.vx -= impulse * 0.25;
+          clampBallSpeed();
+        }
+      }
+      for (const b of buildings) if (b.active && b.hitCooldown <= 0 && resolveAABB(ball, b, 0.55)) { b.hp -= 1; b.hitCooldown = 0.08; if (b.hp <= 0) destroyBuilding(b); }
       for (const orb of orbs) if (orb.active && len2(ball.x - orb.x, ball.y - orb.y) <= ball.r + orb.r) { orb.active = false; gainExp(orb.value); }
       if (ball.y > WORLD.h + 30 || (ball.y > drain.y && ball.x > drain.x0 && ball.x < drain.x1)) { ball.active = false; state.mode = 'ball_lost'; state.ballLostTimer = 0.8; break; }
     }
