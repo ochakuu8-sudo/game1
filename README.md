@@ -38,9 +38,10 @@ npm run build
 
 ## Deploy
 
-- `npm run build` で `dist/` を更新
-- 生成された `dist/` を含めて `main` にコミット
-- `dist/index.html` をエントリとして静的ホスティングに配置
+- ローカルでは `npm run build` で `dist/` を更新
+- CI（GitHub Actions）は push / PR 時に `npm install` → `npm run check` → `npm run build` を実行
+- ビルド成果物 `dist/` は Actions の artifact として取得可能
+- 静的ホスティングでは `dist/index.html` をエントリとして配置
 
 `vite.config.js` では `base: './'` を使用しているため、サブディレクトリ配信でも相対パスで参照しやすくしています。
 
