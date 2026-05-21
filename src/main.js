@@ -33,22 +33,111 @@ function clamp(v, min, max) { return v < min ? min : v > max ? max : v; }
 function len2(x, y) { return Math.hypot(x, y); }
 function randRange(min, max) { return min + Math.random() * (max - min); }
 
-class RuntimeAtlas { /* unchanged */
-  constructor(glRef, size = 1024) { this.gl = glRef; this.size = size; this.canvas = document.createElement('canvas'); this.canvas.width = this.canvas.height = size; this.ctx = this.canvas.getContext('2d'); this.entries = new Map(); this.x = 0; this.y = 0; this.row = 0; this.texture = glRef.createTexture(); glRef.bindTexture(glRef.TEXTURE_2D, this.texture); glRef.texParameteri(glRef.TEXTURE_2D, glRef.TEXTURE_MIN_FILTER, glRef.LINEAR); glRef.texParameteri(glRef.TEXTURE_2D, glRef.TEXTURE_MAG_FILTER, glRef.LINEAR); glRef.texParameteri(glRef.TEXTURE_2D, glRef.TEXTURE_WRAP_S, glRef.CLAMP_TO_EDGE); glRef.texParameteri(glRef.TEXTURE_2D, glRef.TEXTURE_WRAP_T, glRef.CLAMP_TO_EDGE); glRef.texImage2D(glRef.TEXTURE_2D, 0, glRef.RGBA, size, size, 0, glRef.RGBA, glRef.UNSIGNED_BYTE, null); }
-  pack(key, width, height, drawFn) { if (this.entries.has(key)) return this.entries.get(key); const pad = 2; const pw = width + pad * 2; const ph = height + pad * 2; if (this.x + pw > this.size) { this.x = 0; this.y += this.row; this.row = 0; } if (this.y + ph > this.size) throw new Error('RuntimeAtlas overflow'); const ox = this.x + pad; const oy = this.y + pad; drawFn(this.ctx, ox, oy, width, height); const entry = { u0: ox / this.size, v0: oy / this.size, u1: (ox + width) / this.size, v1: (oy + height) / this.size, w: width, h: height }; this.entries.set(key, entry); this.x += pw; this.row = Math.max(this.row, ph); return entry; }
-  upload() { this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture); this.gl.texSubImage2D(this.gl.TEXTURE_2D, 0, 0, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.canvas); }
+class RuntimeAtlas {
+  constructor(glRef, size = 1024) {
+    this.gl = glRef;
+    this.size = size;
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = this.canvas.height = size;
+    this.ctx = this.canvas.getContext('2d');
+    this.entries = new Map();
+    this.x = 0;
+    this.y = 0;
+    this.row = 0;
+    this.texture = glRef.createTexture();
+    glRef.bindTexture(glRef.TEXTURE_2D, this.texture);
+    glRef.texParameteri(glRef.TEXTURE_2D, glRef.TEXTURE_MIN_FILTER, glRef.LINEAR);
+    glRef.texParameteri(glRef.TEXTURE_2D, glRef.TEXTURE_MAG_FILTER, glRef.LINEAR);
+    glRef.texParameteri(glRef.TEXTURE_2D, glRef.TEXTURE_WRAP_S, glRef.CLAMP_TO_EDGE);
+    glRef.texParameteri(glRef.TEXTURE_2D, glRef.TEXTURE_WRAP_T, glRef.CLAMP_TO_EDGE);
+    glRef.texImage2D(glRef.TEXTURE_2D, 0, glRef.RGBA, size, size, 0, glRef.RGBA, glRef.UNSIGNED_BYTE, null);
+  }
+  pack(key, width, height, drawFn) {
+    if (this.entries.has(key)) return this.entries.get(key);
+    const pad = 2;
+    const pw = width + pad * 2;
+    const ph = height + pad * 2;
+    if (this.x + pw > this.size) { this.x = 0; this.y += this.row; this.row = 0; }
+    if (this.y + ph > this.size) throw new Error('RuntimeAtlas overflow');
+    const ox = this.x + pad;
+    const oy = this.y + pad;
+    drawFn(this.ctx, ox, oy, width, height);
+    const entry = { u0: ox / this.size, v0: oy / this.size, u1: (ox + width) / this.size, v1: (oy + height) / this.size, w: width, h: height };
+    this.entries.set(key, entry);
+    this.x += pw;
+    this.row = Math.max(this.row, ph);
+    return entry;
+  }
+  upload() {
+    this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+    this.gl.texSubImage2D(this.gl.TEXTURE_2D, 0, 0, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.canvas);
+  }
 }
 
 function createProgram(glRef, vsSource, fsSource) {
-  const compile = (type, source) => { const shader = glRef.createShader(type); glRef.shaderSource(shader, source); glRef.compileShader(shader); if (!glRef.getShaderParameter(shader, glRef.COMPILE_STATUS)) throw new Error(glRef.getShaderInfoLog(shader)); return shader; };
-  const program = glRef.createProgram(); glRef.attachShader(program, compile(glRef.VERTEX_SHADER, vsSource)); glRef.attachShader(program, compile(glRef.FRAGMENT_SHADER, fsSource)); glRef.linkProgram(program); if (!glRef.getProgramParameter(program, glRef.LINK_STATUS)) throw new Error(glRef.getProgramInfoLog(program)); return program;
+  const compile = (type, source) => {
+    const shader = glRef.createShader(type);
+    glRef.shaderSource(shader, source);
+    glRef.compileShader(shader);
+    if (!glRef.getShaderParameter(shader, glRef.COMPILE_STATUS)) throw new Error(glRef.getShaderInfoLog(shader));
+    return shader;
+  };
+  const program = glRef.createProgram();
+  glRef.attachShader(program, compile(glRef.VERTEX_SHADER, vsSource));
+  glRef.attachShader(program, compile(glRef.FRAGMENT_SHADER, fsSource));
+  glRef.linkProgram(program);
+  if (!glRef.getProgramParameter(program, glRef.LINK_STATUS)) throw new Error(glRef.getProgramInfoLog(program));
+  return program;
 }
 
 class SpriteRenderer {
-  constructor(glRef, atlas) { this.gl = glRef; this.atlas = atlas; this.verts = []; this.buffer = glRef.createBuffer(); this.program = createProgram(glRef, `attribute vec2 a_pos;attribute vec2 a_uv;uniform vec2 u_res;varying vec2 v_uv;void main(){vec2 p=(a_pos/u_res)*2.0-1.0;gl_Position=vec4(p.x,-p.y,0.0,1.0);v_uv=a_uv;}`, `precision mediump float;uniform sampler2D u_tex;varying vec2 v_uv;void main(){gl_FragColor=texture2D(u_tex,v_uv);}`); this.aPos = glRef.getAttribLocation(this.program, 'a_pos'); this.aUv = glRef.getAttribLocation(this.program, 'a_uv'); this.uRes = glRef.getUniformLocation(this.program, 'u_res'); }
+  constructor(glRef, atlas) {
+    this.gl = glRef;
+    this.atlas = atlas;
+    this.verts = [];
+    this.buffer = glRef.createBuffer();
+    this.program = createProgram(
+      glRef,
+      'attribute vec2 a_pos;attribute vec2 a_uv;uniform vec2 u_res;varying vec2 v_uv;void main(){vec2 p=(a_pos/u_res)*2.0-1.0;gl_Position=vec4(p.x,-p.y,0.0,1.0);v_uv=a_uv;}',
+      'precision mediump float;uniform sampler2D u_tex;varying vec2 v_uv;void main(){gl_FragColor=texture2D(u_tex,v_uv);}'
+    );
+    this.aPos = glRef.getAttribLocation(this.program, 'a_pos');
+    this.aUv = glRef.getAttribLocation(this.program, 'a_uv');
+    this.uRes = glRef.getUniformLocation(this.program, 'u_res');
+  }
   begin() { this.verts.length = 0; }
-  pushSprite(entry, x, y, w, h, rot = 0, pivotX = 0.5, pivotY = 0.5) { const cx = x + w * pivotX; const cy = y + h * pivotY; const c = Math.cos(rot); const s = Math.sin(rot); const quad = [[0, 0, entry.u0, entry.v0], [w, 0, entry.u1, entry.v0], [w, h, entry.u1, entry.v1], [0, h, entry.u0, entry.v1]]; const out = quad.map(([lx, ly, u, v]) => { const dx = lx - w * pivotX; const dy = ly - h * pivotY; return [cx + dx * c - dy * s, cy + dx * s + dy * c, u, v]; }); const tri = [out[0], out[1], out[2], out[0], out[2], out[3]]; for (const v of tri) this.verts.push(...v, 1); }
-  flush(width, height) { const glRef = this.gl; glRef.clearColor(0.03, 0.06, 0.13, 1); glRef.clear(glRef.COLOR_BUFFER_BIT); if (!this.verts.length) return; const data = new Float32Array(this.verts); glRef.useProgram(this.program); glRef.bindBuffer(glRef.ARRAY_BUFFER, this.buffer); glRef.bufferData(glRef.ARRAY_BUFFER, data, glRef.DYNAMIC_DRAW); glRef.enableVertexAttribArray(this.aPos); glRef.vertexAttribPointer(this.aPos, 2, glRef.FLOAT, false, 20, 0); glRef.enableVertexAttribArray(this.aUv); glRef.vertexAttribPointer(this.aUv, 2, glRef.FLOAT, false, 20, 8); glRef.uniform2f(this.uRes, width, height); glRef.activeTexture(glRef.TEXTURE0); glRef.bindTexture(glRef.TEXTURE_2D, this.atlas.texture); glRef.drawArrays(glRef.TRIANGLES, 0, this.verts.length / 5); }
+  pushSprite(entry, x, y, w, h, rot = 0, pivotX = 0.5, pivotY = 0.5) {
+    const cx = x + w * pivotX;
+    const cy = y + h * pivotY;
+    const c = Math.cos(rot);
+    const s = Math.sin(rot);
+    const quad = [[0, 0, entry.u0, entry.v0], [w, 0, entry.u1, entry.v0], [w, h, entry.u1, entry.v1], [0, h, entry.u0, entry.v1]];
+    const out = quad.map(([lx, ly, u, v]) => {
+      const dx = lx - w * pivotX;
+      const dy = ly - h * pivotY;
+      return [cx + dx * c - dy * s, cy + dx * s + dy * c, u, v];
+    });
+    const tri = [out[0], out[1], out[2], out[0], out[2], out[3]];
+    for (const v of tri) this.verts.push(...v, 1);
+  }
+  flush(width, height) {
+    const glRef = this.gl;
+    glRef.clearColor(0.03, 0.06, 0.13, 1);
+    glRef.clear(glRef.COLOR_BUFFER_BIT);
+    if (!this.verts.length) return;
+    const data = new Float32Array(this.verts);
+    glRef.useProgram(this.program);
+    glRef.bindBuffer(glRef.ARRAY_BUFFER, this.buffer);
+    glRef.bufferData(glRef.ARRAY_BUFFER, data, glRef.DYNAMIC_DRAW);
+    glRef.enableVertexAttribArray(this.aPos);
+    glRef.vertexAttribPointer(this.aPos, 2, glRef.FLOAT, false, 20, 0);
+    glRef.enableVertexAttribArray(this.aUv);
+    glRef.vertexAttribPointer(this.aUv, 2, glRef.FLOAT, false, 20, 8);
+    glRef.uniform2f(this.uRes, width, height);
+    glRef.activeTexture(glRef.TEXTURE0);
+    glRef.bindTexture(glRef.TEXTURE_2D, this.atlas.texture);
+    glRef.drawArrays(glRef.TRIANGLES, 0, this.verts.length / 5);
+  }
 }
 
 function drawBuildingSprite(ctx, x, y, w, h, base, accent) {
@@ -68,7 +157,7 @@ function registerAtlasSprites(atlas) {
 }
 
 const state = { mode: 'ready', balls: 3, ballLostTimer: 0, fps: 0, fpsS: 0, fpsN: 0, round: 1, quota: 3000, totalScore: 0, roundScore: 0, exp: 0, level: 1, levelUpsPending: 0 };
-const START_POS = { x: 430, y: 690 };
+const START_POS = { x: 430, y: 640 };
 const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: 13, active: false };
 const input = { left: false, right: false, launchTap: false, pointerSide: 0 };
 
@@ -86,37 +175,19 @@ const grid = []; let nextBuildingId = 1; const buildings = []; const orbs = []; 
 for (let r = 0; r < GRID.rows; r += 1) { const row = []; for (let c = 0; c < GRID.cols; c += 1) row.push({ tags: [ZONE_TEMPLATE[r][c]], occupiedBy: null }); grid.push(row); }
 
 const walls = [{ x: 25, y: 25, w: 10, h: 740 }, { x: 465, y: 25, w: 10, h: 740 }, { x: 25, y: 25, w: 450, h: 10 }];
-const rails = [{ x1: 25, y1: 620, x2: 180, y2: 715, r: 10, restitution: 0.45, friction: 0.985 }, { x1: 475, y1: 620, x2: 320, y2: 715, r: 10, restitution: 0.45, friction: 0.985 }];
+const rails = [{ x1: 25, y1: 620, x2: 170, y2: 720, r: 10, restitution: 0.45, friction: 0.985 }, { x1: 475, y1: 620, x2: 330, y2: 720, r: 10, restitution: 0.45, friction: 0.985 }];
 const flippers = {
-  left: {
-    pivot: { x: 185, y: 720 },
-    length: 90,
-    radius: 9,
-    base: 0.18,
-    active: -0.70,
-    angle: 0.18,
-    prev: 0.18,
-    upImpulse: 900,
-  },
-  right: {
-    pivot: { x: 315, y: 720 },
-    length: 90,
-    radius: 9,
-    base: Math.PI - 0.18,
-    active: Math.PI + 0.70,
-    angle: Math.PI - 0.18,
-    prev: Math.PI - 0.18,
-    upImpulse: 900,
-  },
+  left: { pivot: { x: 170, y: 720 }, length: 62, radius: 9, base: 0.16, active: -0.78, angle: 0.16, prev: 0.16, upImpulse: 980 },
+  right: { pivot: { x: 330, y: 720 }, length: 62, radius: 9, base: Math.PI - 0.16, active: Math.PI + 0.78, angle: Math.PI - 0.16, prev: Math.PI - 0.16, upImpulse: 980 },
 };
-const drain = { x0: 220, x1: 280, y: 760 };
+const drain = { x0: 228, x1: 272, y: 760 };
 const maxBuildings = 8;
 
 function getNextExp() { return 5 + state.level * 3; }
 function updateQuota() { state.quota = Math.floor(3000 * Math.pow(1.75, state.round - 1)); }
 function resetGridOccupancy() { for (const row of grid) for (const cell of row) cell.occupiedBy = null; buildings.length = 0; orbs.length = 0; }
 function resetToReady() { ball.x = START_POS.x; ball.y = START_POS.y; ball.vx = 0; ball.vy = 0; ball.active = false; state.mode = 'ready'; }
-function launchBall() { ball.active = true; ball.vx = -90; ball.vy = -820; state.mode = 'playing'; }
+function launchBall() { ball.active = true; ball.vx = -120; ball.vy = -900; state.mode = 'playing'; }
 function clearRound() { resetGridOccupancy(); for (const card of ownedCards) card.cooldownTimer = randRange(card.cooldownSec * 0.7, card.cooldownSec * 1.2); trySpawnFromCard(ownedCards.find((c) => c.id === 'house') || ownedCards[0], true); trySpawnFromCard(ownedCards.find((c) => c.id === 'convenience') || ownedCards[0], true); }
 function beginRound(round) { state.round = round; state.roundScore = 0; state.balls = 3; updateQuota(); clearRound(); resetToReady(); }
 function restartRun() { state.totalScore = 0; state.exp = 0; state.level = 1; state.levelUpsPending = 0; ownedCards.length = 0; ownedCards.push(structuredClone(cardPool.get('house')), structuredClone(cardPool.get('convenience'))); beginRound(1); }
@@ -133,8 +204,51 @@ function gainExp(v) { state.exp += v; while (state.exp >= getNextExp()) { state.
 function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; state.roundScore += building.score; state.totalScore += building.score; spawnOrbs(building, Math.max(1, building.exp)); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
 
 function resolveAABB(b, w, restitution = 0.1) { const nx = clamp(b.x, w.x, w.x + w.w); const ny = clamp(b.y, w.y, w.y + w.h); const dx = b.x - nx; const dy = b.y - ny; const d2 = dx * dx + dy * dy; if (d2 >= b.r * b.r) return false; const d = Math.max(0.0001, Math.sqrt(d2)); const nxn = dx / d; const nyn = dy / d; const pen = b.r - d; b.x += nxn * pen; b.y += nyn * pen; const vn = b.vx * nxn + b.vy * nyn; if (vn < 0) { b.vx -= (1 + restitution) * vn * nxn; b.vy -= (1 + restitution) * vn * nyn; } return true; }
-function segmentCapsuleHit(b, seg, impulse = 0) { const abx = seg.x2 - seg.x1; const aby = seg.y2 - seg.y1; const apx = b.x - seg.x1; const apy = b.y - seg.y1; const ab2 = abx * abx + aby * aby; const t = clamp((apx * abx + apy * aby) / ab2, 0, 1); const cx = seg.x1 + abx * t; const cy = seg.y1 + aby * t; const dx = b.x - cx; const dy = b.y - cy; const rr = b.r + seg.r; const d2 = dx * dx + dy * dy; if (d2 >= rr * rr) return null; const d = Math.max(0.0001, Math.sqrt(d2)); const nx = dx / d; const ny = dy / d; const pen = rr - d; b.x += nx * pen; b.y += ny * pen; const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= (1 + seg.restitution) * vn * nx; b.vy -= (1 + seg.restitution) * vn * ny; } b.vx *= seg.friction; b.vy *= seg.friction; if (impulse > 0) { b.vx += nx * impulse; b.vy += ny * impulse; } return { nx, ny }; }
-function flipperSegment(f) { return { x1: f.pivot.x, y1: f.pivot.y, x2: f.pivot.x + Math.cos(f.angle) * f.length, y2: f.pivot.y + Math.sin(f.angle) * f.length, r: f.radius, restitution: 0.5, friction: 0.985 }; }
+function segmentCapsuleHit(b, seg) {
+  const abx = seg.x2 - seg.x1;
+  const aby = seg.y2 - seg.y1;
+  const apx = b.x - seg.x1;
+  const apy = b.y - seg.y1;
+  const ab2 = abx * abx + aby * aby;
+  const t = clamp((apx * abx + apy * aby) / ab2, 0, 1);
+  const cx = seg.x1 + abx * t;
+  const cy = seg.y1 + aby * t;
+  const dx = b.x - cx;
+  const dy = b.y - cy;
+  const rr = b.r + seg.r;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= rr * rr) return null;
+  const d = Math.max(0.0001, Math.sqrt(d2));
+  const nx = dx / d;
+  const ny = dy / d;
+  const pen = rr - d;
+  b.x += nx * pen;
+  b.y += ny * pen;
+  const vn = b.vx * nx + b.vy * ny;
+  if (vn < 0) {
+    b.vx -= (1 + seg.restitution) * vn * nx;
+    b.vy -= (1 + seg.restitution) * vn * ny;
+  }
+  b.vx *= seg.friction;
+  b.vy *= seg.friction;
+  return { nx, ny, t, cx, cy };
+}
+function flipperSegment(f) { return { x1: f.pivot.x, y1: f.pivot.y, x2: f.pivot.x + Math.cos(f.angle) * f.length, y2: f.pivot.y + Math.sin(f.angle) * f.length, r: f.radius, restitution: 0.58, friction: 0.992 }; }
+function applyFlipperImpulse(f, hit, sdt) {
+  const omega = (f.angle - f.prev) / Math.max(sdt, 0.0001);
+  const rx = hit.cx - f.pivot.x;
+  const ry = hit.cy - f.pivot.y;
+  const surfaceVx = -omega * ry;
+  const surfaceVy = omega * rx;
+  const relVx = ball.vx - surfaceVx;
+  const relVy = ball.vy - surfaceVy;
+  const relN = relVx * hit.nx + relVy * hit.ny;
+  if (relN >= 0) return;
+  const boost = clamp((-relN) * 1.25 + Math.abs(omega) * f.length * 0.22, 0, f.upImpulse);
+  ball.vx += hit.nx * boost;
+  ball.vy += hit.ny * boost;
+  ball.vy -= boost * 0.55;
+}
 function clampBallSpeed() { const max = 1300; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
 function ensureMinBallSpeed(min = 360) { const speed = Math.hypot(ball.vx, ball.vy); if (speed > 0 && speed < min) { const k = min / speed; ball.vx *= k; ball.vy *= k; } }
 
@@ -156,8 +270,8 @@ addEventListener('pointerdown', (e) => pointerDown(e.clientX, e.clientY)); addEv
 function update(dt) {
   state.fpsS += dt; state.fpsN += 1; if (state.fpsS > 0.3) { state.fps = Math.round(state.fpsN / state.fpsS); state.fpsS = 0; state.fpsN = 0; }
   flippers.left.prev = flippers.left.angle; flippers.right.prev = flippers.right.angle;
-  flippers.left.angle += ((input.left ? flippers.left.active : flippers.left.base) - flippers.left.angle) * 0.4;
-  flippers.right.angle += ((input.right ? flippers.right.active : flippers.right.base) - flippers.right.angle) * 0.4;
+  flippers.left.angle += ((input.left ? flippers.left.active : flippers.left.base) - flippers.left.angle) * 0.45;
+  flippers.right.angle += ((input.right ? flippers.right.active : flippers.right.base) - flippers.right.angle) * 0.45;
 
   if (state.mode === 'playing') {
     for (const card of ownedCards) { card.cooldownTimer -= dt; if (card.cooldownTimer <= 0) { trySpawnFromCard(card); card.cooldownTimer += card.cooldownSec; } }
@@ -172,20 +286,13 @@ function update(dt) {
     for (let s = 0; s < substeps; s += 1) {
       ball.vy += 900 * sdt; ball.x += ball.vx * sdt; ball.y += ball.vy * sdt; clampBallSpeed();
       for (const w of walls) resolveAABB(ball, w, 0.62);
-      for (const seg of rails) segmentCapsuleHit(ball, seg, 0);
+      for (const seg of rails) segmentCapsuleHit(ball, seg);
       for (const key of ['left', 'right']) {
-        const f = flippers[key]; const seg = flipperSegment(f); const hit = segmentCapsuleHit(ball, seg, 0);
+        const f = flippers[key];
+        const hit = segmentCapsuleHit(ball, flipperSegment(f));
         const pressed = key === 'left' ? input.left : input.right;
-        const movingUp = pressed && Math.abs(f.prev - f.angle) > 0.01;
-        if (hit && movingUp) {
-          const impulse = clamp(Math.abs(f.prev - f.angle) * 9000, 0, f.upImpulse);
-          ball.vx += hit.nx * impulse;
-          ball.vy += hit.ny * impulse;
-          ball.vy -= impulse * 0.65;
-          if (key === 'left') ball.vx += impulse * 0.25;
-          if (key === 'right') ball.vx -= impulse * 0.25;
-          clampBallSpeed();
-        }
+        const moving = pressed && Math.abs(f.prev - f.angle) > 0.002;
+        if (hit && moving) { applyFlipperImpulse(f, hit, sdt); clampBallSpeed(); ensureMinBallSpeed(420); }
       }
       for (const b of buildings) if (b.active && b.hitCooldown <= 0 && resolveAABB(ball, b, 0.55)) { ensureMinBallSpeed(380); b.hp -= 1; b.hitCooldown = 0.08; if (b.hp <= 0) { destroyBuilding(b); ball.vx *= 1.08; ball.vy *= 1.08; clampBallSpeed(); ensureMinBallSpeed(420); } }
       for (const orb of orbs) if (orb.active && len2(ball.x - orb.x, ball.y - orb.y) <= ball.r + orb.r) { orb.active = false; gainExp(orb.value); }
