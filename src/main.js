@@ -188,10 +188,10 @@ const grid = []; let nextBuildingId = 1; const buildings = []; const orbs = []; 
 for (let r = 0; r < GRID.rows; r += 1) { const row = []; for (let c = 0; c < GRID.cols; c += 1) row.push({ tags: [ZONE_TEMPLATE[r][c]], occupiedBy: null }); grid.push(row); }
 
 const walls = [{ x: 25, y: 25, w: 10, h: 740 }, { x: 465, y: 25, w: 10, h: 740 }, { x: 25, y: 25, w: 450, h: 10 }];
-const rails = [{ x1: 25, y1: 620, x2: 170, y2: 720, r: 10, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }, { x1: 475, y1: 620, x2: 330, y2: 720, r: 10, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }];
+const rails = [{ x1: 25, y1: 620, x2: 160, y2: 700, r: 10, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }, { x1: 475, y1: 620, x2: 340, y2: 700, r: 10, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }];
 const flippers = {
-  left: { pivot: { x: 170, y: 720 }, length: 62, radius: 9, base: 0.16, active: -0.78, angle: 0.16, prev: 0.16, upImpulse: 980 },
-  right: { pivot: { x: 330, y: 720 }, length: 62, radius: 9, base: Math.PI - 0.16, active: Math.PI + 0.78, angle: Math.PI - 0.16, prev: Math.PI - 0.16, upImpulse: 980 },
+  left: { pivot: { x: 170, y: 720 }, length: 82, radius: 9, base: 0.52, active: -0.92, angle: 0.52, prev: 0.52, upImpulse: 980 },
+  right: { pivot: { x: 330, y: 720 }, length: 82, radius: 9, base: Math.PI - 0.52, active: Math.PI + 0.92, angle: Math.PI - 0.52, prev: Math.PI - 0.52, upImpulse: 980 },
 };
 const drain = { x0: 228, x1: 272, y: 760 };
 const maxBuildings = 8;
