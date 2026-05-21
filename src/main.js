@@ -109,7 +109,7 @@ class SpriteRenderer {
 
   begin() { this.verts.length = 0; }
 
-  pushSprite(entry, x, y, w, h, rot = 0, pivotX = 0.5, pivotY = 0.5, alpha = 1) {
+  pushSprite(entry, x, y, w, h, rot = 0, pivotX = 0.5, pivotY = 0.5) {
     const cx = x + w * pivotX;
     const cy = y + h * pivotY;
     const c = Math.cos(rot);
@@ -120,10 +120,10 @@ class SpriteRenderer {
     const out = quad.map(([lx, ly, u, v]) => {
       const dx = lx - w * pivotX;
       const dy = ly - h * pivotY;
-      return [cx + dx * c - dy * s, cy + dx * s + dy * c, u, v, alpha];
+      return [cx + dx * c - dy * s, cy + dx * s + dy * c, u, v];
     });
     const tri = [out[0], out[1], out[2], out[0], out[2], out[3]];
-    for (const v of tri) this.verts.push(...v);
+    for (const v of tri) this.verts.push(...v, 1);
   }
 
   flush(width, height) {
@@ -154,74 +154,49 @@ function registerAtlasSprites(atlas) {
     g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#7da8ff');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + r, y + r, r, 0, Math.PI * 2); ctx.fill();
   });
-  atlas.pack('bumper', 56, 56, (ctx, x, y) => {
-    ctx.fillStyle = '#ff4c8f'; ctx.beginPath(); ctx.arc(x + 28, y + 28, 26, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ffd3e9'; ctx.beginPath(); ctx.arc(x + 28, y + 28, 12, 0, Math.PI * 2); ctx.fill();
+  atlas.pack('flipper', 108, 22, (ctx, x, y) => {
+    ctx.fillStyle = '#54d9ff'; ctx.beginPath(); ctx.roundRect(x, y, 108, 22, 11); ctx.fill();
   });
-  atlas.pack('flipper', 96, 28, (ctx, x, y) => {
-    ctx.fillStyle = '#54d9ff'; ctx.beginPath(); ctx.roundRect(x, y + 4, 94, 20, 10); ctx.fill();
+  atlas.pack('wall', 20, 20, (ctx, x, y) => {
+    ctx.fillStyle = '#5476cb'; ctx.fillRect(x, y, 20, 20);
   });
-  atlas.pack('wall', 36, 36, (ctx, x, y) => {
-    ctx.fillStyle = '#5476cb'; ctx.fillRect(x, y + 10, 36, 16);
-  });
-  atlas.pack('post', 24, 24, (ctx, x, y) => { ctx.fillStyle = '#ffe082'; ctx.beginPath(); ctx.arc(x + 12, y + 12, 10, 0, Math.PI * 2); ctx.fill(); });
-  atlas.pack('spark', 18, 18, (ctx, x, y) => { ctx.fillStyle = '#fff3a9'; ctx.beginPath(); ctx.moveTo(x + 9, y); ctx.lineTo(x + 12, y + 6); ctx.lineTo(x + 18, y + 9); ctx.lineTo(x + 12, y + 12); ctx.lineTo(x + 9, y + 18); ctx.lineTo(x + 6, y + 12); ctx.lineTo(x, y + 9); ctx.lineTo(x + 6, y + 6); ctx.fill(); });
 }
 
-const state = {
-  mode: 'ready',
-  score: 0,
-  best: Number(localStorage.getItem('pin_best') || '0'),
-  balls: 3,
-  ballLostTimer: 0,
-  launchCharge: 0,
-  fps: 0,
-  fpsS: 0,
-  fpsN: 0,
-};
-
+const state = { mode: 'ready', balls: 3, ballLostTimer: 0, fps: 0, fpsS: 0, fpsN: 0 };
 const ball = { x: 450, y: 718, vx: 0, vy: 0, r: 13, active: false };
+
 const walls = [
-  { x: 16, y: 16, w: 20, h: 740 }, { x: 464, y: 16, w: 20, h: 740 }, { x: 16, y: 16, w: 468, h: 20 },
-  { x: 190, y: 740, w: 120, h: 20 }, { x: 36, y: 620, w: 90, h: 20 }, { x: 374, y: 620, w: 90, h: 20 },
+  { x: 25, y: 25, w: 10, h: 740 },
+  { x: 465, y: 25, w: 10, h: 740 },
+  { x: 25, y: 25, w: 450, h: 10 },
 ];
-const drain = { x0: 200, x1: 300, y: 760 };
-const bumpers = [{ x: 170, y: 220, r: 28 }, { x: 250, y: 170, r: 28 }, { x: 330, y: 230, r: 28 }, { x: 250, y: 320, r: 24 }];
-const posts = [{ x: 110, y: 520, r: 12 }, { x: 390, y: 520, r: 12 }, { x: 145, y: 640, r: 12 }, { x: 355, y: 640, r: 12 }];
+
+const rails = [
+  { x1: 25, y1: 620, x2: 170, y2: 700, r: 10, restitution: 0.45, friction: 0.985 },
+  { x1: 475, y1: 620, x2: 330, y2: 700, r: 10, restitution: 0.45, friction: 0.985 },
+];
 
 const flippers = {
-  left: { x: 150, y: 698, w: 96, h: 28, base: -0.48, active: 0.22, angle: -0.48, prev: -0.48, pivot: 0.08 },
-  right: { x: 254, y: 698, w: 96, h: 28, base: 0.48, active: -0.22, angle: 0.48, prev: 0.48, pivot: 0.92 },
+  left: { pivot: { x: 180, y: 715 }, length: 105, radius: 9, base: 0.22, active: -0.45, angle: 0.22, prev: 0.22, upImpulse: 250 },
+  right: { pivot: { x: 320, y: 715 }, length: 105, radius: 9, base: Math.PI - 0.22, active: Math.PI + 0.45, angle: Math.PI - 0.22, prev: Math.PI - 0.22, upImpulse: 250 },
 };
 
-const input = { left: false, right: false, launchHeld: false, launchJustReleased: false, launchTap: false, pointerSide: 0 };
-const particles = Array.from({ length: 120 }, () => ({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, size: 8 }));
+const drain = { x0: 220, x1: 280, y: 760 };
+const input = { left: false, right: false, launchTap: false, pointerSide: 0 };
 
-function spawnParticles(x, y, n, speed) {
-  for (let i = 0; i < particles.length && n > 0; i += 1) {
-    const p = particles[i];
-    if (p.active) continue;
-    const a = Math.random() * Math.PI * 2;
-    const s = speed * (0.5 + Math.random());
-    p.active = true; p.x = x; p.y = y; p.vx = Math.cos(a) * s; p.vy = Math.sin(a) * s; p.life = 0.22 + Math.random() * 0.3; p.maxLife = p.life; p.size = 9 + Math.random() * 5;
-    n -= 1;
-  }
-}
-
-function resetToReady() { ball.x = 450; ball.y = 718; ball.vx = 0; ball.vy = 0; ball.active = false; state.mode = 'ready'; state.launchCharge = 0; }
-function launchBall(force) { ball.active = true; ball.vx = -70; ball.vy = -(650 + force * 300); state.mode = 'playing'; spawnParticles(ball.x, ball.y, 10, 120); }
-function restartGame() { state.score = 0; state.balls = 3; state.mode = 'ready'; state.ballLostTimer = 0; resetToReady(); }
+function resetToReady() { ball.x = 450; ball.y = 718; ball.vx = 0; ball.vy = 0; ball.active = false; state.mode = 'ready'; }
+function launchBall() { ball.active = true; ball.vx = -70; ball.vy = -760; state.mode = 'playing'; }
+function restartGame() { state.balls = 3; state.mode = 'ready'; state.ballLostTimer = 0; resetToReady(); }
 
 addEventListener('keydown', (e) => {
   if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
   if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
-  if (e.code === 'Space' || e.code === 'KeyW') { input.launchHeld = true; input.launchTap = true; }
+  if (e.code === 'Space' || e.code === 'KeyW') input.launchTap = true;
   if (e.code === 'KeyR') restartGame();
 });
 addEventListener('keyup', (e) => {
   if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
   if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
-  if (e.code === 'Space' || e.code === 'KeyW') { input.launchHeld = false; input.launchJustReleased = true; }
 });
 
 function pointerDown(clientX) {
@@ -246,31 +221,65 @@ function resolveAABB(b, w) {
   const dx = b.x - nx;
   const dy = b.y - ny;
   const d2 = dx * dx + dy * dy;
-  if (d2 >= b.r * b.r) return false;
-  let d = Math.sqrt(d2);
-  let nxn = 0; let nyn = -1;
-  if (d > 0.0001) { nxn = dx / d; nyn = dy / d; } else if (Math.abs(dx) > Math.abs(dy)) { nxn = Math.sign(dx || 1); nyn = 0; d = 0; }
+  if (d2 >= b.r * b.r) return;
+  const d = Math.max(0.0001, Math.sqrt(d2));
+  const nxn = dx / d;
+  const nyn = dy / d;
   const pen = b.r - d;
-  b.x += nxn * pen; b.y += nyn * pen;
+  b.x += nxn * pen;
+  b.y += nyn * pen;
   const vn = b.vx * nxn + b.vy * nyn;
-  if (vn < 0) { b.vx -= 2 * vn * nxn; b.vy -= 2 * vn * nyn; b.vx *= 0.96; b.vy *= 0.96; }
-  return true;
+  if (vn < 0) {
+    b.vx -= 1.1 * vn * nxn;
+    b.vy -= 1.1 * vn * nyn;
+    b.vx *= 0.99;
+    b.vy *= 0.99;
+  }
 }
 
-function circleHit(cx, cy, r, power, scoreGain) {
-  const dx = ball.x - cx; const dy = ball.y - cy; const rr = ball.r + r;
+function segmentCapsuleHit(b, seg, impulse = 0) {
+  const abx = seg.x2 - seg.x1;
+  const aby = seg.y2 - seg.y1;
+  const apx = b.x - seg.x1;
+  const apy = b.y - seg.y1;
+  const ab2 = abx * abx + aby * aby;
+  const t = clamp((apx * abx + apy * aby) / ab2, 0, 1);
+  const cx = seg.x1 + abx * t;
+  const cy = seg.y1 + aby * t;
+  const dx = b.x - cx;
+  const dy = b.y - cy;
+  const rr = b.r + seg.r;
   const d2 = dx * dx + dy * dy;
-  if (d2 >= rr * rr) return false;
+  if (d2 >= rr * rr) return;
   const d = Math.max(0.0001, Math.sqrt(d2));
-  const nx = dx / d; const ny = dy / d;
-  ball.x = cx + nx * (rr + 0.3); ball.y = cy + ny * (rr + 0.3);
-  const vn = ball.vx * nx + ball.vy * ny;
-  ball.vx -= 2 * vn * nx; ball.vy -= 2 * vn * ny;
-  ball.vx += nx * power; ball.vy += ny * power;
-  state.score += scoreGain;
-  if (state.score > state.best) { state.best = state.score; localStorage.setItem('pin_best', String(state.best)); }
-  spawnParticles(cx, cy, 8, 170);
-  return true;
+  const nx = dx / d;
+  const ny = dy / d;
+  const pen = rr - d;
+  b.x += nx * pen;
+  b.y += ny * pen;
+  const vn = b.vx * nx + b.vy * ny;
+  if (vn < 0) {
+    b.vx -= (1 + seg.restitution) * vn * nx;
+    b.vy -= (1 + seg.restitution) * vn * ny;
+  }
+  b.vx *= seg.friction;
+  b.vy *= seg.friction;
+  if (impulse > 0) {
+    b.vx += nx * impulse;
+    b.vy += ny * impulse;
+  }
+}
+
+function flipperSegment(f) {
+  return {
+    x1: f.pivot.x,
+    y1: f.pivot.y,
+    x2: f.pivot.x + Math.cos(f.angle) * f.length,
+    y2: f.pivot.y + Math.sin(f.angle) * f.length,
+    r: f.radius,
+    restitution: 0.5,
+    friction: 0.985,
+  };
 }
 
 function update(dt) {
@@ -278,39 +287,35 @@ function update(dt) {
 
   flippers.left.prev = flippers.left.angle;
   flippers.right.prev = flippers.right.angle;
-  flippers.left.angle += ((input.left ? flippers.left.active : flippers.left.base) - flippers.left.angle) * 0.35;
-  flippers.right.angle += ((input.right ? flippers.right.active : flippers.right.base) - flippers.right.angle) * 0.35;
+  flippers.left.angle += ((input.left ? flippers.left.active : flippers.left.base) - flippers.left.angle) * 0.4;
+  flippers.right.angle += ((input.right ? flippers.right.active : flippers.right.base) - flippers.right.angle) * 0.4;
 
   if (state.mode === 'ready') {
     ball.x = 450; ball.y = 718;
-    if (input.launchHeld) state.launchCharge = clamp(state.launchCharge + dt * 1.4, 0, 1);
-    if (input.launchTap || input.launchJustReleased) { launchBall(Math.max(0.2, state.launchCharge)); state.launchCharge = 0; }
+    if (input.launchTap) launchBall();
   } else if (state.mode === 'playing' && ball.active) {
     const speed = len2(ball.vx, ball.vy);
-    const substeps = clamp(Math.ceil((speed * dt) / (ball.r * 0.5)), 1, 6);
+    const substeps = clamp(Math.ceil((speed * dt) / (ball.r * 0.45)), 1, 6);
     const sdt = dt / substeps;
     for (let s = 0; s < substeps; s += 1) {
-      ball.vy += 800 * sdt;
-      const vmax = 1050;
-      const vNow = len2(ball.vx, ball.vy);
-      if (vNow > vmax) { const f = vmax / vNow; ball.vx *= f; ball.vy *= f; }
-      ball.x += ball.vx * sdt; ball.y += ball.vy * sdt;
+      ball.vy += 840 * sdt;
+      ball.x += ball.vx * sdt;
+      ball.y += ball.vy * sdt;
+
       for (const w of walls) resolveAABB(ball, w);
-      for (const b of bumpers) circleHit(b.x, b.y, b.r, 640, 100);
-      for (const p of posts) circleHit(p.x, p.y, p.r, 280, 75);
+      for (const seg of rails) segmentCapsuleHit(ball, seg, 0);
 
       for (const key of ['left', 'right']) {
         const f = flippers[key];
-        const px = f.x + f.w * f.pivot;
-        const py = f.y + f.h * 0.5;
-        circleHit(px + (key === 'left' ? 35 : -35), py, 24, Math.abs(f.angle - f.prev) * 5200 + 120, 0);
+        const seg = flipperSegment(f);
+        const rise = Math.max(0, Math.abs(f.prev - f.angle) - 0.04);
+        segmentCapsuleHit(ball, seg, rise > 0 ? f.upImpulse * rise : 0);
       }
 
       if (ball.y > WORLD.h + 30 || (ball.y > drain.y && ball.x > drain.x0 && ball.x < drain.x1)) {
         ball.active = false;
         state.mode = 'ball_lost';
         state.ballLostTimer = 0.8;
-        spawnParticles(ball.x, WORLD.h - 20, 16, 190);
         break;
       }
     }
@@ -322,17 +327,10 @@ function update(dt) {
     }
   }
 
-  for (const p of particles) {
-    if (!p.active) continue;
-    p.life -= dt; if (p.life <= 0) { p.active = false; continue; }
-    p.vy += 330 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
-  }
   input.launchTap = false;
-  input.launchJustReleased = false;
 }
 
 let dpr = 1;
-function worldToScreen(x, y) { return { x: x * (glCanvas.width / WORLD.w), y: y * (glCanvas.height / WORLD.h) }; }
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, DPR_MAX);
   const rect = wrap.getBoundingClientRect();
@@ -348,30 +346,33 @@ registerAtlasSprites(atlas);
 atlas.upload();
 const renderer = new SpriteRenderer(gl, atlas);
 
+function drawSegmentSprite(entry, x1, y1, x2, y2, thickness, sx, sy) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  const ang = Math.atan2(dy, dx);
+  renderer.pushSprite(entry, x1 * sx, (y1 - thickness) * sy, len * sx, thickness * 2 * sy, ang, 0, 0.5);
+}
+
 function render() {
   const sx = glCanvas.width / WORLD.w;
   const sy = glCanvas.height / WORLD.h;
   renderer.begin();
 
   const wallSpr = atlas.entries.get('wall');
-  const bumpSpr = atlas.entries.get('bumper');
   const flipSpr = atlas.entries.get('flipper');
   const ballSpr = atlas.entries.get('ball');
-  const postSpr = atlas.entries.get('post');
-  const sparkSpr = atlas.entries.get('spark');
 
   for (const w of walls) renderer.pushSprite(wallSpr, w.x * sx, w.y * sy, w.w * sx, w.h * sy);
-  for (const b of bumpers) renderer.pushSprite(bumpSpr, (b.x - b.r) * sx, (b.y - b.r) * sy, b.r * 2 * sx, b.r * 2 * sy);
-  for (const p of posts) renderer.pushSprite(postSpr, (p.x - p.r) * sx, (p.y - p.r) * sy, p.r * 2 * sx, p.r * 2 * sy);
+  for (const seg of rails) drawSegmentSprite(wallSpr, seg.x1, seg.y1, seg.x2, seg.y2, seg.r, sx, sy);
 
-  renderer.pushSprite(flipSpr, flippers.left.x * sx, flippers.left.y * sy, flippers.left.w * sx, flippers.left.h * sy, flippers.left.angle, flippers.left.pivot, 0.5);
-  renderer.pushSprite(flipSpr, flippers.right.x * sx, flippers.right.y * sy, flippers.right.w * sx, flippers.right.h * sy, flippers.right.angle, flippers.right.pivot, 0.5);
-  if (ball.active || state.mode === 'ready') renderer.pushSprite(ballSpr, (ball.x - ball.r) * sx, (ball.y - ball.r) * sy, ball.r * 2 * sx, ball.r * 2 * sy);
-
-  for (const p of particles) {
-    if (!p.active) continue;
-    renderer.pushSprite(sparkSpr, (p.x - p.size * 0.5) * sx, (p.y - p.size * 0.5) * sy, p.size * sx, p.size * sy, p.vx * 0.001);
+  for (const key of ['left', 'right']) {
+    const f = flippers[key];
+    const seg = flipperSegment(f);
+    const ang = Math.atan2(seg.y2 - seg.y1, seg.x2 - seg.x1);
+    renderer.pushSprite(flipSpr, seg.x1 * sx, (seg.y1 - f.radius) * sy, f.length * sx, f.radius * 2 * sy, ang, 0, 0.5);
   }
+  if (ball.active || state.mode === 'ready') renderer.pushSprite(ballSpr, (ball.x - ball.r) * sx, (ball.y - ball.r) * sy, ball.r * 2 * sx, ball.r * 2 * sy);
 
   renderer.flush(glCanvas.width, glCanvas.height);
 
@@ -380,20 +381,12 @@ function render() {
   uiCtx.scale(dpr, dpr);
   const vw = uiCanvas.width / dpr;
   const vh = uiCanvas.height / dpr;
-  uiCtx.strokeStyle = '#4e68b2'; uiCtx.lineWidth = 3; uiCtx.strokeRect(8, 8, vw - 16, vh - 16);
-  uiCtx.fillStyle = '#dfecff'; uiCtx.font = '700 20px system-ui'; uiCtx.fillText(`SCORE ${state.score}`, 18, 32);
-  uiCtx.fillText(`BEST ${state.best}`, 18, 56);
+  uiCtx.fillStyle = '#dfecff'; uiCtx.font = '700 20px system-ui';
   uiCtx.fillText(`BALLS ${state.balls}`, vw - 130, 32);
-  uiCtx.font = '500 13px system-ui'; uiCtx.fillStyle = '#a9bbff'; uiCtx.fillText(`A/← 左  D/→ 右  SPACE 打ち出し  R リスタート`, 18, vh - 16);
-  if (state.mode === 'ready') { uiCtx.fillStyle = '#fff'; uiCtx.font = '700 24px system-ui'; uiCtx.fillText('READY / SPACE TO LAUNCH', 90, 410); }
-  if (state.mode === 'ball_lost') { uiCtx.fillStyle = '#ffc8d8'; uiCtx.font = '700 28px system-ui'; uiCtx.fillText('BALL LOST', 170, 390); }
-  if (state.mode === 'game_over') { uiCtx.fillStyle = '#ff9cb7'; uiCtx.font = '700 34px system-ui'; uiCtx.fillText('GAME OVER', 145, 380); uiCtx.font = '700 20px system-ui'; uiCtx.fillText('Press R or Tap to Restart', 132, 420); }
-  uiCtx.font = '12px monospace'; uiCtx.fillStyle = '#9fb4ff';
-  const activeParticles = particles.reduce((n, p) => n + (p.active ? 1 : 0), 0);
-  uiCtx.fillText(`FPS ${state.fps}  sprites ${(renderer.verts.length / 5 / 6) | 0}  particles ${activeParticles}`, 18, 76);
+  uiCtx.font = '500 13px system-ui'; uiCtx.fillStyle = '#a9bbff'; uiCtx.fillText('A/← 左  D/→ 右  SPACE 打ち出し  R リスタート / タップ操作可', 18, vh - 16);
+  if (state.mode === 'ready') { uiCtx.fillStyle = '#fff'; uiCtx.font = '700 24px system-ui'; uiCtx.fillText('READY', 210, 410); }
+  if (state.mode === 'game_over') { uiCtx.fillStyle = '#ff9cb7'; uiCtx.font = '700 34px system-ui'; uiCtx.fillText('GAME OVER', 145, 380); }
   uiCtx.restore();
-
-  const _origin = worldToScreen(0, 0); void _origin;
 }
 
 let prev = performance.now();
