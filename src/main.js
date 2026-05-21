@@ -1,6 +1,19 @@
 const DPR_MAX = 2;
 const WORLD = { w: 500, h: 800 };
 
+const PHYSICS = {
+  gravity: 980,
+  airDrag: 0.999,
+  rollingFriction: 0.9985,
+  wallBounce: 0.78,
+  railBounce: 0.72,
+  buildingBounce: 0.45,
+  flipperBounce: 0.88,
+  flipperFriction: 0.995,
+  maxBallSpeed: 1100,
+  minFlipperBallSpeed: 420,
+};
+
 const GRID = {
   cols: 8,
   rows: 8,
@@ -175,7 +188,7 @@ const grid = []; let nextBuildingId = 1; const buildings = []; const orbs = []; 
 for (let r = 0; r < GRID.rows; r += 1) { const row = []; for (let c = 0; c < GRID.cols; c += 1) row.push({ tags: [ZONE_TEMPLATE[r][c]], occupiedBy: null }); grid.push(row); }
 
 const walls = [{ x: 25, y: 25, w: 10, h: 740 }, { x: 465, y: 25, w: 10, h: 740 }, { x: 25, y: 25, w: 450, h: 10 }];
-const rails = [{ x1: 25, y1: 620, x2: 170, y2: 720, r: 10, restitution: 0.45, friction: 0.985 }, { x1: 475, y1: 620, x2: 330, y2: 720, r: 10, restitution: 0.45, friction: 0.985 }];
+const rails = [{ x1: 25, y1: 620, x2: 170, y2: 720, r: 10, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }, { x1: 475, y1: 620, x2: 330, y2: 720, r: 10, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }];
 const flippers = {
   left: { pivot: { x: 170, y: 720 }, length: 62, radius: 9, base: 0.16, active: -0.78, angle: 0.16, prev: 0.16, upImpulse: 980 },
   right: { pivot: { x: 330, y: 720 }, length: 62, radius: 9, base: Math.PI - 0.16, active: Math.PI + 0.78, angle: Math.PI - 0.16, prev: Math.PI - 0.16, upImpulse: 980 },
@@ -233,7 +246,7 @@ function segmentCapsuleHit(b, seg) {
   b.vy *= seg.friction;
   return { nx, ny, t, cx, cy };
 }
-function flipperSegment(f) { return { x1: f.pivot.x, y1: f.pivot.y, x2: f.pivot.x + Math.cos(f.angle) * f.length, y2: f.pivot.y + Math.sin(f.angle) * f.length, r: f.radius, restitution: 0.58, friction: 0.992 }; }
+function flipperSegment(f) { return { x1: f.pivot.x, y1: f.pivot.y, x2: f.pivot.x + Math.cos(f.angle) * f.length, y2: f.pivot.y + Math.sin(f.angle) * f.length, r: f.radius, restitution: PHYSICS.flipperBounce, friction: PHYSICS.flipperFriction }; }
 function applyFlipperImpulse(f, hit, sdt) {
   const omega = (f.angle - f.prev) / Math.max(sdt, 0.0001);
   const rx = hit.cx - f.pivot.x;
@@ -245,11 +258,16 @@ function applyFlipperImpulse(f, hit, sdt) {
   const relN = relVx * hit.nx + relVy * hit.ny;
   if (relN >= 0) return;
   const boost = clamp((-relN) * 1.25 + Math.abs(omega) * f.length * 0.22, 0, f.upImpulse);
-  ball.vx += hit.nx * boost;
-  ball.vy += hit.ny * boost;
-  ball.vy -= boost * 0.55;
+  const tangentX = -ry;
+  const tangentY = rx;
+  const tangentLen = Math.hypot(tangentX, tangentY) || 1;
+  const tx = tangentX / tangentLen;
+  const ty = tangentY / tangentLen;
+  ball.vx += hit.nx * boost * 0.75 + tx * boost * 0.28;
+  ball.vy += hit.ny * boost * 0.75 + ty * boost * 0.28;
+  ball.vy -= boost * 0.22;
 }
-function clampBallSpeed() { const max = 1300; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
+function clampBallSpeed() { const max = PHYSICS.maxBallSpeed; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
 function ensureMinBallSpeed(min = 360) { const speed = Math.hypot(ball.vx, ball.vy); if (speed > 0 && speed < min) { const k = min / speed; ball.vx *= k; ball.vy *= k; } }
 
 function makeLevelUpChoices() { const choices = []; const unowned = allCards.filter((c) => !ownedCards.some((o) => o.id === c.id)); if (unowned.length) choices.push({ type: 'new', cardId: unowned[Math.floor(Math.random() * unowned.length)].id }); const up = ownedCards.filter((c) => c.level < 5); while (choices.length < 3 && up.length) { const p = up[Math.floor(Math.random() * up.length)]; choices.push({ type: 'up', cardId: p.id }); } while (choices.length < 3) choices.push({ type: 'up', cardId: ownedCards[Math.floor(Math.random() * ownedCards.length)].id }); return choices.slice(0, 3); }
@@ -267,11 +285,17 @@ function pointerDown(clientX, clientY) { const rect = wrap.getBoundingClientRect
 function pointerUp() { if (input.pointerSide === 1) input.left = false; if (input.pointerSide === 2) input.right = false; input.pointerSide = 0; }
 addEventListener('pointerdown', (e) => pointerDown(e.clientX, e.clientY)); addEventListener('pointerup', pointerUp); addEventListener('pointercancel', pointerUp);
 
+function updateFlipper(f, pressed) {
+  const target = pressed ? f.active : f.base;
+  const speed = pressed ? 0.62 : 0.32;
+  f.angle += (target - f.angle) * speed;
+}
+
 function update(dt) {
   state.fpsS += dt; state.fpsN += 1; if (state.fpsS > 0.3) { state.fps = Math.round(state.fpsN / state.fpsS); state.fpsS = 0; state.fpsN = 0; }
   flippers.left.prev = flippers.left.angle; flippers.right.prev = flippers.right.angle;
-  flippers.left.angle += ((input.left ? flippers.left.active : flippers.left.base) - flippers.left.angle) * 0.45;
-  flippers.right.angle += ((input.right ? flippers.right.active : flippers.right.base) - flippers.right.angle) * 0.45;
+  updateFlipper(flippers.left, input.left);
+  updateFlipper(flippers.right, input.right);
 
   if (state.mode === 'playing') {
     for (const card of ownedCards) { card.cooldownTimer -= dt; if (card.cooldownTimer <= 0) { trySpawnFromCard(card); card.cooldownTimer += card.cooldownSec; } }
@@ -284,17 +308,17 @@ function update(dt) {
   else if (state.mode === 'playing' && ball.active) {
     const speed = len2(ball.vx, ball.vy); const substeps = clamp(Math.ceil((speed * dt) / (ball.r * 0.4)), 1, 8); const sdt = dt / substeps;
     for (let s = 0; s < substeps; s += 1) {
-      ball.vy += 900 * sdt; ball.x += ball.vx * sdt; ball.y += ball.vy * sdt; clampBallSpeed();
-      for (const w of walls) resolveAABB(ball, w, 0.62);
+      ball.vy += PHYSICS.gravity * sdt; ball.vx *= PHYSICS.airDrag * PHYSICS.rollingFriction; ball.vy *= PHYSICS.airDrag; ball.x += ball.vx * sdt; ball.y += ball.vy * sdt; clampBallSpeed();
+      for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce);
       for (const seg of rails) segmentCapsuleHit(ball, seg);
       for (const key of ['left', 'right']) {
         const f = flippers[key];
         const hit = segmentCapsuleHit(ball, flipperSegment(f));
         const pressed = key === 'left' ? input.left : input.right;
         const moving = pressed && Math.abs(f.prev - f.angle) > 0.002;
-        if (hit && moving) { applyFlipperImpulse(f, hit, sdt); clampBallSpeed(); ensureMinBallSpeed(420); }
+        if (hit && moving) { applyFlipperImpulse(f, hit, sdt); clampBallSpeed(); ensureMinBallSpeed(PHYSICS.minFlipperBallSpeed); }
       }
-      for (const b of buildings) if (b.active && b.hitCooldown <= 0 && resolveAABB(ball, b, 0.55)) { ensureMinBallSpeed(380); b.hp -= 1; b.hitCooldown = 0.08; if (b.hp <= 0) { destroyBuilding(b); ball.vx *= 1.08; ball.vy *= 1.08; clampBallSpeed(); ensureMinBallSpeed(420); } }
+      for (const b of buildings) if (b.active && b.hitCooldown <= 0 && resolveAABB(ball, b, PHYSICS.buildingBounce)) { b.hp -= 1; b.hitCooldown = 0.08; if (b.hp <= 0) { destroyBuilding(b); ball.vx *= 1.03; ball.vy *= 1.03; clampBallSpeed(); } }
       for (const orb of orbs) if (orb.active && len2(ball.x - orb.x, ball.y - orb.y) <= ball.r + orb.r) { orb.active = false; gainExp(orb.value); }
       if (ball.y > WORLD.h + 30 || (ball.y > drain.y && ball.x > drain.x0 && ball.x < drain.x1)) { ball.active = false; state.mode = 'ball_lost'; state.ballLostTimer = 0.8; break; }
     }
