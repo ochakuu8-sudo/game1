@@ -2550,16 +2550,18 @@ drawMiniDistrict = function drawMiniDistrictRef(ctx, x, y) {
   pxRect(ctx, gx - 12, gy - 12, gw + 24, gh + 24, REF_PIXEL.asphalt);
   for (let row = 0; row < GRID.rows; row += 1) {
     for (let col = 0; col < GRID.cols; col += 1) {
-      refLot(ctx, gx + col * 40 + 4, gy + row * 40 + 4, 32, 32, ZONE_TEMPLATE[row][col], row, col);
+      const lotInset = 4;
+      const lotSize = GRID.cellSize - lotInset * 2;
+      refLot(ctx, gx + col * GRID.cellSize + lotInset, gy + row * GRID.cellSize + lotInset, lotSize, lotSize, ZONE_TEMPLATE[row][col], row, col);
     }
   }
   for (let i = 0; i <= GRID.cols; i += 1) {
-    const xx = gx + i * 40;
+    const xx = gx + i * GRID.cellSize;
     pxRect(ctx, xx - 2, gy - 12, 4, gh + 24, '#95a3aa');
     if (i > 0 && i < GRID.cols) for (let yy = gy + 10; yy < gy + gh - 8; yy += 34) pxRect(ctx, xx - 1, yy, 2, 5, '#d9e2e7');
   }
   for (let i = 0; i <= GRID.rows; i += 1) {
-    const yy = gy + i * 40;
+    const yy = gy + i * GRID.cellSize;
     pxRect(ctx, gx - 12, yy - 2, gw + 24, 4, '#95a3aa');
     if (i > 0 && i < GRID.rows) for (let xx = gx + 10; xx < gx + gw - 8; xx += 34) pxRect(ctx, xx, yy - 1, 5, 2, '#d9e2e7');
   }
@@ -2721,7 +2723,7 @@ function getCandidates(card) { const list = []; for (let row = 0; row < GRID.row
 function weightedPick(cands) { const total = cands.reduce((a, c) => a + c.weight, 0); let v = Math.random() * total; for (const c of cands) { v -= c.weight; if (v <= 0) return c; } return cands[cands.length - 1]; }
 function occupancy() { let used = 0; for (const r of grid) for (const c of r) if (c.occupiedBy) used += 1; return used / (GRID.cols * GRID.rows); }
 function activeCount(cardId) { return buildings.filter((b) => b.active && b.cardId === cardId).length; }
-function trySpawnFromCard(card, force = false) { if (!card) return false; if (!force) { if (buildings.filter((b) => b.active).length >= maxBuildings) return false; if (occupancy() > 0.72) return false; if (activeCount(card.id) >= card.maxActive) return false; } const cands = getCandidates(card); if (!cands.length) return false; const pick = weightedPick(cands); const x = GRID.left + pick.col * GRID.cellSize; const y = GRID.top + pick.row * GRID.cellSize; const map = { '1x1': [32, 32], '1x2': [32, 72], '2x1': [72, 32], '2x2': [72, 72] }; const key = `${card.footprint.w}x${card.footprint.h}`; const [w, h] = map[key] || [32, 32]; const b = { instanceId: nextBuildingId++, cardId: card.id, name: card.name, level: card.level, col: pick.col, row: pick.row, footprint: structuredClone(card.footprint), x: x + 4, y: y + 4, w, h, hp: card.hp, maxHp: card.hp, score: card.score, exp: card.exp, tags: [...card.tags], effectId: card.effectId, spriteKey: card.spriteKey, active: true, hitCooldown: 0 };
+function trySpawnFromCard(card, force = false) { if (!card) return false; if (!force) { if (buildings.filter((b) => b.active).length >= maxBuildings) return false; if (occupancy() > 0.72) return false; if (activeCount(card.id) >= card.maxActive) return false; } const cands = getCandidates(card); if (!cands.length) return false; const pick = weightedPick(cands); const x = GRID.left + pick.col * GRID.cellSize; const y = GRID.top + pick.row * GRID.cellSize; const inset = 4; const w = card.footprint.w * GRID.cellSize - inset * 2; const h = card.footprint.h * GRID.cellSize - inset * 2; const b = { instanceId: nextBuildingId++, cardId: card.id, name: card.name, level: card.level, col: pick.col, row: pick.row, footprint: structuredClone(card.footprint), x: x + inset, y: y + inset, w, h, hp: card.hp, maxHp: card.hp, score: card.score, exp: card.exp, tags: [...card.tags], effectId: card.effectId, spriteKey: card.spriteKey, active: true, hitCooldown: 0 };
   buildings.push(b); for (let dy = 0; dy < card.footprint.h; dy += 1) for (let dx = 0; dx < card.footprint.w; dx += 1) grid[pick.row + dy][pick.col + dx].occupiedBy = b.instanceId; return true; }
 function spawnPeople(building, amount) {
   const cx = building.x + building.w * 0.5;
