@@ -2569,29 +2569,7 @@ drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
   pxFrame(ctx, x + 8, y + 6, w - 16, h - 10, '#d8dfdb', '#42515a', '#edf2ee');
   pxFrame(ctx, x + 22, y + 80, w - 44, h - 110, '#c7cfd2', '#55646c', '#ecf0f1');
   pxRect(ctx, x + 34, y + 95, w - 68, h - 142, '#dde3e4');
-  refWaterChannel(ctx, x + 36, y + 135, 35, 565, 'left');
-  refWaterChannel(ctx, x + 429, y + 135, 35, 565, 'right');
-
-  refRoadPath(ctx, [[55, 150], [66, 95], [188, 88], [336, 88], [444, 106], [453, 170]], 27, true);
-  refRoadPath(ctx, [[54, 650], [95, 587], [157, 548], [250, 515], [342, 548], [406, 590], [448, 650]], 28, true);
-  refRampPath(ctx, [[56, 615], [76, 510], [59, 425], [78, 335], [63, 240]]);
-  refCityFurniture(ctx, x, y);
-  refRampPath(ctx, [[444, 615], [424, 510], [441, 425], [422, 335], [438, 240]]);
   drawMiniDistrict(ctx, x, y);
-
-  pxFrame(ctx, x + 112, y + 536, 276, 124, '#cbd2d6', '#52666f', '#edf1f2');
-  refRampPath(ctx, [[74, 650], [93, 580], [88, 515], [104, 444]]);
-  refRampPath(ctx, [[426, 650], [407, 580], [412, 515], [396, 444]]);
-  refRoadPath(ctx, [[250, 626], [250, 739]], 31, true);
-  pxDisk(ctx, x + 250, y + 672, 12, '#e8eef2', '#8aa0ad', '#ffffff');
-
-  refRoadPath(ctx, [[44, 692], [132, 692], [160, 705]], 27, false);
-  refRoadPath(ctx, [[456, 692], [368, 692], [340, 705]], 27, false);
-  pxFrame(ctx, x + 203, y + 735, 94, 48, '#59666e', '#2f3a40', '#9da8ae');
-  pxRect(ctx, x + 226, y + 755, 48, 5, '#324048');
-  for (let i = 0; i < 7; i += 1) pxRect(ctx, x + 218 + i * 9, y + 766, 5, 17, '#435159');
-  pxRect(ctx, x + 70, y + 727, 30, 16, '#aeb7bc');
-  pxRect(ctx, x + 400, y + 727, 30, 16, '#aeb7bc');
 };
 
 function refCityFurniture(ctx, x, y) {
