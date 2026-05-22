@@ -2631,10 +2631,25 @@ registerAtlasSprites = function registerAtlasSpritesRef(atlas) {
   packHiDpi(atlas, 'building_apartment', 40, 80, (c, x, y, w, h) => drawApartmentSprite(c, x, y, w, h));
   packHiDpi(atlas, 'building_gas', 80, 40, (c, x, y, w, h) => drawGasSprite(c, x, y, w, h));
   packHiDpi(atlas, 'building_tower', 80, 80, (c, x, y, w, h) => drawTowerSprite(c, x, y, w, h));
-  packHiDpi(atlas, 'exp_orb', 20, 20, (ctx, x, y, w) => {
-    pxDisk(ctx, x + w * 0.5, y + w * 0.5, w * 0.45, REF_PIXEL.yellow, '#8a4d10', '#fff7bf');
-    refStar(ctx, x + w * 0.5, y + w * 0.5, 6, '#fff7bf', '#f08b22');
-  });
+  const personPalettes = [
+    { head: '#ffe0be', body: '#4a8fd6', legs: '#1d3557' },
+    { head: '#ffd2a6', body: '#53b37b', legs: '#2f4858' },
+    { head: '#ffcc9d', body: '#d97f4a', legs: '#425066' },
+  ];
+  const legsByFrame = [[2, 0], [1, 1], [0, 2]];
+  for (let variant = 0; variant < personPalettes.length; variant += 1) {
+    for (let frame = 0; frame < 3; frame += 1) {
+      packHiDpi(atlas, `person_${variant}_${frame}`, 10, 10, (ctx, x, y) => {
+        const palette = personPalettes[variant];
+        const [lLeg, rLeg] = legsByFrame[frame];
+        pxRect(ctx, x + 3, y + 1, 4, 1, '#00000066');
+        pxRect(ctx, x + 4, y + 0, 2, 2, palette.head);
+        pxRect(ctx, x + 3, y + 2, 4, 3, palette.body);
+        pxRect(ctx, x + 3, y + 5, 1, 2 + lLeg, palette.legs);
+        pxRect(ctx, x + 6, y + 5 + rLeg, 1, 2, palette.legs);
+      });
+    }
+  }
   packHiDpi(atlas, 'playfield', WORLD.w, WORLD.h, (ctx, x, y, w, h) => drawPlayfieldSprite(ctx, x, y, w, h));
 };
 
@@ -2653,8 +2668,8 @@ const allCards = [
 const cardPool = new Map(allCards.map((card) => [card.id, card]));
 const ownedCards = [structuredClone(cardPool.get('house')), structuredClone(cardPool.get('convenience'))];
 
-const grid = []; let nextBuildingId = 1; const buildings = []; const orbs = []; const people = []; let levelUpChoices = [];
-const MAX_PEOPLE = 100;
+const grid = []; let nextBuildingId = 1; const buildings = []; const people = []; let levelUpChoices = [];
+const MAX_PEOPLE = 80;
 for (let r = 0; r < GRID.rows; r += 1) { const row = []; for (let c = 0; c < GRID.cols; c += 1) row.push({ tags: [ZONE_TEMPLATE[r][c]], occupiedBy: null }); grid.push(row); }
 
 const walls = [{ x: 25, y: 25, w: 10, h: 740 }, { x: 465, y: 25, w: 10, h: 740 }, { x: 25, y: 25, w: 450, h: 10 }];
@@ -2668,7 +2683,7 @@ const maxBuildings = 8;
 
 function getNextExp() { return 5 + state.level * 3; }
 function updateQuota() { state.quota = Math.floor(3000 * Math.pow(1.75, state.round - 1)); }
-function resetGridOccupancy() { for (const row of grid) for (const cell of row) cell.occupiedBy = null; buildings.length = 0; orbs.length = 0; people.length = 0; }
+function resetGridOccupancy() { for (const row of grid) for (const cell of row) cell.occupiedBy = null; buildings.length = 0; people.length = 0; }
 function resetToReady() { ball.x = START_POS.x; ball.y = START_POS.y; ball.vx = 0; ball.vy = 0; ball.active = false; state.mode = 'ready'; }
 function launchBall() { ball.active = true; ball.vx = -120; ball.vy = -900; state.mode = 'playing'; }
 function clearRound() { resetGridOccupancy(); for (const card of ownedCards) card.cooldownTimer = randRange(card.cooldownSec * 0.7, card.cooldownSec * 1.2); trySpawnFromCard(ownedCards.find((c) => c.id === 'house') || ownedCards[0], true); trySpawnFromCard(ownedCards.find((c) => c.id === 'convenience') || ownedCards[0], true); }
@@ -2682,43 +2697,36 @@ function occupancy() { let used = 0; for (const r of grid) for (const c of r) if
 function activeCount(cardId) { return buildings.filter((b) => b.active && b.cardId === cardId).length; }
 function trySpawnFromCard(card, force = false) { if (!card) return false; if (!force) { if (buildings.filter((b) => b.active).length >= maxBuildings) return false; if (occupancy() > 0.72) return false; if (activeCount(card.id) >= card.maxActive) return false; } const cands = getCandidates(card); if (!cands.length) return false; const pick = weightedPick(cands); const x = GRID.left + pick.col * GRID.cellSize; const y = GRID.top + pick.row * GRID.cellSize; const map = { '1x1': [32, 32], '1x2': [32, 72], '2x1': [72, 32], '2x2': [72, 72] }; const key = `${card.footprint.w}x${card.footprint.h}`; const [w, h] = map[key] || [32, 32]; const b = { instanceId: nextBuildingId++, cardId: card.id, name: card.name, level: card.level, col: pick.col, row: pick.row, footprint: structuredClone(card.footprint), x: x + 4, y: y + 4, w, h, hp: card.hp, maxHp: card.hp, score: card.score, exp: card.exp, tags: [...card.tags], effectId: card.effectId, spriteKey: card.spriteKey, active: true, hitCooldown: 0 };
   buildings.push(b); for (let dy = 0; dy < card.footprint.h; dy += 1) for (let dx = 0; dx < card.footprint.w; dx += 1) grid[pick.row + dy][pick.col + dx].occupiedBy = b.instanceId; return true; }
-function spawnOrbs(building, amount) { for (let i = 0; i < amount; i += 1) orbs.push({ x: building.x + building.w * 0.5 + randRange(-8, 8), y: building.y + building.h * 0.5 + randRange(-8, 8), vx: randRange(-30, 30), vy: randRange(-40, 0), r: 9, value: 1, life: 10, active: true }); }
-function spawnPeople(building) {
-  const byType = {
-    house: [2, 4],
-    convenience: [3, 5],
-    apartment: [5, 8],
-    gas_station: [3, 5],
-    tower: [6, 10],
-  };
-  const [min, max] = byType[building.cardId] || [3, 6];
-  const count = Math.floor(randRange(min, max + 1));
+function spawnPeople(building, amount) {
   const cx = building.x + building.w * 0.5;
   const cy = building.y + building.h * 0.5;
-  for (let i = 0; i < count; i += 1) {
+  const spawnCount = Math.max(1, Math.floor(amount));
+  for (let i = 0; i < spawnCount; i += 1) {
     let person = people.find((p) => !p.active);
     if (!person) {
       if (people.length >= MAX_PEOPLE) break;
       person = {};
       people.push(person);
     }
-    const angle = randRange(-Math.PI * 0.9, Math.PI * 0.2);
-    const speed = randRange(46, 96);
-    const life = randRange(1.5, 3.0);
-    person.x = cx + randRange(-8, 8);
-    person.y = cy + randRange(-8, 8);
-    person.vx = Math.cos(angle) * speed + randRange(-15, 15);
-    person.vy = Math.sin(angle) * speed + randRange(10, 30);
+    const angle = randRange(0, Math.PI * 2);
+    const speed = randRange(50, 90);
+    const life = randRange(3, 8);
+    person.x = cx + randRange(-6, 6);
+    person.y = cy + randRange(-6, 6);
+    person.vx = Math.cos(angle) * speed;
+    person.vy = Math.sin(angle) * speed;
+    person.r = randRange(6, 9);
+    person.value = 1;
     person.life = life;
-    person.maxLife = life;
-    person.color = Math.floor(randRange(0, 3));
-    person.frame = Math.floor(randRange(0, 2));
-    person.animTimer = randRange(0, 0.12);
     person.active = true;
+    person.anim = Math.floor(randRange(0, 3));
+    person.animTimer = randRange(0, 0.24);
+    person.seed = Math.random() * 1000;
+    person.spriteVariant = Math.floor(randRange(0, 3));
   }
 }
 function gainExp(v) { state.exp += v; while (state.exp >= getNextExp()) { state.exp -= getNextExp(); state.level += 1; state.levelUpsPending += 1; } }
-function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; state.roundScore += building.score; state.totalScore += building.score; spawnOrbs(building, Math.max(1, building.exp)); spawnPeople(building); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
+function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; state.roundScore += building.score; state.totalScore += building.score; spawnPeople(building, Math.max(1, building.exp)); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
 
 function resolveAABB(b, w, restitution = 0.1) {
   const nx = clamp(b.x, w.x, w.x + w.w);
@@ -2862,21 +2870,23 @@ function update(dt) {
   }
 
   for (const b of buildings) if (b.active && b.hitCooldown > 0) b.hitCooldown -= dt;
-  for (const orb of orbs) if (orb.active) { orb.life -= dt; if (orb.life <= 0) orb.active = false; orb.vy += 260 * dt; orb.x += orb.vx * dt; orb.y += orb.vy * dt; orb.vx *= 0.98; orb.vy *= 0.98; }
   for (const person of people) if (person.active) {
     person.life -= dt;
     if (person.life <= 0) { person.active = false; continue; }
     person.animTimer += dt;
-    if (person.animTimer > 0.12) { person.animTimer = 0; person.frame = (person.frame + 1) % 2; }
-    person.vx += randRange(-22, 22) * dt;
-    person.vy += randRange(-18, 18) * dt + 6 * dt;
-    const speed = Math.hypot(person.vx, person.vy);
-    if (speed > 110) { const k = 110 / speed; person.vx *= k; person.vy *= k; }
+    if (person.animTimer > 0.1) { person.animTimer = 0; person.anim = (person.anim + 1) % 3; }
+    const wobble = person.seed + person.life * 3;
+    person.vx += Math.cos(wobble * 1.7) * 25 * dt + randRange(-10, 10) * dt;
+    person.vy += Math.sin(wobble * 1.3) * 25 * dt + randRange(-10, 10) * dt;
+    const speed = Math.hypot(person.vx, person.vy) || 1;
+    const targetSpeed = 76;
+    person.vx = (person.vx / speed) * targetSpeed;
+    person.vy = (person.vy / speed) * targetSpeed;
     person.x += person.vx * dt;
     person.y += person.vy * dt;
-    person.vx *= 0.98;
-    person.vy *= 0.98;
-    if (person.x < -30 || person.x > WORLD.w + 30 || person.y < -30 || person.y > WORLD.h + 30) person.active = false;
+    const minX = 28; const maxX = WORLD.w - 28; const minY = 28; const maxY = WORLD.h - 28;
+    if (person.x < minX || person.x > maxX) { person.x = clamp(person.x, minX, maxX); person.vx *= -1; }
+    if (person.y < minY || person.y > maxY) { person.y = clamp(person.y, minY, maxY); person.vy *= -1; }
   }
 
   if (state.mode === 'ready') { ball.x = START_POS.x; ball.y = START_POS.y; if (input.launchTap) launchBall(); }
@@ -2893,7 +2903,7 @@ function update(dt) {
         resolveFlipperHit(f, pressed, sdt);
       }
       for (const b of buildings) if (b.active && b.hitCooldown <= 0 && resolveAABB(ball, { x: b.x - 4, y: b.y - 4, w: b.w + 8, h: b.h + 8 }, PHYSICS.buildingBounce)) { b.hp -= 1; b.hitCooldown = 0.08; if (b.hp <= 0) { destroyBuilding(b); ball.vx *= 1.03; ball.vy *= 1.03; clampBallSpeed(); } }
-      for (const orb of orbs) if (orb.active && len2(ball.x - orb.x, ball.y - orb.y) <= ball.r + orb.r) { orb.active = false; gainExp(orb.value); }
+      for (const person of people) if (person.active && len2(ball.x - person.x, ball.y - person.y) <= ball.r + person.r) { person.active = false; gainExp(person.value); }
       if (ball.y > WORLD.h + 30 || (ball.y > drain.y && ball.x > drain.x0 && ball.x < drain.x1)) { ball.active = false; state.mode = 'ball_lost'; state.ballLostTimer = 0.8; break; }
     }
   } else if (state.mode === 'ball_lost') {
@@ -2921,7 +2931,7 @@ function drawSegmentSprite(entry, x1, y1, x2, y2, thickness, sx, sy) { const dx 
 function zoneSprite(cell) { return atlas.entries.get(`zone_${cell.tags[0]}`) || atlas.entries.get('zone_small'); }
 function render() {
   const sx = glCanvas.width / WORLD.w; const sy = glCanvas.height / WORLD.h; renderer.begin();
-  const fieldSpr = atlas.entries.get('playfield'); const wallSpr = atlas.entries.get('wall'); const flipSpr = atlas.entries.get('flipper'); const ballSpr = atlas.entries.get('ball'); const orbSpr = atlas.entries.get('exp_orb'); const baseSpr = atlas.entries.get('building_base'); const hitBaseSpr = atlas.entries.get('building_hit_base');
+  const fieldSpr = atlas.entries.get('playfield'); const wallSpr = atlas.entries.get('wall'); const flipSpr = atlas.entries.get('flipper'); const ballSpr = atlas.entries.get('ball'); const baseSpr = atlas.entries.get('building_base'); const hitBaseSpr = atlas.entries.get('building_hit_base');
   renderer.pushSprite(fieldSpr, 0, 0, glCanvas.width, glCanvas.height);
   for (const w of walls) renderer.pushSprite(wallSpr, w.x * sx, w.y * sy, w.w * sx, w.h * sy);
   for (const seg of rails) drawSegmentSprite(wallSpr, seg.x1, seg.y1, seg.x2, seg.y2, seg.r, sx, sy);
@@ -2929,35 +2939,13 @@ function render() {
     renderer.pushSprite(b.hitCooldown > 0 ? hitBaseSpr : baseSpr, (b.x - 4) * sx, (b.y - 4) * sy, (b.w + 8) * sx, (b.h + 8) * sy);
     renderer.pushSprite(atlas.entries.get(b.spriteKey), b.x * sx, b.y * sy, b.w * sx, b.h * sy);
   }
-  for (const orb of orbs) if (orb.active) renderer.pushSprite(orbSpr, (orb.x - orb.r) * sx, (orb.y - orb.r) * sy, orb.r * 2 * sx, orb.r * 2 * sy);
+  for (const person of people) if (person.active) { const spr = atlas.entries.get(`person_${person.spriteVariant}_${person.anim}`); if (spr) renderer.pushSprite(spr, (person.x - 5) * sx, (person.y - 5) * sy, 10 * sx, 10 * sy); }
   for (const key of ['left', 'right']) { const f = flippers[key]; const seg = flipperSegment(f); const ang = Math.atan2(seg.y2 - seg.y1, seg.x2 - seg.x1); renderer.pushSprite(flipSpr, seg.x1 * sx, (seg.y1 - f.radius) * sy, f.length * sx, f.radius * 2 * sy, ang, 0, 0.5); }
   if (ball.active || state.mode === 'ready') renderer.pushSprite(ballSpr, (ball.x - ball.r) * sx, (ball.y - ball.r) * sy, ball.r * 2 * sx, ball.r * 2 * sy);
   renderer.flush(glCanvas.width, glCanvas.height);
 
   uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
-  const personPalettes = [
-    { head: '#ffe0be', body: '#4a8fd6', legs: '#1d3557' },
-    { head: '#ffd2a6', body: '#53b37b', legs: '#2f4858' },
-    { head: '#ffcc9d', body: '#d97f4a', legs: '#425066' },
-  ];
-  for (const person of people) if (person.active) {
-    const alpha = clamp(person.life / Math.max(0.001, person.maxLife), 0, 1) * 0.75;
-    const palette = personPalettes[person.color] || personPalettes[0];
-    const px = Math.round(person.x * sx);
-    const py = Math.round(person.y * sy);
-    const bob = person.frame ? 1 : 0;
-    uiCtx.globalAlpha = alpha;
-    uiCtx.fillStyle = '#00000066';
-    uiCtx.fillRect(px - 2, py + 4, 5, 2);
-    uiCtx.fillStyle = palette.head;
-    uiCtx.fillRect(px, py - 3, 2, 2);
-    uiCtx.fillStyle = palette.body;
-    uiCtx.fillRect(px - 1, py - 1, 4, 3);
-    uiCtx.fillStyle = palette.legs;
-    uiCtx.fillRect(px - 1, py + 2, 1, 2 + bob);
-    uiCtx.fillRect(px + 2, py + 2 + bob, 1, 2);
-  }
-  uiCtx.globalAlpha = 1;
+
   uiCtx.save(); uiCtx.scale(dpr, dpr); const vw = uiCanvas.width / dpr; const vh = uiCanvas.height / dpr;
   const cardLabel = (card) => ({ house: 'HOME', convenience: 'SHOP', apartment: 'APT', gas_station: 'GAS', tower: 'TOWER' }[card?.id] || 'CARD');
   const hudW = Math.min(500, vw);
