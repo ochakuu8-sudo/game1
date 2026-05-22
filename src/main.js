@@ -1,17 +1,23 @@
 const DPR_MAX = 2;
 const WORLD = { w: 500, h: 800 };
+const PLAYFIELD_TOP_Y = 104;
+const GRID_TOP_Y = 132;
+const BALL_RADIUS = 18;
+const BALL_SPRITE_SIZE = 42;
 
 const PHYSICS = {
-  gravity: 980,
-  airDrag: 0.999,
-  rollingFriction: 0.9985,
-  wallBounce: 0.78,
-  railBounce: 0.72,
-  buildingBounce: 0.45,
-  flipperBounce: 0.88,
-  flipperFriction: 0.995,
-  maxBallSpeed: 1100,
-  minFlipperBallSpeed: 420,
+  gravity: 940,
+  airDrag: 0.9972,
+  rollingFriction: 0.9975,
+  wallBounce: 0.52,
+  railBounce: 0.48,
+  buildingBounce: 0.32,
+  flipperBounce: 0.64,
+  flipperFriction: 0.985,
+  maxBallSpeed: 760,
+  maxUpwardBallSpeed: 1040,
+  minFlipperBallSpeed: 300,
+  spinDamping: 0.972,
 };
 
 const GRID = {
@@ -19,7 +25,7 @@ const GRID = {
   rows: 8,
   cellSize: 52,
   left: 90,
-  top: 90,
+  top: GRID_TOP_Y,
   get width() { return this.cols * this.cellSize; },
   get height() { return this.rows * this.cellSize; },
 };
@@ -2327,7 +2333,7 @@ const REF_PIXEL = {
 };
 
 GRID.left = 42;
-GRID.top = 88;
+GRID.top = GRID_TOP_Y;
 THEME.clear = [0.70, 0.82, 0.92, 1];
 
 function refLinePath(ctx, pts, width, color, dash = null) {
@@ -2567,10 +2573,14 @@ drawMiniDistrict = function drawMiniDistrictRef(ctx, x, y) {
   }
 };
 drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
+  const laneTop = PLAYFIELD_TOP_Y + 4;
+  const laneBottom = h - 30;
+  const deckTop = laneTop + 15;
+  const deckBottom = h - 47;
   pxRect(ctx, x, y, w, h, '#cfd8dd');
   pxFrame(ctx, x + 8, y + 6, w - 16, h - 10, '#d8dfdb', '#42515a', '#edf2ee');
-  pxFrame(ctx, x + 22, y + 80, w - 44, h - 110, '#c7cfd2', '#55646c', '#ecf0f1');
-  pxRect(ctx, x + 34, y + 95, w - 68, h - 142, '#dde3e4');
+  pxFrame(ctx, x + 22, y + laneTop, w - 44, laneBottom - laneTop, '#c7cfd2', '#55646c', '#ecf0f1');
+  pxRect(ctx, x + 34, y + deckTop, w - 68, deckBottom - deckTop, '#dde3e4');
   drawMiniDistrict(ctx, x, y);
 };
 
@@ -2630,10 +2640,10 @@ function packHiDpi(atlas, key, width, height, drawFn, scale = 2) {
   });
 }
 registerAtlasSprites = function registerAtlasSpritesRef(atlas) {
-  packHiDpi(atlas, 'ball', 30, 30, (ctx, x, y, w) => {
-    pxDisk(ctx, x + w * 0.5, y + w * 0.5, w * 0.47, '#cfd9e6', REF_PIXEL.ink, '#ffffff');
-    pxRect(ctx, x + 8, y + 7, 8, 4, '#ffffff');
-    pxRect(ctx, x + 18, y + 21, 5, 3, '#6f7f8b');
+  packHiDpi(atlas, 'ball', BALL_SPRITE_SIZE, BALL_SPRITE_SIZE, (ctx, x, y, w) => {
+    pxDisk(ctx, x + w * 0.5, y + w * 0.5, w * 0.47, '#bcc7d0', REF_PIXEL.ink, '#f8fbff');
+    pxRect(ctx, x + 12, y + 11, 8, 3, '#ffffff');
+    pxRect(ctx, x + 27, y + 29, 4, 2, '#7e8a94');
   });
   packHiDpi(atlas, 'flipper', 84, 20, (ctx, x, y) => {
     pxRect(ctx, x + 4, y + 15, 78, 5, 'rgba(36,44,50,.25)');
@@ -2683,7 +2693,7 @@ registerAtlasSprites = function registerAtlasSpritesRef(atlas) {
 
 const state = { mode: 'ready', balls: 3, ballLostTimer: 0, fps: 0, fpsS: 0, fpsN: 0, round: 1, quota: 3000, totalScore: 0, roundScore: 0, exp: 0, level: 1, levelUpsPending: 0 };
 const START_POS = { x: 430, y: 640 };
-const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: 13, active: false };
+const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot: 0, spin: 0, active: false };
 const input = { left: false, right: false, launchTap: false, pointerSide: 0 };
 
 const allCards = [
@@ -2700,11 +2710,11 @@ const grid = []; let nextBuildingId = 1; const buildings = []; const people = []
 const MAX_PEOPLE = 80;
 for (let r = 0; r < GRID.rows; r += 1) { const row = []; for (let c = 0; c < GRID.cols; c += 1) row.push({ tags: [ZONE_TEMPLATE[r][c]], occupiedBy: null }); grid.push(row); }
 
-const walls = [{ x: 25, y: 25, w: 10, h: 740 }, { x: 465, y: 25, w: 10, h: 740 }, { x: 25, y: 25, w: 450, h: 10 }];
-const rails = [{ x1: 25, y1: 620, x2: 160, y2: 704, r: 10, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 10, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }];
+const walls = [{ x: 25, y: PLAYFIELD_TOP_Y, w: 10, h: 765 - PLAYFIELD_TOP_Y }, { x: 465, y: PLAYFIELD_TOP_Y, w: 10, h: 765 - PLAYFIELD_TOP_Y }, { x: 25, y: PLAYFIELD_TOP_Y, w: 450, h: 10 }];
+const rails = [{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }];
 const flippers = {
-  left: { pivot: { x: 160, y: 704 }, length: 82, radius: 9, base: 0.52, active: -0.92, angle: 0.52, prev: 0.52, upImpulse: 980 },
-  right: { pivot: { x: 340, y: 704 }, length: 82, radius: 9, base: Math.PI - 0.52, active: Math.PI + 0.92, angle: Math.PI - 0.52, prev: Math.PI - 0.52, upImpulse: 980 },
+  left: { pivot: { x: 160, y: 704 }, length: 84, radius: 11, base: 0.52, active: -0.92, angle: 0.52, prev: 0.52, upImpulse: 620 },
+  right: { pivot: { x: 340, y: 704 }, length: 84, radius: 11, base: Math.PI - 0.52, active: Math.PI + 0.92, angle: Math.PI - 0.52, prev: Math.PI - 0.52, upImpulse: 620 },
 };
 const drain = { x0: 228, x1: 272, y: 760 };
 const maxBuildings = 8;
@@ -2712,8 +2722,8 @@ const maxBuildings = 8;
 function getNextExp() { return 5 + state.level * 3; }
 function updateQuota() { state.quota = Math.floor(3000 * Math.pow(1.75, state.round - 1)); }
 function resetGridOccupancy() { for (const row of grid) for (const cell of row) cell.occupiedBy = null; buildings.length = 0; people.length = 0; }
-function resetToReady() { ball.x = START_POS.x; ball.y = START_POS.y; ball.vx = 0; ball.vy = 0; ball.active = false; state.mode = 'ready'; }
-function launchBall() { ball.active = true; ball.vx = -120; ball.vy = -900; state.mode = 'playing'; }
+function resetToReady() { ball.x = START_POS.x; ball.y = START_POS.y; ball.vx = 0; ball.vy = 0; ball.rot = 0; ball.spin = 0; ball.active = false; state.mode = 'ready'; }
+function launchBall() { ball.active = true; ball.vx = -90; ball.vy = -1080; ball.spin = -1.2; state.mode = 'playing'; }
 function clearRound() { resetGridOccupancy(); for (const card of ownedCards) card.cooldownTimer = randRange(card.cooldownSec * 0.7, card.cooldownSec * 1.2); trySpawnFromCard(ownedCards.find((c) => c.id === 'house') || ownedCards[0], true); trySpawnFromCard(ownedCards.find((c) => c.id === 'convenience') || ownedCards[0], true); }
 function beginRound(round) { state.round = round; state.roundScore = 0; state.balls = 3; updateQuota(); clearRound(); resetToReady(); }
 function restartRun() { state.totalScore = 0; state.exp = 0; state.level = 1; state.levelUpsPending = 0; ownedCards.length = 0; ownedCards.push(structuredClone(cardPool.get('house')), structuredClone(cardPool.get('convenience'))); beginRound(1); }
@@ -2756,6 +2766,21 @@ function spawnPeople(building, amount) {
 function gainExp(v) { state.exp += v; while (state.exp >= getNextExp()) { state.exp -= getNextExp(); state.level += 1; state.levelUpsPending += 1; } }
 function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; state.roundScore += building.score; state.totalScore += building.score; spawnPeople(building, Math.max(1, building.exp)); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
 
+function addCollisionSpin(nx, ny, amount = 0.14) {
+  const tangentSpeed = ball.vx * -ny + ball.vy * nx;
+  ball.spin = clamp(ball.spin + (tangentSpeed / Math.max(ball.r, 1)) * amount, -7, 7);
+}
+function updateBallRotation(dt) {
+  const speed = Math.hypot(ball.vx, ball.vy);
+  if (speed > 1) {
+    const travelSign = Math.abs(ball.vx) > 8 ? Math.sign(ball.vx) : Math.sign(ball.spin || 1);
+    const targetSpin = (speed / Math.max(ball.r, 1)) * travelSign * 0.24;
+    ball.spin += (targetSpin - ball.spin) * 0.026;
+  }
+  ball.spin *= PHYSICS.spinDamping;
+  ball.rot += ball.spin * dt;
+}
+
 function resolveAABB(b, w, restitution = 0.1) {
   const nx = clamp(b.x, w.x, w.x + w.w);
   const ny = clamp(b.y, w.y, w.y + w.h);
@@ -2791,6 +2816,7 @@ function resolveAABB(b, w, restitution = 0.1) {
   if (vn < 0) {
     b.vx -= (1 + restitution) * vn * nxn;
     b.vy -= (1 + restitution) * vn * nyn;
+    addCollisionSpin(nxn, nyn, 0.05);
   }
   return true;
 }
@@ -2818,6 +2844,7 @@ function segmentCapsuleHit(b, seg) {
   if (vn < 0) {
     b.vx -= (1 + seg.restitution) * vn * nx;
     b.vy -= (1 + seg.restitution) * vn * ny;
+    addCollisionSpin(nx, ny, 0.038);
   }
   b.vx *= seg.friction;
   b.vy *= seg.friction;
@@ -2834,17 +2861,19 @@ function applyFlipperImpulse(f, hit, sdt) {
   const relVy = ball.vy - surfaceVy;
   const relN = relVx * hit.nx + relVy * hit.ny;
   if (relN >= 0) return;
-  const boost = clamp((-relN) * 1.25 + Math.abs(omega) * f.length * 0.22, 0, f.upImpulse);
+  const tipPower = 0.52 + hit.t * 0.20;
+  const boost = clamp(((-relN) * 0.68 + Math.abs(omega) * f.length * 0.11) * tipPower, 0, f.upImpulse);
   const tangentX = -ry;
   const tangentY = rx;
   const tangentLen = Math.hypot(tangentX, tangentY) || 1;
   const tx = tangentX / tangentLen;
   const ty = tangentY / tangentLen;
-  ball.vx += hit.nx * boost * 0.75 + tx * boost * 0.28;
-  ball.vy += hit.ny * boost * 0.75 + ty * boost * 0.28;
-  ball.vy -= boost * 0.22;
+  ball.vx += hit.nx * boost * 0.50 + tx * boost * 0.14;
+  ball.vy += hit.ny * boost * 0.50 + ty * boost * 0.14;
+  ball.vy -= boost * 0.03;
+  ball.spin = clamp(ball.spin + (boost / Math.max(ball.r, 1)) * (hit.t > 0.5 ? 0.10 : 0.07), -7, 7);
 }
-function clampBallSpeed() { const max = PHYSICS.maxBallSpeed; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
+function clampBallSpeed() { const max = ball.vy < -20 ? PHYSICS.maxUpwardBallSpeed : PHYSICS.maxBallSpeed; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
 function ensureMinBallSpeed(min = 360) { const speed = Math.hypot(ball.vx, ball.vy); if (speed > 0 && speed < min) { const k = min / speed; ball.vx *= k; ball.vy *= k; } }
 
 function makeLevelUpChoices() { const choices = []; const unowned = allCards.filter((c) => !ownedCards.some((o) => o.id === c.id)); if (unowned.length) choices.push({ type: 'new', cardId: unowned[Math.floor(Math.random() * unowned.length)].id }); const up = ownedCards.filter((c) => c.level < 5); while (choices.length < 3 && up.length) { const p = up[Math.floor(Math.random() * up.length)]; choices.push({ type: 'up', cardId: p.id }); } while (choices.length < 3) choices.push({ type: 'up', cardId: ownedCards[Math.floor(Math.random() * ownedCards.length)].id }); return choices.slice(0, 3); }
@@ -2919,10 +2948,10 @@ function update(dt) {
 
   if (state.mode === 'ready') { ball.x = START_POS.x; ball.y = START_POS.y; if (input.launchTap) launchBall(); }
   else if (state.mode === 'playing' && ball.active) {
-    const speed = len2(ball.vx, ball.vy); const substeps = clamp(Math.ceil((speed * dt) / (ball.r * 0.4)), 1, 8); const sdt = dt / substeps;
+    const speed = len2(ball.vx, ball.vy); const substeps = clamp(Math.ceil((speed * dt) / (ball.r * 0.32)), 1, 8); const sdt = dt / substeps;
     for (let s = 0; s < substeps; s += 1) {
       updateFlippers(sdt);
-      ball.vy += PHYSICS.gravity * sdt; ball.vx *= PHYSICS.airDrag * PHYSICS.rollingFriction; ball.vy *= PHYSICS.airDrag; ball.x += ball.vx * sdt; ball.y += ball.vy * sdt; clampBallSpeed();
+      ball.vy += PHYSICS.gravity * sdt; ball.vx *= PHYSICS.airDrag * PHYSICS.rollingFriction; ball.vy *= PHYSICS.airDrag; ball.x += ball.vx * sdt; ball.y += ball.vy * sdt; updateBallRotation(sdt); clampBallSpeed();
       for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce);
       for (const seg of rails) segmentCapsuleHit(ball, seg);
       for (const key of ['left', 'right']) {
@@ -2969,36 +2998,52 @@ function render() {
   }
   for (const person of people) if (person.active) { const spr = atlas.entries.get(`person_${person.spriteVariant}_${person.anim}`); if (spr) renderer.pushSprite(spr, (person.x - 5) * sx, (person.y - 5) * sy, 10 * sx, 10 * sy); }
   for (const key of ['left', 'right']) { const f = flippers[key]; const seg = flipperSegment(f); const ang = Math.atan2(seg.y2 - seg.y1, seg.x2 - seg.x1); renderer.pushSprite(flipSpr, seg.x1 * sx, (seg.y1 - f.radius) * sy, f.length * sx, f.radius * 2 * sy, ang, 0, 0.5); }
-  if (ball.active || state.mode === 'ready') renderer.pushSprite(ballSpr, (ball.x - ball.r) * sx, (ball.y - ball.r) * sy, ball.r * 2 * sx, ball.r * 2 * sy);
+  if (ball.active || state.mode === 'ready') renderer.pushSprite(ballSpr, (ball.x - ball.r) * sx, (ball.y - ball.r) * sy, ball.r * 2 * sx, ball.r * 2 * sy, ball.rot);
   renderer.flush(glCanvas.width, glCanvas.height);
 
   uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
 
   uiCtx.save(); uiCtx.scale(dpr, dpr); const vw = uiCanvas.width / dpr; const vh = uiCanvas.height / dpr;
   const cardLabel = (card) => ({ house: 'HOME', convenience: 'SHOP', apartment: 'APT', gas_station: 'GAS', tower: 'TOWER' }[card?.id] || 'CARD');
-  const hudW = Math.min(320, vw - 20);
+  const hudW = Math.min(440, vw - 20);
   const hudX = (vw - hudW) * 0.5;
-  const hudY = 8;
-  const hudH = 52;
+  const hudY = 6;
+  const hudH = 94;
   pxRect(uiCtx, hudX, hudY, hudW, hudH, '#f5d8a7');
   pxRect(uiCtx, hudX + 4, hudY + 4, hudW - 8, hudH - 8, '#102a44');
   pxCutPanel(uiCtx, hudX + 8, hudY + 8, hudW - 16, hudH - 12, '#176aa3', '#0a223a', '#68e4ff');
-  let hx = hudX + 16;
-  pxFrame(uiCtx, hx, hudY + 14, 134, 32, '#124f82', '#071c31', '#68e4ff', false);
-  refStar(uiCtx, hx + 16, hudY + 30, 14, '#ffd33f', '#8a4d10');
+  const boardX = hudX + 18;
+  const boardW = hudW - 36;
+  pxFrame(uiCtx, boardX, hudY + 12, boardW, 48, '#124f82', '#071c31', '#68e4ff', false);
+  refStar(uiCtx, boardX + 19, hudY + 36, 15, '#ffd33f', '#8a4d10');
+  uiCtx.fillStyle = '#7ee9ff';
+  uiCtx.font = '900 9px ui-monospace, SFMono-Regular, Consolas, monospace';
+  uiCtx.fillText('SCORE', boardX + 39, hudY + 31);
   uiCtx.fillStyle = '#fff3bd';
-  uiCtx.font = '900 14px ui-monospace, SFMono-Regular, Consolas, monospace';
-  uiCtx.fillText(String(state.totalScore).padStart(6, '0'), hx + 36, hudY + 34);
-  hx += 144;
-  pxFrame(uiCtx, hx, hudY + 14, 152, 32, '#124f82', '#071c31', '#68e4ff', false);
-  pxDisk(uiCtx, hx + 13, hudY + 30, 10, '#ffd33f', '#8a4d10', '#fff7bf');
+  uiCtx.font = '900 30px ui-monospace, SFMono-Regular, Consolas, monospace';
+  uiCtx.textAlign = 'center';
+  uiCtx.fillText(String(state.totalScore).padStart(7, '0'), hudX + hudW * 0.5, hudY + 54);
+  uiCtx.textAlign = 'start';
+  const infoFrameY = hudY + 66;
+  const infoTextY = infoFrameY + 15;
+  const roundText = `ROUND ${state.round}`;
+  const goalText = `GOAL ${state.roundScore}/${state.quota}`;
   const expMax = Math.max(1, getNextExp());
   const expRatio = clamp(state.exp / expMax, 0, 1);
-  pxRect(uiCtx, hx + 29, hudY + 22, 108, 8, '#08213b');
-  pxRect(uiCtx, hx + 31, hudY + 24, Math.floor(104 * expRatio), 4, '#25c8ff');
+  pxFrame(uiCtx, boardX, infoFrameY, boardW, 22, '#0e3457', '#071c31', '#46d6ff', false);
   uiCtx.fillStyle = '#bce9ff';
   uiCtx.font = '900 9px ui-monospace, SFMono-Regular, Consolas, monospace';
-  uiCtx.fillText(`EXP ${state.exp}/${expMax}`, hx + 29, hudY + 40);
+  uiCtx.fillText(roundText, boardX + 10, infoTextY);
+  uiCtx.textAlign = 'center';
+  uiCtx.fillText(goalText, hudX + hudW * 0.5, infoTextY);
+  uiCtx.textAlign = 'start';
+  const expX = boardX + boardW - 100;
+  const expBarW = 58;
+  pxDisk(uiCtx, expX - 8, infoFrameY + 11, 5, '#ffd33f', '#8a4d10', '#fff7bf');
+  uiCtx.fillStyle = '#bce9ff';
+  uiCtx.fillText(`LV ${state.level}`, expX, infoTextY);
+  pxRect(uiCtx, expX + 34, infoFrameY + 8, expBarW, 7, '#08213b');
+  pxRect(uiCtx, expX + 36, infoFrameY + 10, Math.floor((expBarW - 4) * expRatio), 3, '#25c8ff');
   if (state.mode === 'ready') {
     pxRect(uiCtx, vw * 0.5 - 24, vh - 42, 48, 4, '#ffd13a');
   }
