@@ -346,17 +346,17 @@ function drawPavingGrid(ctx, x, y, w, h, color = 'rgba(255,255,255,0.18)', step 
   ctx.stroke();
 }
 function drawTargetBase(ctx, x, y, w, h, hot = false) {
-  drawPixelFrame(ctx, x + 1, y + 1, w - 3, h - 3, hot ? '#f6da7c' : '#c9bea2', hot ? '#ffb329' : '#111820');
-  ctx.fillStyle = hot ? 'rgba(255, 91, 52, 0.30)' : 'rgba(0,0,0,0.12)';
-  ctx.fillRect(x + 6, y + h - 9, w - 15, 3);
-  ctx.fillStyle = '#f5db63';
-  ctx.fillRect(x + 6, y + 6, 9, 3);
-  ctx.fillRect(x + w - 18, y + 6, 9, 3);
-  ctx.fillStyle = hot ? '#ffffff' : '#2b3a3f';
-  ctx.fillRect(x + 9, y + h - 17, w - 22, 2);
+  drawPixelFrame(ctx, x + 2, y + 3, w - 4, h - 7, hot ? '#fff4b8' : '#e6edf2', hot ? '#f0c137' : '#98a9b4');
+  ctx.fillStyle = 'rgba(0,0,0,0.10)';
+  ctx.fillRect(x + 7, y + h - 8, w - 14, 2);
+  ctx.fillStyle = hot ? '#ffe27a' : '#d4dde3';
+  ctx.fillRect(x + 7, y + 8, 8, 2);
+  ctx.fillRect(x + w - 15, y + 8, 8, 2);
+  ctx.fillStyle = hot ? '#ffffff' : '#6f8088';
+  ctx.fillRect(x + 10, y + h - 16, w - 20, 2);
   if (hot) {
     ctx.fillStyle = 'rgba(255,255,255,0.82)';
-    ctx.fillRect(x + 12, y + 12, w - 26, 4);
+    ctx.fillRect(x + 11, y + 12, w - 22, 3);
   }
 }
 function drawGlassTower(ctx, x, y, w, h, accent = '#32bde2') {
@@ -2308,16 +2308,16 @@ registerAtlasSprites = function registerAtlasSpritesPixel(atlas) {
 };
 
 const REF_PIXEL = {
-  cream: '#f5d8a7',
-  cream2: '#fff1c9',
-  blue: '#176aa3',
-  blueDark: '#0b3458',
-  blueDeep: '#08213b',
-  water: '#08a8dc',
-  waterLight: '#74ecff',
-  asphalt: '#75858a',
-  asphaltDark: '#5a6d73',
-  lane: '#fff1b8',
+  cream: '#f6e9c8',
+  cream2: '#fff7e3',
+  blue: '#4fa6d4',
+  blueDark: '#2f6588',
+  blueDeep: '#214b68',
+  water: '#8cd8f3',
+  waterLight: '#dff6ff',
+  asphalt: '#a6b2b8',
+  asphaltDark: '#8f9da4',
+  lane: '#e7edf1',
   yellow: '#ffd33f',
   orange: '#f08b22',
   red: '#ee5548',
@@ -2344,21 +2344,16 @@ function refLinePath(ctx, pts, width, color, dash = null) {
   ctx.restore();
 }
 function refRoadPath(ctx, pts, width = 24, dashed = true) {
-  refLinePath(ctx, pts.map(([a, b]) => [a + 4, b + 5]), width + 9, 'rgba(4,18,30,.30)');
-  refLinePath(ctx, pts, width + 7, REF_PIXEL.ink);
+  refLinePath(ctx, pts.map(([a, b]) => [a + 2, b + 3]), width + 5, 'rgba(40,56,66,.18)');
+  refLinePath(ctx, pts, width + 3, '#7f8e96');
   refLinePath(ctx, pts, width, REF_PIXEL.asphalt);
-  if (dashed) refLinePath(ctx, pts, 3, REF_PIXEL.lane, [15, 12]);
+  if (dashed) refLinePath(ctx, pts, 2, REF_PIXEL.lane, [10, 14]);
 }
 function refRampPath(ctx, pts) {
-  refLinePath(ctx, pts.map(([a, b]) => [a + 4, b + 6]), 25, 'rgba(60,35,10,.38)');
-  refLinePath(ctx, pts, 25, '#9f631b');
-  refLinePath(ctx, pts, 19, REF_PIXEL.yellow);
-  refLinePath(ctx, pts.map(([a, b]) => [a - 1, b - 2]), 4, '#ffe98a');
-  refLinePath(ctx, pts, 2, '#fff5be', [16, 12]);
-  for (let i = 1; i < pts.length - 1; i += 1) {
-    pxRect(ctx, pts[i][0] - 5, pts[i][1] + 8, 10, 28, '#b87525');
-    pxRect(ctx, pts[i][0] - 2, pts[i][1] + 8, 4, 28, '#ffd36b');
-  }
+  refLinePath(ctx, pts.map(([a, b]) => [a + 2, b + 3]), 22, 'rgba(70,72,68,.20)');
+  refLinePath(ctx, pts, 22, '#afb18f');
+  refLinePath(ctx, pts, 16, '#d8d19b');
+  refLinePath(ctx, pts, 2, '#f2ebbd', [18, 14]);
 }
 function refStar(ctx, cx, cy, r, fill = REF_PIXEL.red, edge = '#9e2f2b') {
   ctx.save();
@@ -2391,11 +2386,10 @@ function refStar(ctx, cx, cy, r, fill = REF_PIXEL.red, edge = '#9e2f2b') {
   ctx.restore();
 }
 function refWaterChannel(ctx, x, y, w, h, side = 'left') {
-  pxFrame(ctx, x, y, w, h, REF_PIXEL.water, '#07527f', REF_PIXEL.waterLight);
-  for (let yy = y + 28; yy < y + h - 20; yy += 56) {
-    pxRect(ctx, x + 9, yy, 18, 3, '#b9f8ff');
-    pxRect(ctx, x + 20, yy + 8, 20, 3, '#55dfff');
-    pxRect(ctx, side === 'left' ? x + 6 : x + w - 18, yy + 22, 12, 12, '#0f7cb7');
+  pxFrame(ctx, x, y, w, h, REF_PIXEL.water, '#5a98b5', REF_PIXEL.waterLight);
+  for (let yy = y + 34; yy < y + h - 24; yy += 88) {
+    pxRect(ctx, x + 10, yy, w - 18, 2, '#ccefff');
+    pxRect(ctx, side === 'left' ? x + 7 : x + w - 14, yy + 24, 6, 6, '#7abedc');
   }
 }
 function refTreeCluster(ctx, x, y, s = 1) {
@@ -2471,23 +2465,24 @@ function refDecorBuilding(ctx, x, y, w, h, type = 'tower') {
   }
 }
 function refLot(ctx, x, y, w, h, kind, row = 0, col = 0) {
-  pxFrame(ctx, x, y, w, h, '#dfc99b', '#627c82', '#fff0c0', false);
-  pxRect(ctx, x + 4, y + 4, w - 8, h - 8, '#efd9aa');
-  const types = {
-    danger: 'construction',
-    public: 'park',
-    residential: 'house',
-    commercial: 'shop',
-    large: 'tower',
-    medium: col % 2 ? 'tower' : 'shop',
-    small: (row + col) % 3 === 0 ? 'park' : 'house',
+  const zoneTone = {
+    danger: '#e7d7b9',
+    public: '#dce8d2',
+    residential: '#eadfca',
+    commercial: '#e4ddd1',
+    large: '#ded8ce',
+    medium: '#e7dfd2',
+    small: '#eee5d7',
   };
-  refDecorBuilding(ctx, x + 4, y + 4, w - 8, h - 8, types[kind] || 'house');
+  const fill = zoneTone[kind] || '#e8dfcf';
+  pxFrame(ctx, x, y, w, h, fill, '#b4c0c6', '#f8f5ed', false);
+  pxRect(ctx, x + 3, y + 3, w - 6, h - 6, fill);
+  pxRect(ctx, x + 6, y + h - 9, w - 12, 2, 'rgba(120,130,136,.25)');
 }
 function refBuildingBase(ctx, x, y, w, h, body, trim = REF_PIXEL.ink, hi = '#ffffff') {
-  pxRect(ctx, x + 5, y + h - 3, w - 4, 5, 'rgba(6,18,30,.34)');
-  pxFrame(ctx, x + 3, y + 7, w - 6, h - 9, body, trim, hi, false);
-  pxRect(ctx, x + 6, y + h - 10, w - 12, 3, 'rgba(0,0,0,.18)');
+  pxRect(ctx, x + 6, y + h - 2, w - 8, 4, 'rgba(9,22,35,.28)');
+  pxFrame(ctx, x + 3, y + 7, w - 6, h - 10, body, '#0f2c45', hi, false);
+  pxRect(ctx, x + 7, y + h - 11, w - 14, 2, 'rgba(0,0,0,.14)');
 }
 drawHouseSprite = function drawHouseSpriteRef(ctx, x, y, w, h) {
   refBuildingBase(ctx, x, y, w, h, '#ffe6a7', REF_PIXEL.ink, '#fff6c8');
@@ -2558,23 +2553,17 @@ drawMiniDistrict = function drawMiniDistrictRef(ctx, x, y) {
   }
   for (let i = 0; i <= GRID.cols; i += 1) {
     const xx = gx + i * 40;
-    pxRect(ctx, xx - 3, gy - 12, 6, gh + 24, REF_PIXEL.asphaltDark);
-    if (i > 0 && i < GRID.cols) for (let yy = gy + 8; yy < gy + gh - 6; yy += 24) pxRect(ctx, xx - 1, yy, 2, 10, REF_PIXEL.lane);
+    pxRect(ctx, xx - 2, gy - 12, 4, gh + 24, '#95a3aa');
+    if (i > 0 && i < GRID.cols) for (let yy = gy + 10; yy < gy + gh - 8; yy += 34) pxRect(ctx, xx - 1, yy, 2, 5, '#d9e2e7');
   }
   for (let i = 0; i <= GRID.rows; i += 1) {
     const yy = gy + i * 40;
-    pxRect(ctx, gx - 12, yy - 3, gw + 24, 6, REF_PIXEL.asphaltDark);
-    if (i > 0 && i < GRID.rows) for (let xx = gx + 8; xx < gx + gw - 6; xx += 24) pxRect(ctx, xx, yy - 1, 10, 2, REF_PIXEL.lane);
+    pxRect(ctx, gx - 12, yy - 2, gw + 24, 4, '#95a3aa');
+    if (i > 0 && i < GRID.rows) for (let xx = gx + 10; xx < gx + gw - 8; xx += 34) pxRect(ctx, xx, yy - 1, 5, 2, '#d9e2e7');
   }
-  for (const [cx, cy, vertical] of [[gx + 80, gy + 120, true], [gx + 160, gy + 200, false], [gx + 240, gy + 80, true], [gx + 280, gy + 240, false]]) pxCrosswalk(ctx, cx, cy, 28, vertical);
-  pxCar(ctx, gx + 58, gy + 114, '#ff4d65', false);
-  pxCar(ctx, gx + 190, gy + 258, '#2fd3df', false);
-  pxCar(ctx, gx + 302, gy + 186, '#ffd13a', true);
-  pxCar(ctx, gx + 134, gy + 66, '#44c96a', true);
 };
 drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
-  pxRect(ctx, x, y, w, h, '#0c8fcb');
-  for (let yy = y + h - 86; yy < y + h; yy += 20) pxRect(ctx, x, yy, w, 3, '#06669e');
+  pxRect(ctx, x, y, w, h, '#99d9f4');
   pxFrame(ctx, x + 8, y + 6, w - 16, h - 10, REF_PIXEL.cream, REF_PIXEL.ink, REF_PIXEL.cream2);
   pxFrame(ctx, x + 22, y + 80, w - 44, h - 110, '#d3b98d', REF_PIXEL.blueDark, '#fff1c9');
   pxRect(ctx, x + 34, y + 95, w - 68, h - 142, '#e9d1a3');
@@ -2587,53 +2576,19 @@ drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
   refRampPath(ctx, [[444, 615], [424, 510], [441, 425], [422, 335], [438, 240]]);
   drawMiniDistrict(ctx, x, y);
 
-  refDecorBuilding(ctx, x + 45, y + 108, 30, 76, 'tower');
-  pxRect(ctx, x + 53, y + 92, 11, 22, REF_PIXEL.red);
-  pxRect(ctx, x + 49, y + 175, 24, 8, '#ffffff');
-  refDecorBuilding(ctx, x + 409, y + 438, 42, 76, 'tower');
-  refTreeCluster(ctx, x + 72, y + 480, 0.8);
-  refTreeCluster(ctx, x + 426, y + 488, 0.8);
-
-  pxFrame(ctx, x + 142, y + 432, 216, 108, '#d6b17e', '#7d6241', '#fff1c8');
-  for (const [bx, by] of [[182, 477], [250, 460], [318, 477]]) {
-    pxDisk(ctx, x + bx, y + by, 24, '#fff1ce', '#b53d33', '#ffffff');
-    refStar(ctx, x + bx, y + by, 12, REF_PIXEL.red);
-  }
-  pxFrame(ctx, x + 123, y + 436, 46, 38, '#4aa4df', REF_PIXEL.ink, '#bdf2ff');
-  pxTriangle(ctx, x + 146, y + 456, 'right', '#ffffff', '#1b5d8d');
-  pxFrame(ctx, x + 331, y + 436, 46, 38, '#4aa4df', REF_PIXEL.ink, '#bdf2ff');
-  pxTriangle(ctx, x + 354, y + 456, 'left', '#ffffff', '#1b5d8d');
-
   pxFrame(ctx, x + 112, y + 536, 276, 124, '#d8c09b', '#52666f', '#fff3c8');
-  pxDisk(ctx, x + 250, y + 596, 45, '#e6d0a5', '#7d6241', '#fff1c8');
-  pxDisk(ctx, x + 250, y + 596, 32, REF_PIXEL.water, '#197aa4', REF_PIXEL.waterLight);
-  pxDisk(ctx, x + 250, y + 590, 15, '#eaffff', '#197aa4', '#ffffff');
-  pxRect(ctx, x + 247, y + 561, 6, 25, '#eaffff');
-  pxRect(ctx, x + 240, y + 573, 20, 5, '#b9f8ff');
-  for (const [tx, ty] of [[145, 548], [181, 635], [335, 548], [363, 625]]) refTreeCluster(ctx, x + tx, y + ty, 0.65);
-  pxRect(ctx, x + 147, y + 638, 38, 8, '#8b5730');
-  pxRect(ctx, x + 321, y + 638, 38, 8, '#8b5730');
-
   refRampPath(ctx, [[74, 650], [93, 580], [88, 515], [104, 444]]);
   refRampPath(ctx, [[426, 650], [407, 580], [412, 515], [396, 444]]);
-  pxTriangle(ctx, x + 148, y + 650, 'up', REF_PIXEL.yellow);
-  pxTriangle(ctx, x + 352, y + 650, 'up', REF_PIXEL.yellow);
   refRoadPath(ctx, [[250, 626], [250, 739]], 31, true);
-  pxDisk(ctx, x + 250, y + 672, 17, '#dfe9f4', REF_PIXEL.ink, '#ffffff');
+  pxDisk(ctx, x + 250, y + 672, 12, '#e8eef2', '#8aa0ad', '#ffffff');
 
   refRoadPath(ctx, [[44, 692], [132, 692], [160, 705]], 27, false);
   refRoadPath(ctx, [[456, 692], [368, 692], [340, 705]], 27, false);
   pxFrame(ctx, x + 203, y + 735, 94, 48, '#3f505c', REF_PIXEL.ink, '#718796');
   pxRect(ctx, x + 226, y + 755, 48, 5, '#111b28');
   for (let i = 0; i < 7; i += 1) pxRect(ctx, x + 218 + i * 9, y + 766, 5, 17, '#061323');
-  refDecorBuilding(ctx, x + 54, y + 681, 52, 45, 'shop');
-  refDecorBuilding(ctx, x + 394, y + 681, 52, 45, 'shop');
-  refTreeCluster(ctx, x + 80, y + 735, 0.8);
-  refTreeCluster(ctx, x + 420, y + 735, 0.8);
-  pxCar(ctx, x + 93, y + 598, '#ff594f', true);
-  pxCar(ctx, x + 406, y + 598, '#ffd13a', true);
-  pxCar(ctx, x + 64, y + 376, '#45d36c', true);
-  pxCar(ctx, x + 436, y + 328, '#ff4f73', true);
+  refTreeCluster(ctx, x + 84, y + 736, 0.65);
+  refTreeCluster(ctx, x + 416, y + 736, 0.65);
 };
 function packHiDpi(atlas, key, width, height, drawFn, scale = 2) {
   atlas.pack(key, width * scale, height * scale, (ctx, x, y) => {
