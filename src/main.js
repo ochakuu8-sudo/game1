@@ -2575,6 +2575,7 @@ drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
   refRoadPath(ctx, [[55, 150], [66, 95], [188, 88], [336, 88], [444, 106], [453, 170]], 27, true);
   refRoadPath(ctx, [[54, 650], [95, 587], [157, 548], [250, 515], [342, 548], [406, 590], [448, 650]], 28, true);
   refRampPath(ctx, [[56, 615], [76, 510], [59, 425], [78, 335], [63, 240]]);
+  refCityFurniture(ctx, x, y);
   refRampPath(ctx, [[444, 615], [424, 510], [441, 425], [422, 335], [438, 240]]);
   drawMiniDistrict(ctx, x, y);
 
@@ -2592,6 +2593,53 @@ drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
   pxRect(ctx, x + 70, y + 727, 30, 16, '#aeb7bc');
   pxRect(ctx, x + 400, y + 727, 30, 16, '#aeb7bc');
 };
+
+function refCityFurniture(ctx, x, y) {
+  const stop = [
+    [x + 88, y + 146],
+    [x + 374, y + 146],
+    [x + 90, y + 628],
+    [x + 372, y + 628],
+  ];
+  for (const [sx, sy] of stop) {
+    pxRect(ctx, sx, sy, 24, 4, '#f2d873');
+    pxRect(ctx, sx + 2, sy - 7, 2, 7, '#5a6870');
+    pxRect(ctx, sx + 20, sy - 7, 2, 7, '#5a6870');
+    pxRect(ctx, sx + 6, sy - 14, 12, 6, '#dfeaf0');
+    pxRect(ctx, sx + 8, sy - 12, 8, 2, '#4d6e80');
+  }
+
+  const crosswalks = [
+    [x + 150, y + 108, 'h'],
+    [x + 312, y + 108, 'h'],
+    [x + 150, y + 672, 'h'],
+    [x + 312, y + 672, 'h'],
+  ];
+  for (const [cx, cy, dir] of crosswalks) {
+    for (let i = 0; i < 6; i += 1) {
+      if (dir === 'h') pxRect(ctx, cx + i * 8, cy, 5, 3, '#edf3f6');
+    }
+  }
+
+  const lamps = [
+    [x + 126, y + 196], [x + 372, y + 196],
+    [x + 126, y + 602], [x + 372, y + 602],
+  ];
+  for (const [lx, ly] of lamps) {
+    pxRect(ctx, lx, ly, 2, 18, '#4f5c64');
+    pxRect(ctx, lx - 3, ly - 3, 8, 4, '#e9f2f6');
+    pxRect(ctx, lx - 1, ly + 18, 4, 3, '#6b7880');
+  }
+
+  pxFrame(ctx, x + 177, y + 544, 32, 20, '#d9e4ea', '#4e5f68', '#f4f8fb', false);
+  pxRect(ctx, x + 182, y + 551, 22, 7, '#5ea2c6');
+  pxRect(ctx, x + 214, y + 549, 8, 11, '#cf4f3d');
+
+  pxFrame(ctx, x + 292, y + 544, 32, 20, '#d9e4ea', '#4e5f68', '#f4f8fb', false);
+  pxRect(ctx, x + 297, y + 551, 22, 7, '#6fb36a');
+  pxRect(ctx, x + 284, y + 549, 8, 11, '#2d7ca0');
+}
+
 function packHiDpi(atlas, key, width, height, drawFn, scale = 2) {
   atlas.pack(key, width * scale, height * scale, (ctx, x, y) => {
     ctx.save();
