@@ -2565,10 +2565,10 @@ drawMiniDistrict = function drawMiniDistrictRef(ctx, x, y) {
   }
 };
 drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
-  pxRect(ctx, x, y, w, h, '#b8d8ee');
-  pxFrame(ctx, x + 8, y + 6, w - 16, h - 10, REF_PIXEL.cream, REF_PIXEL.ink, REF_PIXEL.cream2);
-  pxFrame(ctx, x + 22, y + 80, w - 44, h - 110, '#c4cdd1', REF_PIXEL.blueDark, '#e9edf0');
-  pxRect(ctx, x + 34, y + 95, w - 68, h - 142, '#d8e0e2');
+  pxRect(ctx, x, y, w, h, '#cfd8dd');
+  pxFrame(ctx, x + 8, y + 6, w - 16, h - 10, '#d8dfdb', '#42515a', '#edf2ee');
+  pxFrame(ctx, x + 22, y + 80, w - 44, h - 110, '#c7cfd2', '#55646c', '#ecf0f1');
+  pxRect(ctx, x + 34, y + 95, w - 68, h - 142, '#dde3e4');
   refWaterChannel(ctx, x + 36, y + 135, 35, 565, 'left');
   refWaterChannel(ctx, x + 429, y + 135, 35, 565, 'right');
 
@@ -2586,9 +2586,9 @@ drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
 
   refRoadPath(ctx, [[44, 692], [132, 692], [160, 705]], 27, false);
   refRoadPath(ctx, [[456, 692], [368, 692], [340, 705]], 27, false);
-  pxFrame(ctx, x + 203, y + 735, 94, 48, '#3f505c', REF_PIXEL.ink, '#718796');
-  pxRect(ctx, x + 226, y + 755, 48, 5, '#111b28');
-  for (let i = 0; i < 7; i += 1) pxRect(ctx, x + 218 + i * 9, y + 766, 5, 17, '#061323');
+  pxFrame(ctx, x + 203, y + 735, 94, 48, '#59666e', '#2f3a40', '#9da8ae');
+  pxRect(ctx, x + 226, y + 755, 48, 5, '#324048');
+  for (let i = 0; i < 7; i += 1) pxRect(ctx, x + 218 + i * 9, y + 766, 5, 17, '#435159');
   pxRect(ctx, x + 70, y + 727, 30, 16, '#aeb7bc');
   pxRect(ctx, x + 400, y + 727, 30, 16, '#aeb7bc');
 };
@@ -2608,18 +2608,18 @@ registerAtlasSprites = function registerAtlasSpritesRef(atlas) {
     pxRect(ctx, x + 18, y + 21, 5, 3, '#6f7f8b');
   });
   packHiDpi(atlas, 'flipper', 84, 20, (ctx, x, y) => {
-    pxRect(ctx, x + 4, y + 15, 78, 5, 'rgba(4,20,31,.34)');
-    pxFrame(ctx, x, y, 84, 20, '#fff5d2', REF_PIXEL.ink, '#ffffff', false);
-    pxRect(ctx, x + 7, y + 4, 70, 4, REF_PIXEL.orange);
-    pxRect(ctx, x + 10, y + 13, 56, 3, '#d85b2a');
-    pxDisk(ctx, x + 70, y + 10, 6, REF_PIXEL.yellow, '#8a4d10', '#fff7bf');
+    pxRect(ctx, x + 4, y + 15, 78, 5, 'rgba(36,44,50,.25)');
+    pxFrame(ctx, x, y, 84, 20, '#d7dde1', '#4d5a62', '#f2f5f7', false);
+    pxRect(ctx, x + 7, y + 6, 70, 3, '#b6c0c6');
+    pxRect(ctx, x + 10, y + 12, 56, 3, '#8f9ba3');
+    pxDisk(ctx, x + 70, y + 10, 5, '#c8d0d6', '#4d5a62', '#eef2f5');
   });
   packHiDpi(atlas, 'wall', 20, 20, (ctx, x, y) => {
-    pxRect(ctx, x, y, 20, 20, '#174b68');
-    pxRect(ctx, x + 3, y, 14, 20, '#2b91bd');
-    pxRect(ctx, x + 5, y, 4, 20, '#8fefff');
-    pxRect(ctx, x + 11, y, 4, 20, '#fff6d6');
-    pxRect(ctx, x + 16, y, 2, 20, REF_PIXEL.yellow);
+    pxRect(ctx, x, y, 20, 20, '#5f6d74');
+    pxRect(ctx, x + 3, y, 14, 20, '#8e9ca3');
+    pxRect(ctx, x + 5, y, 4, 20, '#c4cdd2');
+    pxRect(ctx, x + 11, y, 4, 20, '#e4eaed');
+    pxRect(ctx, x + 16, y, 2, 20, '#9aa7ad');
   });
   packHiDpi(atlas, 'building_base', 40, 40, (ctx, x, y, w, h) => drawTargetBase(ctx, x, y, w, h, false));
   packHiDpi(atlas, 'building_hit_base', 40, 40, (ctx, x, y, w, h) => drawTargetBase(ctx, x, y, w, h, true));
