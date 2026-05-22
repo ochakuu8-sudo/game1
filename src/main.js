@@ -17,7 +17,7 @@ const PHYSICS = {
 const GRID = {
   cols: 8,
   rows: 8,
-  cellSize: 40,
+  cellSize: 52,
   left: 90,
   top: 90,
   get width() { return this.cols * this.cellSize; },
@@ -2326,8 +2326,8 @@ const REF_PIXEL = {
   ink: '#102a44',
 };
 
-GRID.left = 82;
-GRID.top = 116;
+GRID.left = 42;
+GRID.top = 88;
 THEME.clear = [0.70, 0.82, 0.92, 1];
 
 function refLinePath(ctx, pts, width, color, dash = null) {
