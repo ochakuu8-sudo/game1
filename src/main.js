@@ -6,18 +6,18 @@ const BALL_RADIUS = 18;
 const BALL_SPRITE_SIZE = 42;
 
 const PHYSICS = {
-  gravity: 900,
-  airDrag: 0.9976,
-  rollingFriction: 0.9978,
+  gravity: 930,
+  airDrag: 0.9979,
+  rollingFriction: 0.9982,
   wallBounce: 0.58,
   railBounce: 0.08,
-  buildingBounce: 0.28,
+  buildingBounce: 0.24,
   flipperBounce: 0.08,
   flipperFriction: 0.985,
   railFriction: 0.996,
-  maxBallSpeed: 820,
-  maxUpwardBallSpeed: 1100,
-  minFlipperBallSpeed: 330,
+  maxBallSpeed: 900,
+  maxUpwardBallSpeed: 1180,
+  minFlipperBallSpeed: 390,
   spinDamping: 0.988,
   rollingSpinGain: 0.42,
 };
@@ -92,7 +92,7 @@ function len2(x, y) { return Math.hypot(x, y); }
 function randRange(min, max) { return min + Math.random() * (max - min); }
 function worldPan(x) { return clamp((x / WORLD.w) * 1.6 - 0.8, -0.8, 0.8); }
 
-const sound = { ctx: null, master: null, enabled: false, last: Object.create(null) };
+const sound = { ctx: null, master: null, enabled: false, unlockedCue: false, last: Object.create(null) };
 
 function ensureAudio() {
   if (sound.ctx) return sound.ctx;
@@ -100,15 +100,22 @@ function ensureAudio() {
   if (!AudioCtx) return null;
   sound.ctx = new AudioCtx();
   sound.master = sound.ctx.createGain();
-  sound.master.gain.value = 0.34;
+  sound.master.gain.value = 0.9;
   sound.master.connect(sound.ctx.destination);
   return sound.ctx;
 }
 function unlockAudio() {
   const ctx = ensureAudio();
   if (!ctx) return;
+  const shouldCue = !sound.unlockedCue;
   sound.enabled = true;
-  if (ctx.state === 'suspended') ctx.resume();
+  const playUnlockCue = () => {
+    if (!shouldCue || sound.unlockedCue) return;
+    sound.unlockedCue = true;
+    playSfx('audioOn', 1, 0);
+  };
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  playUnlockCue();
 }
 function sfxGain(value, duration, start = 0, attack = 0.004) {
   const ctx = sound.ctx;
@@ -167,34 +174,75 @@ function playSfx(kind, intensity = 1, pan = 0) {
   const ctx = sound.ctx;
   if (ctx.state === 'suspended') ctx.resume();
   const now = ctx.currentTime;
-  const cooldown = { hit: 0.045, flipper: 0.055, destroy: 0.09, explode: 0.16, launch: 0.18, collect: 0.08, level: 0.35, drain: 0.24 }[kind] || 0;
+  const cooldown = {
+    hit: 0.045, flipper: 0.055, sweet: 0.075, rush: 0.18, destroy: 0.055, explode: 0.12, launch: 0.18,
+    audioOn: 0.5, collect: 0.08, crush: 0.035, level: 0.35, levelReady: 0.42, upgrade: 0.12,
+    newCard: 0.18, roundClear: 0.55, gameOver: 0.55, drain: 0.24,
+  }[kind] || 0;
   if (now - (sound.last[kind] || -1) < cooldown) return;
   sound.last[kind] = now;
 
-  if (kind === 'launch') {
+  if (kind === 'audioOn') {
+    tone({ type: 'square', freq: 560, to: 860, duration: 0.09, gain: 0.120 * intensity, pan, start: 0 });
+    tone({ type: 'triangle', freq: 920, to: 1320, duration: 0.12, gain: 0.105 * intensity, pan, start: 0.075 });
+    noise({ duration: 0.055, gain: 0.024 * intensity, filter: 4200, type: 'bandpass', pan, start: 0.02 });
+  } else if (kind === 'launch') {
     tone({ type: 'triangle', freq: 150, to: 620, duration: 0.20, gain: 0.09 * intensity, pan });
     noise({ duration: 0.16, gain: 0.025 * intensity, filter: 900, type: 'highpass', pan });
   } else if (kind === 'flipper') {
     tone({ type: 'square', freq: 460, to: 210, duration: 0.045, gain: 0.055 * intensity, pan });
     noise({ duration: 0.035, gain: 0.030 * intensity, filter: 2200, type: 'bandpass', pan });
+  } else if (kind === 'sweet') {
+    tone({ type: 'square', freq: 520, to: 780, duration: 0.055, gain: 0.080 * intensity, pan });
+    tone({ type: 'triangle', freq: 980, to: 1420, duration: 0.075, gain: 0.052 * intensity, pan, start: 0.035 });
+    noise({ duration: 0.038, gain: 0.030 * intensity, filter: 3600, type: 'bandpass', pan });
+  } else if (kind === 'rush') {
+    tone({ type: 'triangle', freq: 520, to: 760, duration: 0.08, gain: 0.050 * intensity, pan, start: 0 });
+    tone({ type: 'triangle', freq: 760, to: 1080, duration: 0.09, gain: 0.052 * intensity, pan, start: 0.055 });
+    tone({ type: 'sine', freq: 1220, to: 1560, duration: 0.08, gain: 0.035 * intensity, pan, start: 0.13 });
   } else if (kind === 'hit') {
     tone({ type: 'triangle', freq: 760, to: 1180, duration: 0.055, gain: 0.050 * intensity, pan });
     tone({ type: 'sine', freq: 1420, to: 920, duration: 0.035, gain: 0.030 * intensity, pan, start: 0.012 });
     noise({ duration: 0.035, gain: 0.020 * intensity, filter: 3600, type: 'bandpass', pan });
   } else if (kind === 'destroy') {
-    tone({ type: 'triangle', freq: 330, to: 520, duration: 0.085, gain: 0.060 * intensity, pan });
-    tone({ type: 'triangle', freq: 520, to: 780, duration: 0.105, gain: 0.060 * intensity, pan, start: 0.045 });
-    noise({ duration: 0.12, gain: 0.030 * intensity, filter: 1800, type: 'bandpass', pan });
+    tone({ type: 'square', freq: 180, to: 85, duration: 0.12, gain: 0.088 * intensity, pan });
+    tone({ type: 'triangle', freq: 390, to: 680, duration: 0.12, gain: 0.075 * intensity, pan, start: 0.035 });
+    tone({ type: 'sine', freq: 980, to: 620, duration: 0.055, gain: 0.042 * intensity, pan, start: 0.02 });
+    noise({ duration: 0.14, gain: 0.065 * intensity, filter: 1400, type: 'bandpass', pan });
   } else if (kind === 'explode') {
-    noise({ duration: 0.24, gain: 0.080 * intensity, filter: 520, type: 'lowpass', pan });
-    tone({ type: 'sawtooth', freq: 210, to: 70, duration: 0.20, gain: 0.070 * intensity, pan });
-    tone({ type: 'triangle', freq: 520, to: 880, duration: 0.12, gain: 0.050 * intensity, pan, start: 0.05 });
+    noise({ duration: 0.27, gain: 0.115 * intensity, filter: 520, type: 'lowpass', pan });
+    tone({ type: 'sawtooth', freq: 220, to: 58, duration: 0.22, gain: 0.105 * intensity, pan });
+    tone({ type: 'triangle', freq: 520, to: 920, duration: 0.13, gain: 0.070 * intensity, pan, start: 0.05 });
   } else if (kind === 'collect') {
     tone({ type: 'sine', freq: 900, to: 1350, duration: 0.070, gain: 0.040 * intensity, pan });
+  } else if (kind === 'crush') {
+    tone({ type: 'square', freq: 220, to: 130, duration: 0.055, gain: 0.072 * intensity, pan });
+    tone({ type: 'triangle', freq: 760, to: 420, duration: 0.045, gain: 0.042 * intensity, pan, start: 0.012 });
+    noise({ duration: 0.055, gain: 0.035 * intensity, filter: 900, type: 'lowpass', pan });
   } else if (kind === 'level') {
     tone({ type: 'triangle', freq: 520, to: 680, duration: 0.08, gain: 0.052 * intensity, pan, start: 0 });
     tone({ type: 'triangle', freq: 700, to: 920, duration: 0.09, gain: 0.052 * intensity, pan, start: 0.07 });
     tone({ type: 'triangle', freq: 920, to: 1260, duration: 0.12, gain: 0.060 * intensity, pan, start: 0.14 });
+  } else if (kind === 'levelReady') {
+    tone({ type: 'triangle', freq: 460, to: 640, duration: 0.08, gain: 0.040 * intensity, pan, start: 0 });
+    tone({ type: 'triangle', freq: 680, to: 880, duration: 0.09, gain: 0.040 * intensity, pan, start: 0.065 });
+    tone({ type: 'sine', freq: 1040, to: 1260, duration: 0.10, gain: 0.036 * intensity, pan, start: 0.14 });
+  } else if (kind === 'upgrade') {
+    tone({ type: 'triangle', freq: 620, to: 920, duration: 0.075, gain: 0.050 * intensity, pan });
+    tone({ type: 'sine', freq: 1060, to: 1380, duration: 0.08, gain: 0.038 * intensity, pan, start: 0.055 });
+    noise({ duration: 0.035, gain: 0.014 * intensity, filter: 4200, type: 'bandpass', pan });
+  } else if (kind === 'newCard') {
+    tone({ type: 'triangle', freq: 520, to: 760, duration: 0.085, gain: 0.052 * intensity, pan, start: 0 });
+    tone({ type: 'triangle', freq: 760, to: 1040, duration: 0.095, gain: 0.050 * intensity, pan, start: 0.07 });
+    tone({ type: 'sine', freq: 1240, to: 1480, duration: 0.08, gain: 0.034 * intensity, pan, start: 0.15 });
+  } else if (kind === 'roundClear') {
+    tone({ type: 'triangle', freq: 420, to: 620, duration: 0.09, gain: 0.050 * intensity, pan, start: 0 });
+    tone({ type: 'triangle', freq: 620, to: 860, duration: 0.10, gain: 0.050 * intensity, pan, start: 0.08 });
+    tone({ type: 'triangle', freq: 860, to: 1180, duration: 0.12, gain: 0.056 * intensity, pan, start: 0.17 });
+    tone({ type: 'sine', freq: 1360, to: 1520, duration: 0.10, gain: 0.030 * intensity, pan, start: 0.29 });
+  } else if (kind === 'gameOver') {
+    tone({ type: 'sine', freq: 330, to: 210, duration: 0.16, gain: 0.052 * intensity, pan, start: 0 });
+    tone({ type: 'triangle', freq: 210, to: 110, duration: 0.24, gain: 0.050 * intensity, pan, start: 0.11 });
   } else if (kind === 'drain') {
     tone({ type: 'sine', freq: 260, to: 120, duration: 0.20, gain: 0.055 * intensity, pan });
   }
@@ -2812,11 +2860,11 @@ const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot
 const input = { left: false, right: false, launchTap: false, pointerSide: 0 };
 
 const allCards = [
-  { id: 'house', name: '住宅', level: 1, rarity: 'common', cooldownSec: 7, cooldownTimer: 0, footprint: { w: 1, h: 1 }, score: 100, hp: 1, exp: 1, tags: ['residential', 'small'], preferredTags: ['residential', 'small'], forbiddenTags: ['danger'], maxActive: 8, effectId: null, spriteKey: 'building_house' },
-  { id: 'convenience', name: 'コンビニ', level: 1, rarity: 'common', cooldownSec: 10, cooldownTimer: 1, footprint: { w: 1, h: 1 }, score: 180, hp: 1, exp: 2, tags: ['commercial', 'small'], preferredTags: ['commercial', 'small'], forbiddenTags: [], maxActive: 4, effectId: null, spriteKey: 'building_convenience' },
-  { id: 'apartment', name: 'アパート', level: 1, rarity: 'uncommon', cooldownSec: 15, cooldownTimer: 2, footprint: { w: 1, h: 2 }, score: 450, hp: 2, exp: 4, tags: ['residential', 'medium'], preferredTags: ['residential', 'medium'], forbiddenTags: ['danger'], maxActive: 3, effectId: null, spriteKey: 'building_apartment' },
-  { id: 'gas_station', name: 'ガソリンスタンド', level: 1, rarity: 'uncommon', cooldownSec: 20, cooldownTimer: 3, footprint: { w: 2, h: 1 }, score: 300, hp: 1, exp: 2, tags: ['commercial', 'danger', 'explosive'], preferredTags: ['danger', 'commercial'], forbiddenTags: [], maxActive: 2, effectId: 'explode', spriteKey: 'building_gas' },
-  { id: 'tower', name: 'タワー', level: 1, rarity: 'rare', cooldownSec: 28, cooldownTimer: 5, footprint: { w: 2, h: 2 }, score: 1600, hp: 4, exp: 8, tags: ['large', 'landmark'], preferredTags: ['large', 'danger'], forbiddenTags: ['residential'], maxActive: 1, effectId: null, spriteKey: 'building_tower' },
+  { id: 'house', name: '住宅', level: 1, rarity: 'common', cooldownSec: 7, cooldownTimer: 0, footprint: { w: 1, h: 1 }, score: 100, hp: 1, peopleCount: 1, tags: ['residential', 'small'], preferredTags: ['residential', 'small'], forbiddenTags: ['danger'], maxActive: 8, effectId: null, spriteKey: 'building_house' },
+  { id: 'convenience', name: 'コンビニ', level: 1, rarity: 'common', cooldownSec: 10, cooldownTimer: 1, footprint: { w: 1, h: 1 }, score: 180, hp: 1, peopleCount: 2, tags: ['commercial', 'small'], preferredTags: ['commercial', 'small'], forbiddenTags: [], maxActive: 4, effectId: null, spriteKey: 'building_convenience' },
+  { id: 'apartment', name: 'アパート', level: 1, rarity: 'uncommon', cooldownSec: 15, cooldownTimer: 2, footprint: { w: 1, h: 2 }, score: 450, hp: 2, peopleCount: 4, tags: ['residential', 'medium'], preferredTags: ['residential', 'medium'], forbiddenTags: ['danger'], maxActive: 3, effectId: null, spriteKey: 'building_apartment' },
+  { id: 'gas_station', name: 'ガソリンスタンド', level: 1, rarity: 'uncommon', cooldownSec: 20, cooldownTimer: 3, footprint: { w: 2, h: 1 }, score: 300, hp: 1, peopleCount: 2, tags: ['commercial', 'danger', 'explosive'], preferredTags: ['danger', 'commercial'], forbiddenTags: [], maxActive: 2, effectId: 'explode', spriteKey: 'building_gas' },
+  { id: 'tower', name: 'タワー', level: 1, rarity: 'rare', cooldownSec: 28, cooldownTimer: 5, footprint: { w: 2, h: 2 }, score: 1600, hp: 4, peopleCount: 8, tags: ['large', 'landmark'], preferredTags: ['large', 'danger'], forbiddenTags: ['residential'], maxActive: 1, effectId: null, spriteKey: 'building_tower' },
 ];
 const cardPool = new Map(allCards.map((card) => [card.id, card]));
 const ownedCards = [structuredClone(cardPool.get('house')), structuredClone(cardPool.get('convenience'))];
@@ -2829,8 +2877,13 @@ const hitSparks = [];
 const ballTrail = [];
 const scorePopups = [];
 const shockwaves = [];
+const impactBursts = [];
 const screenShake = { time: 0, duration: 0, amount: 0 };
+const screenFlash = { time: 0, duration: 0, alpha: 0, color: '#fff7bf' };
 const scorePulse = { time: 0, duration: 0.24, amount: 0 };
+const hitStop = { time: 0, duration: 0 };
+const flowState = { streak: 0, time: 0, popTime: 0, label: '' };
+const ballFlow = { slowTime: 0 };
 for (let r = 0; r < GRID.rows; r += 1) { const row = []; for (let c = 0; c < GRID.cols; c += 1) row.push({ tags: [ZONE_TEMPLATE[r][c]], occupiedBy: null }); grid.push(row); }
 
 const walls = [{ x: 25, y: PLAYFIELD_TOP_Y, w: 10, h: 765 - PLAYFIELD_TOP_Y }, { x: 465, y: PLAYFIELD_TOP_Y, w: 10, h: 765 - PLAYFIELD_TOP_Y }, { x: 25, y: PLAYFIELD_TOP_Y, w: 450, h: 10 }];
@@ -2844,7 +2897,7 @@ const maxBuildings = 8;
 
 function getNextExp() { return 5 + state.level * 3; }
 function updateQuota() { state.quota = Math.floor(3000 * Math.pow(1.75, state.round - 1)); }
-function clearJuiceEffects() { hitSparks.length = 0; ballTrail.length = 0; scorePopups.length = 0; shockwaves.length = 0; screenShake.time = 0; screenShake.duration = 0; screenShake.amount = 0; scorePulse.time = 0; scorePulse.amount = 0; glCanvas.style.transform = ''; }
+function clearJuiceEffects() { hitSparks.length = 0; ballTrail.length = 0; scorePopups.length = 0; shockwaves.length = 0; impactBursts.length = 0; screenShake.time = 0; screenShake.duration = 0; screenShake.amount = 0; screenFlash.time = 0; screenFlash.duration = 0; screenFlash.alpha = 0; scorePulse.time = 0; scorePulse.amount = 0; hitStop.time = 0; hitStop.duration = 0; flowState.streak = 0; flowState.time = 0; flowState.popTime = 0; flowState.label = ''; ballFlow.slowTime = 0; glCanvas.style.transform = ''; }
 function resetGridOccupancy() { for (const row of grid) for (const cell of row) cell.occupiedBy = null; buildings.length = 0; people.length = 0; clearJuiceEffects(); }
 function resetToReady() { ball.x = START_POS.x; ball.y = START_POS.y; ball.vx = 0; ball.vy = 0; ball.rot = 0; ball.spin = 0; ball.active = false; state.mode = 'ready'; }
 function launchBall() { ball.active = true; ball.vx = -90; ball.vy = -1080; ball.spin = -1.2; state.mode = 'playing'; playSfx('launch', 1, worldPan(ball.x)); }
@@ -2857,7 +2910,7 @@ function getCandidates(card) { const list = []; for (let row = 0; row < GRID.row
 function weightedPick(cands) { const total = cands.reduce((a, c) => a + c.weight, 0); let v = Math.random() * total; for (const c of cands) { v -= c.weight; if (v <= 0) return c; } return cands[cands.length - 1]; }
 function occupancy() { let used = 0; for (const r of grid) for (const c of r) if (c.occupiedBy) used += 1; return used / (GRID.cols * GRID.rows); }
 function activeCount(cardId) { return buildings.filter((b) => b.active && b.cardId === cardId).length; }
-function trySpawnFromCard(card, force = false) { if (!card) return false; if (!force) { if (buildings.filter((b) => b.active).length >= maxBuildings) return false; if (occupancy() > 0.72) return false; if (activeCount(card.id) >= card.maxActive) return false; } const cands = getCandidates(card); if (!cands.length) return false; const pick = weightedPick(cands); const x = GRID.left + pick.col * GRID.cellSize; const y = GRID.top + pick.row * GRID.cellSize; const inset = 4; const w = card.footprint.w * GRID.cellSize - inset * 2; const h = card.footprint.h * GRID.cellSize - inset * 2; const b = { instanceId: nextBuildingId++, cardId: card.id, name: card.name, level: card.level, col: pick.col, row: pick.row, footprint: structuredClone(card.footprint), x: x + inset, y: y + inset, w, h, hp: card.hp, maxHp: card.hp, score: card.score, exp: card.exp, tags: [...card.tags], effectId: card.effectId, spriteKey: card.spriteKey, active: true, hitCooldown: 0 };
+function trySpawnFromCard(card, force = false) { if (!card) return false; if (!force) { if (buildings.filter((b) => b.active).length >= maxBuildings) return false; if (occupancy() > 0.72) return false; if (activeCount(card.id) >= card.maxActive) return false; } const cands = getCandidates(card); if (!cands.length) return false; const pick = weightedPick(cands); const x = GRID.left + pick.col * GRID.cellSize; const y = GRID.top + pick.row * GRID.cellSize; const inset = 4; const w = card.footprint.w * GRID.cellSize - inset * 2; const h = card.footprint.h * GRID.cellSize - inset * 2; const b = { instanceId: nextBuildingId++, cardId: card.id, name: card.name, level: card.level, col: pick.col, row: pick.row, footprint: structuredClone(card.footprint), x: x + inset, y: y + inset, w, h, hp: card.hp, maxHp: card.hp, score: card.score, peopleCount: card.peopleCount, tags: [...card.tags], effectId: card.effectId, spriteKey: card.spriteKey, active: true, hitCooldown: 0 };
   buildings.push(b); for (let dy = 0; dy < card.footprint.h; dy += 1) for (let dx = 0; dx < card.footprint.w; dx += 1) grid[pick.row + dy][pick.col + dx].occupiedBy = b.instanceId; return true; }
 function spawnPeople(building, amount) {
   const cx = building.x + building.w * 0.5;
@@ -2887,16 +2940,38 @@ function spawnPeople(building, amount) {
     person.spriteVariant = Math.floor(randRange(0, 3));
   }
 }
-function gainExp(v) { let leveled = false; state.exp += v; while (state.exp >= getNextExp()) { state.exp -= getNextExp(); state.level += 1; state.levelUpsPending += 1; leveled = true; } playSfx(leveled ? 'level' : 'collect', leveled ? 1 : 0.75, worldPan(ball.x)); }
+function gainExp(v, pan = worldPan(ball.x), collectSfx = 'collect') { let leveled = false; state.exp += v; while (state.exp >= getNextExp()) { state.exp -= getNextExp(); state.level += 1; state.levelUpsPending += 1; leveled = true; } playSfx(leveled ? 'level' : collectSfx, leveled ? 1 : 0.95, pan); if (leveled && state.mode === 'playing') enterLevelUpMode(); }
 
 function addScreenShake(amount = 3, duration = 0.12) {
   screenShake.amount = Math.max(screenShake.amount, amount);
   screenShake.duration = Math.max(screenShake.duration, duration);
   screenShake.time = Math.max(screenShake.time, duration);
 }
+function addScreenFlash(color = '#fff7bf', alpha = 0.12, duration = 0.08) {
+  screenFlash.color = color;
+  screenFlash.alpha = Math.max(screenFlash.alpha, alpha);
+  screenFlash.duration = Math.max(screenFlash.duration, duration);
+  screenFlash.time = Math.max(screenFlash.time, duration);
+}
+function addHitStop(duration = 0.035) {
+  hitStop.duration = Math.max(hitStop.duration, duration);
+  hitStop.time = Math.max(hitStop.time, duration);
+}
 function addScorePulse(amount = 1) {
   scorePulse.amount = Math.max(scorePulse.amount, amount);
   scorePulse.time = scorePulse.duration;
+}
+function addFlowHit() {
+  flowState.streak = flowState.time > 0 ? Math.min(99, flowState.streak + 1) : 1;
+  flowState.time = 1.35;
+  if (flowState.streak >= 3) {
+    flowState.label = `RUSH x${flowState.streak}`;
+    flowState.popTime = 0.52;
+    if (flowState.streak % 3 === 0) {
+      addScreenFlash('#68e4ff', 0.06, 0.055);
+      playSfx('rush', 0.75, 0);
+    }
+  }
 }
 function pushBallTrail() {
   if (!ball.active) return;
@@ -2928,25 +3003,69 @@ function spawnHitSparks(x, y, count = 6, power = 1) {
   }
   for (const spark of hitSparks) if (!spark.maxLife) spark.maxLife = spark.life;
 }
-function spawnScorePopup(x, y, score) {
-  scorePopups.push({ x, y, value: score, life: 0.82, maxLife: 0.82, vy: -42 });
+function spawnScorePopup(x, y, value, opts = {}) {
+  const life = opts.life ?? 0.82;
+  scorePopups.push({
+    x, y, value,
+    prefix: opts.prefix ?? '+',
+    color: opts.color ?? '#fff7bf',
+    stroke: opts.stroke ?? '#071c31',
+    size: opts.size ?? 18,
+    life,
+    maxLife: life,
+    vy: opts.vy ?? -42,
+    wobble: randRange(-0.7, 0.7),
+  });
   if (scorePopups.length > 16) scorePopups.shift();
 }
 function spawnShockwave(x, y, strong = false) {
   shockwaves.push({ x, y, strong, life: strong ? 0.38 : 0.30, maxLife: strong ? 0.38 : 0.30, radius: strong ? 18 : 12, maxRadius: strong ? 84 : 58, color: strong ? '#ff9b2f' : '#25c8ff', fill: strong ? '#ffd13a' : '#68e4ff' });
   if (shockwaves.length > 10) shockwaves.shift();
 }
+function spawnImpactBurst(x, y, strong = false, color = '#fff7bf') {
+  const life = strong ? 0.34 : 0.24;
+  impactBursts.push({
+    x, y, color,
+    life,
+    maxLife: life,
+    radius: strong ? 42 : 24,
+    arms: strong ? 10 : 7,
+    spin: randRange(-0.8, 0.8),
+    width: strong ? 5 : 3,
+  });
+  if (impactBursts.length > 12) impactBursts.shift();
+}
+function spawnFlipperShotJuice(hit, side, sweet = false) {
+  spawnHitSparks(hit.cx, hit.cy, sweet ? 13 : 7, sweet ? 0.95 : 0.62);
+  if (!sweet) return;
+  spawnImpactBurst(hit.cx, hit.cy, false, '#68e4ff');
+  spawnScorePopup(hit.cx + side * 8, hit.cy - 18, 'PERFECT', { prefix: '', size: 12, color: '#68e4ff', vy: -28, life: 0.46 });
+  addScreenFlash('#68e4ff', 0.06, 0.045);
+  addHitStop(0.018);
+}
 function spawnDestroyJuice(building, strong = false) {
   const cx = building.x + building.w * 0.5;
   const cy = building.y + building.h * 0.5;
-  spawnScorePopup(cx, cy - 8, building.score);
+  spawnScorePopup(cx, cy - 8, building.score, { size: strong ? 24 : 21, color: strong ? '#fff36b' : '#fff7bf', vy: strong ? -58 : -50 });
   spawnShockwave(cx, cy, strong);
-  spawnHitSparks(cx, cy, strong ? 20 : 14, strong ? 1.35 : 1.08);
-  addScreenShake(strong ? 5 : 3, strong ? 0.14 : 0.11);
-  addScorePulse(strong ? 1.25 : 1);
-  playSfx(strong ? 'explode' : 'destroy', strong ? 1.05 : 0.9, worldPan(cx));
+  spawnImpactBurst(cx, cy, strong, strong ? '#ffcf3a' : '#68e4ff');
+  spawnHitSparks(cx, cy, strong ? 30 : 20, strong ? 1.58 : 1.22);
+  addScreenShake(strong ? 7 : 4.2, strong ? 0.16 : 0.12);
+  addScreenFlash(strong ? '#ffcf3a' : '#ffffff', strong ? 0.18 : 0.11, strong ? 0.10 : 0.07);
+  addHitStop(strong ? 0.052 : 0.034);
+  addScorePulse(strong ? 1.45 : 1.15);
+  playSfx(strong ? 'explode' : 'destroy', strong ? 1.25 : 1.15, worldPan(cx));
 }
-function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; state.roundScore += building.score; state.totalScore += building.score; spawnPeople(building, Math.max(1, building.exp)); spawnDestroyJuice(building, allowExplosion && building.effectId === 'explode'); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
+function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; state.roundScore += building.score; state.totalScore += building.score; spawnPeople(building, Math.max(1, building.peopleCount)); spawnDestroyJuice(building, allowExplosion && building.effectId === 'explode'); addFlowHit(); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
+function crushPerson(person) {
+  person.active = false;
+  spawnHitSparks(person.x, person.y, 7, 0.62);
+  spawnImpactBurst(person.x, person.y, false, '#9dff6e');
+  spawnScorePopup(person.x, person.y - 8, 'EXP', { prefix: '', size: 12, color: '#9dff6e', vy: -30, life: 0.48 });
+  addScreenFlash('#9dff6e', 0.045, 0.045);
+  addFlowHit();
+  gainExp(person.value, worldPan(person.x), 'crush');
+}
 
 function addCollisionSpin(nx, ny, amount = 0.14) {
   const tangentSpeed = ball.vx * -ny + ball.vy * nx;
@@ -2985,19 +3104,33 @@ function updateJuiceEffects(dt) {
     if (popup.life <= 0) { scorePopups.splice(i, 1); continue; }
     popup.y += popup.vy * dt;
     popup.vy *= 0.985;
+    popup.x += Math.sin(popup.life * 18) * popup.wobble * dt * 12;
   }
   for (let i = shockwaves.length - 1; i >= 0; i -= 1) {
     shockwaves[i].life -= dt;
     if (shockwaves[i].life <= 0) shockwaves.splice(i, 1);
   }
+  for (let i = impactBursts.length - 1; i >= 0; i -= 1) {
+    impactBursts[i].life -= dt;
+    if (impactBursts[i].life <= 0) impactBursts.splice(i, 1);
+  }
   if (screenShake.time > 0) {
     screenShake.time = Math.max(0, screenShake.time - dt);
     if (screenShake.time <= 0) screenShake.amount = 0;
+  }
+  if (screenFlash.time > 0) {
+    screenFlash.time = Math.max(0, screenFlash.time - dt);
+    if (screenFlash.time <= 0) screenFlash.alpha = 0;
   }
   if (scorePulse.time > 0) {
     scorePulse.time = Math.max(0, scorePulse.time - dt);
     if (scorePulse.time <= 0) scorePulse.amount = 0;
   }
+  if (flowState.time > 0) {
+    flowState.time = Math.max(0, flowState.time - dt);
+    if (flowState.time <= 0) flowState.streak = 0;
+  }
+  if (flowState.popTime > 0) flowState.popTime = Math.max(0, flowState.popTime - dt);
 }
 function getShakeOffset() {
   if (screenShake.time <= 0 || screenShake.duration <= 0) return { x: 0, y: 0 };
@@ -3047,6 +3180,28 @@ function drawJuiceEffects(ctx, sx, sy) {
     ctx.arc(x, y, r * 0.72, 0, Math.PI * 2);
     ctx.stroke();
   }
+  for (const burst of impactBursts) {
+    const t = 1 - burst.life / burst.maxLife;
+    const alpha = (1 - t) * 0.90;
+    const x = burst.x * sx;
+    const y = burst.y * sy;
+    const len = burst.radius * sx * (0.35 + t * 0.9);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(t * burst.spin);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = burst.color;
+    ctx.shadowColor = burst.color;
+    ctx.shadowBlur = 10;
+    for (let i = 0; i < burst.arms; i += 1) {
+      const a = (Math.PI * 2 * i) / burst.arms;
+      ctx.save();
+      ctx.rotate(a);
+      ctx.fillRect(len * 0.34, -burst.width * 0.5, len * 0.56, burst.width);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
   for (const spark of hitSparks) {
     const alpha = clamp(spark.life / spark.maxLife, 0, 1);
     const size = Math.max(1, spark.size * (0.6 + alpha * 0.7));
@@ -3067,14 +3222,15 @@ function drawJuiceEffects(ctx, sx, sy) {
   ctx.textAlign = 'center';
   for (const popup of scorePopups) {
     const alpha = clamp(popup.life / popup.maxLife, 0, 1);
-    const scale = 1 + Math.sin((1 - alpha) * Math.PI) * 0.18;
-    ctx.font = `900 ${Math.round(18 * scale)}px ui-monospace, SFMono-Regular, Consolas, monospace`;
+    const scale = 1 + Math.sin((1 - alpha) * Math.PI) * 0.28;
+    const label = `${popup.prefix}${popup.value}`;
+    ctx.font = `900 ${Math.round(popup.size * scale)}px ui-monospace, SFMono-Regular, Consolas, monospace`;
     ctx.globalAlpha = alpha;
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#071c31';
-    ctx.strokeText(`+${popup.value}`, popup.x * sx, popup.y * sy);
-    ctx.fillStyle = '#fff7bf';
-    ctx.fillText(`+${popup.value}`, popup.x * sx, popup.y * sy);
+    ctx.lineWidth = Math.max(3, popup.size * 0.22);
+    ctx.strokeStyle = popup.stroke;
+    ctx.strokeText(label, popup.x * sx, popup.y * sy);
+    ctx.fillStyle = popup.color;
+    ctx.fillText(label, popup.x * sx, popup.y * sy);
   }
   ctx.restore();
   ctx.globalAlpha = 1;
@@ -3170,6 +3326,8 @@ function applyFlipperImpulse(f, hit, sdt) {
   if (relN >= 0) return;
   const tipPower = 0.54 + hit.t * 0.22;
   const boost = clamp(((-relN) * 0.74 + Math.abs(omega) * f.length * 0.13) * tipPower, 0, f.upImpulse);
+  const side = f.pivot.x < WORLD.w * 0.5 ? 1 : -1;
+  const sweet = hit.t >= 0.42 && hit.t <= 0.88;
   const tangentX = -ry;
   const tangentY = rx;
   const tangentLen = Math.hypot(tangentX, tangentY) || 1;
@@ -3178,18 +3336,117 @@ function applyFlipperImpulse(f, hit, sdt) {
   ball.vx += hit.nx * boost * 0.54 + tx * boost * 0.16;
   ball.vy += hit.ny * boost * 0.54 + ty * boost * 0.16;
   ball.vy -= boost * 0.04;
+  const targetVx = side * (220 + hit.t * 230);
+  const targetVy = -(560 + hit.t * 360 + (sweet ? 90 : 0));
+  const blend = sweet ? 0.32 : 0.20;
+  ball.vx += (targetVx - ball.vx) * blend;
+  ball.vy += (targetVy - ball.vy) * blend;
   ball.spin = clamp(ball.spin + (boost / Math.max(ball.r, 1)) * (hit.t > 0.5 ? 0.10 : 0.07), -7, 7);
+  return { sweet, side, power: boost };
 }
 function clampBallSpeed() { const max = ball.vy < -20 ? PHYSICS.maxUpwardBallSpeed : PHYSICS.maxBallSpeed; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
 function ensureMinBallSpeed(min = 360) { const speed = Math.hypot(ball.vx, ball.vy); if (speed > 0 && speed < min) { const k = min / speed; ball.vx *= k; ball.vy *= k; } }
+function applyBallFlowAssist(dt) {
+  if (!ball.active || state.mode !== 'playing') { ballFlow.slowTime = 0; return; }
+  const speed = Math.hypot(ball.vx, ball.vy);
+  if (speed < 185 && ball.y < drain.y - 110) ballFlow.slowTime += dt;
+  else ballFlow.slowTime = Math.max(0, ballFlow.slowTime - dt * 2);
+  if (ballFlow.slowTime > 0.42) {
+    const side = ball.x < WORLD.w * 0.5 ? 1 : -1;
+    ball.vx += side * 65 * dt;
+    ball.vy += 135 * dt;
+    ensureMinBallSpeed(235);
+  }
+}
 
-function makeLevelUpChoices() { const choices = []; const unowned = allCards.filter((c) => !ownedCards.some((o) => o.id === c.id)); if (unowned.length) choices.push({ type: 'new', cardId: unowned[Math.floor(Math.random() * unowned.length)].id }); const up = ownedCards.filter((c) => c.level < 5); while (choices.length < 3 && up.length) { const p = up[Math.floor(Math.random() * up.length)]; choices.push({ type: 'up', cardId: p.id }); } while (choices.length < 3) choices.push({ type: 'up', cardId: ownedCards[Math.floor(Math.random() * ownedCards.length)].id }); return choices.slice(0, 3); }
-function applyChoice(i) { const ch = levelUpChoices[i]; if (!ch) return; if (ch.type === 'new') ownedCards.push(structuredClone(cardPool.get(ch.cardId))); else { const card = ownedCards.find((c) => c.id === ch.cardId); if (!card) return; card.level = Math.min(5, card.level + 1); card.score = Math.floor(card.score * 1.25); card.exp += 1; card.cooldownSec = Math.max(2.4, card.cooldownSec * 0.9); if (['apartment', 'tower'].includes(card.id)) card.hp += 1; if ([3, 5].includes(card.level)) card.maxActive += 1; }
-  state.levelUpsPending = Math.max(0, state.levelUpsPending - 1);
-  if (state.levelUpsPending > 0) levelUpChoices = makeLevelUpChoices();
+const CARD_LABELS = { house: 'HOME', convenience: 'SHOP', apartment: 'APT', gas_station: 'GAS', tower: 'TOWER' };
+const UPGRADE_DEFS = [
+  { stat: 'score', label: 'SCORE +25%', get: (c) => c.score, next: (c) => Math.floor(c.score * 1.25), apply: (c) => { c.score = Math.floor(c.score * 1.25); } },
+  { stat: 'cooldownSec', label: 'CD -12%', get: (c) => c.cooldownSec, next: (c) => Math.max(2.4, Math.round(c.cooldownSec * 0.88 * 10) / 10), apply: (c) => { c.cooldownSec = Math.max(2.4, Math.round(c.cooldownSec * 0.88 * 10) / 10); } },
+  { stat: 'peopleCount', label: 'PEOPLE +1', get: (c) => c.peopleCount, next: (c) => c.peopleCount + 1, apply: (c) => { c.peopleCount += 1; } },
+  { stat: 'hp', label: 'HP +1', get: (c) => c.hp, next: (c) => c.hp + 1, apply: (c) => { c.hp += 1; } },
+  { stat: 'maxActive', label: 'MAX +1', get: (c) => c.maxActive, next: (c) => c.maxActive + 1, apply: (c) => { c.maxActive += 1; } },
+];
+function cardName(card) { return card?.name || CARD_LABELS[card?.id] || 'CARD'; }
+function upgradeDef(stat) { return UPGRADE_DEFS.find((def) => def.stat === stat); }
+function statText(stat, value) { return stat === 'cooldownSec' ? `${Number(value).toFixed(1)}s` : String(value); }
+function choiceTitle(choice) {
+  const card = cardPool.get(choice.cardId) || ownedCards.find((c) => c.id === choice.cardId);
+  if (choice.type === 'new') return `NEW BUILDING ${cardName(card)}`;
+  const def = upgradeDef(choice.stat);
+  return `${cardName(card)} ${def?.label || 'UPGRADE'}`;
+}
+function choiceDetail(choice) {
+  const card = cardPool.get(choice.cardId) || ownedCards.find((c) => c.id === choice.cardId);
+  if (!card) return '';
+  if (choice.type === 'new') return `SCORE ${card.score} / CD ${statText('cooldownSec', card.cooldownSec)} / PEOPLE ${card.peopleCount}`;
+  const def = upgradeDef(choice.stat);
+  return `${statText(choice.stat, choice.before)} > ${statText(choice.stat, choice.after)}  LV ${card.level} > ${Math.min(5, card.level + 1)}`;
+}
+function drawChoice(list) {
+  if (!list.length) return null;
+  const index = Math.floor(randRange(0, list.length));
+  return list.splice(index, 1)[0];
+}
+function makeUpgradeChoice(card, def) {
+  return { type: 'upgrade', cardId: card.id, stat: def.stat, before: def.get(card), after: def.next(card) };
+}
+function makeLevelUpChoices() {
+  const choices = [];
+  const unowned = allCards.filter((c) => !ownedCards.some((o) => o.id === c.id));
+  if (unowned.length) {
+    const card = unowned[Math.floor(randRange(0, unowned.length))];
+    choices.push({ type: 'new', cardId: card.id });
+  }
+  const upgradePool = [];
+  for (const card of ownedCards) {
+    if (card.level >= 5) continue;
+    for (const def of UPGRADE_DEFS) upgradePool.push(makeUpgradeChoice(card, def));
+  }
+  while (choices.length < 3 && upgradePool.length) choices.push(drawChoice(upgradePool));
+  return choices;
+}
+function applyUpgradeChoice(choice) {
+  const card = ownedCards.find((c) => c.id === choice.cardId);
+  const def = upgradeDef(choice.stat);
+  if (!card || !def || card.level >= 5) return false;
+  def.apply(card);
+  card.level = Math.min(5, card.level + 1);
+  return true;
+}
+function enterLevelUpMode() {
+  if (state.levelUpsPending <= 0) return false;
+  levelUpChoices = makeLevelUpChoices();
+  if (!levelUpChoices.length) { state.levelUpsPending = 0; return false; }
+  state.mode = 'level_up';
+  input.left = false;
+  input.right = false;
+  input.pointerSide = 0;
+  input.launchTap = false;
+  ballFlow.slowTime = 0;
+  hitStop.time = 0;
+  hitStop.duration = 0;
+  playSfx('levelReady', 0.85, 0);
+  return true;
+}
+function continueAfterLevelUp() {
+  if (enterLevelUpMode()) return;
+  if (ball.active && state.balls > 0) state.mode = 'playing';
   else if (state.balls > 0) resetToReady();
-  else if (state.roundScore >= state.quota) beginRound(state.round + 1);
-  else state.mode = 'game_over';
+  else if (state.roundScore >= state.quota) { playSfx('roundClear', 0.95, 0); beginRound(state.round + 1); }
+  else { playSfx('gameOver', 0.9, 0); state.mode = 'game_over'; }
+}
+function applyChoice(i) {
+  const ch = levelUpChoices[i];
+  if (!ch) return;
+  if (ch.type === 'new') {
+    ownedCards.push(structuredClone(cardPool.get(ch.cardId)));
+    playSfx('newCard', 0.95, 0);
+  } else if (applyUpgradeChoice(ch)) {
+    playSfx('upgrade', 0.9, 0);
+  }
+  state.levelUpsPending = Math.max(0, state.levelUpsPending - 1);
+  continueAfterLevelUp();
 }
 
 addEventListener('keydown', (e) => {
@@ -3208,13 +3465,16 @@ function pointerDown(clientX, clientY) {
   const rect = wrap.getBoundingClientRect();
   const x = clientX - rect.left;
   const y = clientY - rect.top;
-  if (state.mode === 'level_up') { const top = 200; for (let i = 0; i < 3; i += 1) { const cy = top + i * 70; if (x > 80 && x < rect.width - 80 && y > cy && y < cy + 54) applyChoice(i); } return; }
+  if (state.mode === 'level_up') { const panelY = 150; for (let i = 0; i < 3; i += 1) { const cy = panelY + 72 + i * 66; if (x > 64 && x < rect.width - 64 && y > cy && y < cy + 48) applyChoice(i); } return; }
   if (state.mode === 'game_over') { restartRun(); return; }
   if (state.mode === 'ready') { input.launchTap = true; return; }
   if (x < rect.width * 0.5) { input.left = true; input.pointerSide = 1; playSfx('flipper', 0.6, -0.45); }
   else { input.right = true; input.pointerSide = 2; playSfx('flipper', 0.6, 0.45); }
 }
 function pointerUp() { if (input.pointerSide === 1) input.left = false; if (input.pointerSide === 2) input.right = false; input.pointerSide = 0; }
+addEventListener('pointerdown', unlockAudio, { capture: true });
+addEventListener('mousedown', unlockAudio, { capture: true });
+addEventListener('touchstart', unlockAudio, { capture: true, passive: true });
 addEventListener('pointerdown', (e) => pointerDown(e.clientX, e.clientY)); addEventListener('pointerup', pointerUp); addEventListener('pointercancel', pointerUp);
 
 function updateFlipper(f, pressed, dt) {
@@ -3235,14 +3495,16 @@ function resolveFlipperHit(f, pressed, sdt) {
     const angle = f.prev + delta * (i / sweepSteps);
     const hit = segmentCapsuleHit(ball, flipperSegment(f, angle), 0.75);
     if (!hit) continue;
+    let shot = null;
     if (pressed && Math.abs(delta) > 0.0005) {
-      applyFlipperImpulse(f, hit, sdt);
+      shot = applyFlipperImpulse(f, hit, sdt);
       clampBallSpeed();
-      ensureMinBallSpeed(PHYSICS.minFlipperBallSpeed);
+      ensureMinBallSpeed(shot?.sweet ? PHYSICS.minFlipperBallSpeed + 80 : PHYSICS.minFlipperBallSpeed);
     }
     if (f.fxCooldown <= 0) {
-      spawnHitSparks(hit.cx, hit.cy, pressed ? 5 : 3, pressed ? 0.62 : 0.42);
-      playSfx('flipper', pressed ? 0.72 : 0.48, worldPan(hit.cx));
+      if (pressed) spawnFlipperShotJuice(hit, shot?.side || (f.pivot.x < WORLD.w * 0.5 ? 1 : -1), !!shot?.sweet);
+      else spawnHitSparks(hit.cx, hit.cy, 3, 0.42);
+      playSfx(shot?.sweet ? 'sweet' : 'flipper', shot?.sweet ? 0.96 : pressed ? 0.72 : 0.48, worldPan(hit.cx));
       f.fxCooldown = pressed ? 0.08 : 0.12;
     }
     return true;
@@ -3252,6 +3514,17 @@ function resolveFlipperHit(f, pressed, sdt) {
 
 function update(dt) {
   state.fpsS += dt; state.fpsN += 1; if (state.fpsS > 0.3) { state.fps = Math.round(state.fpsN / state.fpsS); state.fpsS = 0; state.fpsN = 0; }
+  if (hitStop.time > 0) {
+    hitStop.time = Math.max(0, hitStop.time - dt);
+    updateJuiceEffects(dt);
+    input.launchTap = false;
+    return;
+  }
+  if (state.mode === 'level_up') {
+    updateJuiceEffects(dt);
+    input.launchTap = false;
+    return;
+  }
   if (state.mode !== 'playing' || !ball.active) updateFlippers(dt);
 
   if (state.mode === 'playing') {
@@ -3284,6 +3557,7 @@ function update(dt) {
     for (let s = 0; s < substeps; s += 1) {
       updateFlippers(sdt);
       ball.vy += PHYSICS.gravity * sdt; ball.vx *= PHYSICS.airDrag * PHYSICS.rollingFriction; ball.vy *= PHYSICS.airDrag; ball.x += ball.vx * sdt; ball.y += ball.vy * sdt; updateBallRotation(sdt); clampBallSpeed();
+      applyBallFlowAssist(sdt);
       pushBallTrail();
       for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce);
       for (const seg of rails) segmentCapsuleHit(ball, seg, 0.35);
@@ -3292,21 +3566,30 @@ function update(dt) {
         const pressed = key === 'left' ? input.left : input.right;
         resolveFlipperHit(f, pressed, sdt);
       }
-      for (const b of buildings) if (b.active && b.hitCooldown <= 0 && resolveAABB(ball, { x: b.x - 4, y: b.y - 4, w: b.w + 8, h: b.h + 8 }, PHYSICS.buildingBounce)) { spawnHitSparks(ball.x, ball.y, 8, 0.95); playSfx('hit', 0.78, worldPan(ball.x)); b.hp -= 1; b.hitCooldown = 0.08; if (b.hp <= 0) { destroyBuilding(b); ball.vx *= 1.03; ball.vy *= 1.03; clampBallSpeed(); } }
-      for (const person of people) if (person.active && len2(ball.x - person.x, ball.y - person.y) <= ball.r + person.r) { person.active = false; gainExp(person.value); }
+      for (const b of buildings) if (b.active && b.hitCooldown <= 0 && resolveAABB(ball, { x: b.x - 4, y: b.y - 4, w: b.w + 8, h: b.h + 8 }, PHYSICS.buildingBounce)) {
+        spawnHitSparks(ball.x, ball.y, 9, 1.02);
+        playSfx('hit', 0.86, worldPan(ball.x));
+        b.hp -= 1;
+        b.hitCooldown = 0.08;
+        if (b.hp <= 0) {
+          destroyBuilding(b);
+          ball.vx *= 1.03;
+          ball.vy *= 1.03;
+          clampBallSpeed();
+        } else {
+          addScreenShake(1.2, 0.045);
+          addScreenFlash('#fff7bf', 0.045, 0.04);
+        }
+      }
+      for (const person of people) if (person.active && len2(ball.x - person.x, ball.y - person.y) <= ball.r + person.r) crushPerson(person);
+      if (state.mode !== 'playing') break;
       if (ball.y > WORLD.h + 30 || (ball.y > drain.y && ball.x > drain.x0 && ball.x < drain.x1)) { playSfx('drain', 0.9, worldPan(ball.x)); ball.active = false; state.mode = 'ball_lost'; state.ballLostTimer = 0.8; break; }
     }
   } else if (state.mode === 'ball_lost') {
     state.ballLostTimer -= dt;
     if (state.ballLostTimer <= 0) {
       state.balls -= 1;
-      if (state.levelUpsPending > 0) {
-        state.mode = 'level_up';
-        levelUpChoices = makeLevelUpChoices();
-      } else if (state.balls <= 0) {
-        if (state.roundScore >= state.quota) { beginRound(state.round + 1); }
-        else state.mode = 'game_over';
-      } else resetToReady();
+      continueAfterLevelUp();
     }
   }
   updateJuiceEffects(dt);
@@ -3341,17 +3624,37 @@ function render() {
   uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
 
   uiCtx.save(); uiCtx.scale(dpr, dpr); const vw = uiCanvas.width / dpr; const vh = uiCanvas.height / dpr;
-  if (ballTrail.length || hitSparks.length || scorePopups.length || shockwaves.length) {
+  if (ballTrail.length || hitSparks.length || scorePopups.length || shockwaves.length || impactBursts.length) {
     uiCtx.save();
     uiCtx.translate(shake.x, shake.y);
     drawJuiceEffects(uiCtx, vw / WORLD.w, vh / WORLD.h);
     uiCtx.restore();
   }
-  const cardLabel = (card) => ({ house: 'HOME', convenience: 'SHOP', apartment: 'APT', gas_station: 'GAS', tower: 'TOWER' }[card?.id] || 'CARD');
+  if (screenFlash.time > 0 && screenFlash.duration > 0) {
+    const flashT = clamp(screenFlash.time / screenFlash.duration, 0, 1);
+    uiCtx.globalAlpha = screenFlash.alpha * flashT * flashT;
+    uiCtx.fillStyle = screenFlash.color;
+    uiCtx.fillRect(0, 0, vw, vh);
+    uiCtx.globalAlpha = 1;
+  }
   const hudW = Math.min(400, vw - 22);
   const hudX = (vw - hudW) * 0.5;
   const hudY = 8;
   const hudH = 76;
+  if (flowState.popTime > 0 && flowState.label) {
+    const rushT = clamp(flowState.popTime / 0.52, 0, 1);
+    const rushScale = 1 + Math.sin((1 - rushT) * Math.PI) * 0.22;
+    uiCtx.save();
+    uiCtx.globalAlpha = rushT;
+    uiCtx.textAlign = 'center';
+    uiCtx.font = `900 ${Math.round(18 * rushScale)}px ui-monospace, SFMono-Regular, Consolas, monospace`;
+    uiCtx.lineWidth = 5;
+    uiCtx.strokeStyle = '#071c31';
+    uiCtx.strokeText(flowState.label, vw * 0.5, hudY + hudH + 28);
+    uiCtx.fillStyle = '#68e4ff';
+    uiCtx.fillText(flowState.label, vw * 0.5, hudY + hudH + 28);
+    uiCtx.restore();
+  }
   pxRect(uiCtx, hudX, hudY, hudW, hudH, '#ffcf3a');
   pxRect(uiCtx, hudX + 4, hudY + 4, hudW - 8, hudH - 8, '#071c31');
   pxFrame(uiCtx, hudX + 9, hudY + 9, hudW - 18, hudH - 18, '#0f5a8c', '#071c31', '#7ef5ff', false);
@@ -3413,15 +3716,16 @@ function render() {
     uiCtx.font = '900 28px ui-monospace, SFMono-Regular, Consolas, monospace';
     uiCtx.fillText('LEVEL UP', panelX + 24, panelY + 42);
     pxRect(uiCtx, panelX + 24, panelY + 52, 118, 5, '#ffd13a');
-    uiCtx.font = '900 16px ui-monospace, SFMono-Regular, Consolas, monospace';
+    uiCtx.textAlign = 'start';
     for (let i = 0; i < levelUpChoices.length; i += 1) {
       const ch = levelUpChoices[i];
-      const card = cardPool.get(ch.cardId) || ownedCards.find((c) => c.id === ch.cardId);
-      const txt = ch.type === 'new' ? `${i + 1}. NEW ${cardLabel(card)}` : `${i + 1}. UP ${cardLabel(card)}`;
       const cy = panelY + 72 + i * 66;
       pxFrame(uiCtx, panelX + 34, cy, panelW - 68, 48, i === 0 ? '#ffd13a' : '#124f82', '#09243f', i === 0 ? '#fff7bf' : '#68e4ff', false);
       uiCtx.fillStyle = i === 0 ? '#123452' : '#fff3bd';
-      uiCtx.fillText(txt, panelX + 52, cy + 30);
+      uiCtx.font = '900 13px ui-monospace, SFMono-Regular, Consolas, monospace';
+      uiCtx.fillText(`${i + 1}. ${choiceTitle(ch)}`, panelX + 52, cy + 19);
+      uiCtx.font = '900 10px ui-monospace, SFMono-Regular, Consolas, monospace';
+      uiCtx.fillText(choiceDetail(ch), panelX + 52, cy + 36);
     }
   }
   uiCtx.restore();
