@@ -13,7 +13,8 @@ const PHYSICS = {
   railBounce: 0.04,
   buildingBounce: 0.22,
   flipperBounce: 0.03,
-  flipperFriction: 0.90,
+  flipperFriction: 0.985,
+  railFriction: 0.996,
   maxBallSpeed: 760,
   maxUpwardBallSpeed: 1040,
   minFlipperBallSpeed: 300,
@@ -2712,7 +2713,7 @@ const MAX_PEOPLE = 80;
 for (let r = 0; r < GRID.rows; r += 1) { const row = []; for (let c = 0; c < GRID.cols; c += 1) row.push({ tags: [ZONE_TEMPLATE[r][c]], occupiedBy: null }); grid.push(row); }
 
 const walls = [{ x: 25, y: PLAYFIELD_TOP_Y, w: 10, h: 765 - PLAYFIELD_TOP_Y }, { x: 465, y: PLAYFIELD_TOP_Y, w: 10, h: 765 - PLAYFIELD_TOP_Y }, { x: 25, y: PLAYFIELD_TOP_Y, w: 450, h: 10 }];
-const rails = [{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.flipperFriction }];
+const rails = [{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
 const flippers = {
   left: { pivot: { x: 160, y: 704 }, length: 84, radius: 11, base: 0.52, active: -0.92, angle: 0.52, prev: 0.52, upImpulse: 620 },
   right: { pivot: { x: 340, y: 704 }, length: 84, radius: 11, base: Math.PI - 0.52, active: Math.PI + 0.92, angle: Math.PI - 0.52, prev: Math.PI - 0.52, upImpulse: 620 },
@@ -2856,8 +2857,6 @@ function segmentCapsuleHit(b, seg, rollingBias = 0) {
   const newVt = vt * grip;
   b.vx += (newVt - vt) * tx;
   b.vy += (newVt - vt) * ty;
-  b.vx *= seg.friction;
-  b.vy *= seg.friction;
   return { nx, ny, t, cx, cy };
 }
 function flipperSegment(f, angle = f.angle) { return { x1: f.pivot.x, y1: f.pivot.y, x2: f.pivot.x + Math.cos(angle) * f.length, y2: f.pivot.y + Math.sin(angle) * f.length, r: f.radius, restitution: PHYSICS.flipperBounce, friction: PHYSICS.flipperFriction }; }
