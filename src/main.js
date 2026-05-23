@@ -10,14 +10,15 @@ const PHYSICS = {
   airDrag: 0.9972,
   rollingFriction: 0.9975,
   wallBounce: 0.52,
-  railBounce: 0.16,
-  buildingBounce: 0.32,
-  flipperBounce: 0.12,
-  flipperFriction: 0.94,
+  railBounce: 0.04,
+  buildingBounce: 0.22,
+  flipperBounce: 0.03,
+  flipperFriction: 0.90,
   maxBallSpeed: 760,
   maxUpwardBallSpeed: 1040,
   minFlipperBallSpeed: 300,
-  spinDamping: 0.972,
+  spinDamping: 0.988,
+  rollingSpinGain: 0.42,
 };
 
 const GRID = {
@@ -2774,8 +2775,8 @@ function updateBallRotation(dt) {
   const speed = Math.hypot(ball.vx, ball.vy);
   if (speed > 1) {
     const travelSign = Math.abs(ball.vx) > 8 ? Math.sign(ball.vx) : Math.sign(ball.spin || 1);
-    const targetSpin = (speed / Math.max(ball.r, 1)) * travelSign * 0.24;
-    ball.spin += (targetSpin - ball.spin) * 0.026;
+    const targetSpin = (speed / Math.max(ball.r, 1)) * travelSign * PHYSICS.rollingSpinGain;
+    ball.spin += (targetSpin - ball.spin) * 0.052;
   }
   ball.spin *= PHYSICS.spinDamping;
   ball.rot += ball.spin * dt;
@@ -2820,7 +2821,7 @@ function resolveAABB(b, w, restitution = 0.1) {
   }
   return true;
 }
-function segmentCapsuleHit(b, seg) {
+function segmentCapsuleHit(b, seg, rollingBias = 0) {
   const abx = seg.x2 - seg.x1;
   const aby = seg.y2 - seg.y1;
   const apx = b.x - seg.x1;
@@ -2842,10 +2843,19 @@ function segmentCapsuleHit(b, seg) {
   b.y += ny * pen;
   const vn = b.vx * nx + b.vy * ny;
   if (vn < 0) {
-    b.vx -= (1 + seg.restitution) * vn * nx;
-    b.vy -= (1 + seg.restitution) * vn * ny;
-    addCollisionSpin(nx, ny, 0.038);
+    const rebound = (1 + seg.restitution) * vn;
+    b.vx -= rebound * nx;
+    b.vy -= rebound * ny;
+    addCollisionSpin(nx, ny, 0.09 + rollingBias * 0.06);
   }
+
+  const tx = -ny;
+  const ty = nx;
+  const vt = b.vx * tx + b.vy * ty;
+  const grip = clamp(seg.friction + rollingBias * 0.08, 0, 0.999);
+  const newVt = vt * grip;
+  b.vx += (newVt - vt) * tx;
+  b.vy += (newVt - vt) * ty;
   b.vx *= seg.friction;
   b.vy *= seg.friction;
   return { nx, ny, t, cx, cy };
@@ -2906,7 +2916,7 @@ function resolveFlipperHit(f, pressed, sdt) {
   const sweepSteps = clamp(Math.ceil(Math.abs(delta) / 0.08), 1, 8);
   for (let i = 0; i <= sweepSteps; i += 1) {
     const angle = f.prev + delta * (i / sweepSteps);
-    const hit = segmentCapsuleHit(ball, flipperSegment(f, angle));
+    const hit = segmentCapsuleHit(ball, flipperSegment(f, angle), 0.75);
     if (!hit) continue;
     if (pressed && Math.abs(delta) > 0.0005) {
       applyFlipperImpulse(f, hit, sdt);
@@ -2953,7 +2963,7 @@ function update(dt) {
       updateFlippers(sdt);
       ball.vy += PHYSICS.gravity * sdt; ball.vx *= PHYSICS.airDrag * PHYSICS.rollingFriction; ball.vy *= PHYSICS.airDrag; ball.x += ball.vx * sdt; ball.y += ball.vy * sdt; updateBallRotation(sdt); clampBallSpeed();
       for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce);
-      for (const seg of rails) segmentCapsuleHit(ball, seg);
+      for (const seg of rails) segmentCapsuleHit(ball, seg, 0.35);
       for (const key of ['left', 'right']) {
         const f = flippers[key];
         const pressed = key === 'left' ? input.left : input.right;
