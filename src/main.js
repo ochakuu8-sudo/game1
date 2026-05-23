@@ -6,18 +6,18 @@ const BALL_RADIUS = 18;
 const BALL_SPRITE_SIZE = 42;
 
 const PHYSICS = {
-  gravity: 940,
-  airDrag: 0.9972,
-  rollingFriction: 0.9975,
-  wallBounce: 0.52,
-  railBounce: 0.04,
-  buildingBounce: 0.22,
-  flipperBounce: 0.03,
+  gravity: 900,
+  airDrag: 0.9976,
+  rollingFriction: 0.9978,
+  wallBounce: 0.58,
+  railBounce: 0.08,
+  buildingBounce: 0.28,
+  flipperBounce: 0.08,
   flipperFriction: 0.985,
   railFriction: 0.996,
-  maxBallSpeed: 760,
-  maxUpwardBallSpeed: 1040,
-  minFlipperBallSpeed: 300,
+  maxBallSpeed: 820,
+  maxUpwardBallSpeed: 1100,
+  minFlipperBallSpeed: 330,
   spinDamping: 0.988,
   rollingSpinGain: 0.42,
 };
@@ -90,6 +90,115 @@ if (!gl) throw new Error('WebGL unavailable');
 function clamp(v, min, max) { return v < min ? min : v > max ? max : v; }
 function len2(x, y) { return Math.hypot(x, y); }
 function randRange(min, max) { return min + Math.random() * (max - min); }
+function worldPan(x) { return clamp((x / WORLD.w) * 1.6 - 0.8, -0.8, 0.8); }
+
+const sound = { ctx: null, master: null, enabled: false, last: Object.create(null) };
+
+function ensureAudio() {
+  if (sound.ctx) return sound.ctx;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  sound.ctx = new AudioCtx();
+  sound.master = sound.ctx.createGain();
+  sound.master.gain.value = 0.34;
+  sound.master.connect(sound.ctx.destination);
+  return sound.ctx;
+}
+function unlockAudio() {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  sound.enabled = true;
+  if (ctx.state === 'suspended') ctx.resume();
+}
+function sfxGain(value, duration, start = 0, attack = 0.004) {
+  const ctx = sound.ctx;
+  const gain = ctx.createGain();
+  const now = ctx.currentTime + start;
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(value, now + attack);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  return gain;
+}
+function sfxOut(gain, pan = 0) {
+  if (sound.ctx.createStereoPanner) {
+    const panner = sound.ctx.createStereoPanner();
+    panner.pan.value = pan;
+    gain.connect(panner);
+    panner.connect(sound.master);
+  } else {
+    gain.connect(sound.master);
+  }
+}
+function tone({ type = 'triangle', freq = 440, to = 440, duration = 0.1, gain = 0.08, pan = 0, start = 0 }) {
+  const ctx = sound.ctx;
+  const osc = ctx.createOscillator();
+  const amp = sfxGain(gain, duration, start);
+  const t = ctx.currentTime + start;
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + duration);
+  osc.connect(amp);
+  sfxOut(amp, pan);
+  osc.start(t);
+  osc.stop(t + duration + 0.02);
+}
+function noise({ duration = 0.08, gain = 0.05, pan = 0, start = 0, filter = 1600, type = 'bandpass' }) {
+  const ctx = sound.ctx;
+  const length = Math.max(1, Math.floor(ctx.sampleRate * duration));
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource();
+  const biquad = ctx.createBiquadFilter();
+  const amp = sfxGain(gain, duration, start, 0.002);
+  biquad.type = type;
+  biquad.frequency.value = filter;
+  biquad.Q.value = 0.8;
+  src.buffer = buffer;
+  src.connect(biquad);
+  biquad.connect(amp);
+  sfxOut(amp, pan);
+  const t = ctx.currentTime + start;
+  src.start(t);
+  src.stop(t + duration + 0.02);
+}
+function playSfx(kind, intensity = 1, pan = 0) {
+  if (!sound.enabled || !sound.ctx) return;
+  const ctx = sound.ctx;
+  if (ctx.state === 'suspended') ctx.resume();
+  const now = ctx.currentTime;
+  const cooldown = { hit: 0.045, flipper: 0.055, destroy: 0.09, explode: 0.16, launch: 0.18, collect: 0.08, level: 0.35, drain: 0.24 }[kind] || 0;
+  if (now - (sound.last[kind] || -1) < cooldown) return;
+  sound.last[kind] = now;
+
+  if (kind === 'launch') {
+    tone({ type: 'triangle', freq: 150, to: 620, duration: 0.20, gain: 0.09 * intensity, pan });
+    noise({ duration: 0.16, gain: 0.025 * intensity, filter: 900, type: 'highpass', pan });
+  } else if (kind === 'flipper') {
+    tone({ type: 'square', freq: 460, to: 210, duration: 0.045, gain: 0.055 * intensity, pan });
+    noise({ duration: 0.035, gain: 0.030 * intensity, filter: 2200, type: 'bandpass', pan });
+  } else if (kind === 'hit') {
+    tone({ type: 'triangle', freq: 760, to: 1180, duration: 0.055, gain: 0.050 * intensity, pan });
+    tone({ type: 'sine', freq: 1420, to: 920, duration: 0.035, gain: 0.030 * intensity, pan, start: 0.012 });
+    noise({ duration: 0.035, gain: 0.020 * intensity, filter: 3600, type: 'bandpass', pan });
+  } else if (kind === 'destroy') {
+    tone({ type: 'triangle', freq: 330, to: 520, duration: 0.085, gain: 0.060 * intensity, pan });
+    tone({ type: 'triangle', freq: 520, to: 780, duration: 0.105, gain: 0.060 * intensity, pan, start: 0.045 });
+    noise({ duration: 0.12, gain: 0.030 * intensity, filter: 1800, type: 'bandpass', pan });
+  } else if (kind === 'explode') {
+    noise({ duration: 0.24, gain: 0.080 * intensity, filter: 520, type: 'lowpass', pan });
+    tone({ type: 'sawtooth', freq: 210, to: 70, duration: 0.20, gain: 0.070 * intensity, pan });
+    tone({ type: 'triangle', freq: 520, to: 880, duration: 0.12, gain: 0.050 * intensity, pan, start: 0.05 });
+  } else if (kind === 'collect') {
+    tone({ type: 'sine', freq: 900, to: 1350, duration: 0.070, gain: 0.040 * intensity, pan });
+  } else if (kind === 'level') {
+    tone({ type: 'triangle', freq: 520, to: 680, duration: 0.08, gain: 0.052 * intensity, pan, start: 0 });
+    tone({ type: 'triangle', freq: 700, to: 920, duration: 0.09, gain: 0.052 * intensity, pan, start: 0.07 });
+    tone({ type: 'triangle', freq: 920, to: 1260, duration: 0.12, gain: 0.060 * intensity, pan, start: 0.14 });
+  } else if (kind === 'drain') {
+    tone({ type: 'sine', freq: 260, to: 120, duration: 0.20, gain: 0.055 * intensity, pan });
+  }
+}
 
 class RuntimeAtlas {
   constructor(glRef, size = 1024) {
@@ -2672,21 +2781,25 @@ registerAtlasSprites = function registerAtlasSpritesRef(atlas) {
   packHiDpi(atlas, 'building_gas', 80, 40, (c, x, y, w, h) => drawGasSprite(c, x, y, w, h));
   packHiDpi(atlas, 'building_tower', 80, 80, (c, x, y, w, h) => drawTowerSprite(c, x, y, w, h));
   const personPalettes = [
-    { head: '#ffe0be', body: '#4a8fd6', legs: '#1d3557' },
-    { head: '#ffd2a6', body: '#53b37b', legs: '#2f4858' },
-    { head: '#ffcc9d', body: '#d97f4a', legs: '#425066' },
+    { fill: '#dceee7' },
+    { fill: '#e9eadf' },
+    { fill: '#dbe9f0' },
   ];
-  const legsByFrame = [[2, 0], [1, 1], [0, 2]];
+  const legsByFrame = [[1, 0], [0, 1], [0, 0]];
   for (let variant = 0; variant < personPalettes.length; variant += 1) {
     for (let frame = 0; frame < 3; frame += 1) {
-      packHiDpi(atlas, `person_${variant}_${frame}`, 10, 10, (ctx, x, y) => {
+      packHiDpi(atlas, `person_${variant}_${frame}`, 8, 10, (ctx, x, y) => {
         const palette = personPalettes[variant];
         const [lLeg, rLeg] = legsByFrame[frame];
-        pxRect(ctx, x + 3, y + 1, 4, 1, '#00000066');
-        pxRect(ctx, x + 4, y + 0, 2, 2, palette.head);
-        pxRect(ctx, x + 3, y + 2, 4, 3, palette.body);
-        pxRect(ctx, x + 3, y + 5, 1, 2 + lLeg, palette.legs);
-        pxRect(ctx, x + 6, y + 5 + rLeg, 1, 2, palette.legs);
+        pxRect(ctx, x + 2, y + 9, 4, 1, 'rgba(4,20,31,.18)');
+        pxRect(ctx, x + 2, y + 0, 4, 3, '#1f3a46');
+        pxRect(ctx, x + 3, y + 1, 2, 1, palette.fill);
+        pxRect(ctx, x + 2, y + 3, 4, 4, '#1f3a46');
+        pxRect(ctx, x + 3, y + 4, 2, 2, palette.fill);
+        pxRect(ctx, x + 1, y + 4, 1, 2, '#1f3a46');
+        pxRect(ctx, x + 6, y + 4, 1, 2, '#1f3a46');
+        pxRect(ctx, x + 2, y + 7, 2, 2 + lLeg, '#1f3a46');
+        pxRect(ctx, x + 4, y + 7 + rLeg, 2, 2, '#1f3a46');
       });
     }
   }
@@ -2710,22 +2823,31 @@ const ownedCards = [structuredClone(cardPool.get('house')), structuredClone(card
 
 const grid = []; let nextBuildingId = 1; const buildings = []; const people = []; let levelUpChoices = [];
 const MAX_PEOPLE = 80;
+const MAX_HIT_SPARKS = 120;
+const MAX_BALL_TRAIL = 12;
+const hitSparks = [];
+const ballTrail = [];
+const scorePopups = [];
+const shockwaves = [];
+const screenShake = { time: 0, duration: 0, amount: 0 };
+const scorePulse = { time: 0, duration: 0.24, amount: 0 };
 for (let r = 0; r < GRID.rows; r += 1) { const row = []; for (let c = 0; c < GRID.cols; c += 1) row.push({ tags: [ZONE_TEMPLATE[r][c]], occupiedBy: null }); grid.push(row); }
 
 const walls = [{ x: 25, y: PLAYFIELD_TOP_Y, w: 10, h: 765 - PLAYFIELD_TOP_Y }, { x: 465, y: PLAYFIELD_TOP_Y, w: 10, h: 765 - PLAYFIELD_TOP_Y }, { x: 25, y: PLAYFIELD_TOP_Y, w: 450, h: 10 }];
 const rails = [{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
 const flippers = {
-  left: { pivot: { x: 160, y: 704 }, length: 84, radius: 11, base: 0.52, active: -0.92, angle: 0.52, prev: 0.52, upImpulse: 620 },
-  right: { pivot: { x: 340, y: 704 }, length: 84, radius: 11, base: Math.PI - 0.52, active: Math.PI + 0.92, angle: Math.PI - 0.52, prev: Math.PI - 0.52, upImpulse: 620 },
+  left: { pivot: { x: 160, y: 704 }, length: 84, radius: 11, base: 0.46, active: -0.50, angle: 0.46, prev: 0.46, upImpulse: 680, fxCooldown: 0 },
+  right: { pivot: { x: 340, y: 704 }, length: 84, radius: 11, base: Math.PI - 0.46, active: Math.PI + 0.50, angle: Math.PI - 0.46, prev: Math.PI - 0.46, upImpulse: 680, fxCooldown: 0 },
 };
 const drain = { x0: 228, x1: 272, y: 760 };
 const maxBuildings = 8;
 
 function getNextExp() { return 5 + state.level * 3; }
 function updateQuota() { state.quota = Math.floor(3000 * Math.pow(1.75, state.round - 1)); }
-function resetGridOccupancy() { for (const row of grid) for (const cell of row) cell.occupiedBy = null; buildings.length = 0; people.length = 0; }
+function clearJuiceEffects() { hitSparks.length = 0; ballTrail.length = 0; scorePopups.length = 0; shockwaves.length = 0; screenShake.time = 0; screenShake.duration = 0; screenShake.amount = 0; scorePulse.time = 0; scorePulse.amount = 0; glCanvas.style.transform = ''; }
+function resetGridOccupancy() { for (const row of grid) for (const cell of row) cell.occupiedBy = null; buildings.length = 0; people.length = 0; clearJuiceEffects(); }
 function resetToReady() { ball.x = START_POS.x; ball.y = START_POS.y; ball.vx = 0; ball.vy = 0; ball.rot = 0; ball.spin = 0; ball.active = false; state.mode = 'ready'; }
-function launchBall() { ball.active = true; ball.vx = -90; ball.vy = -1080; ball.spin = -1.2; state.mode = 'playing'; }
+function launchBall() { ball.active = true; ball.vx = -90; ball.vy = -1080; ball.spin = -1.2; state.mode = 'playing'; playSfx('launch', 1, worldPan(ball.x)); }
 function clearRound() { resetGridOccupancy(); for (const card of ownedCards) card.cooldownTimer = randRange(card.cooldownSec * 0.7, card.cooldownSec * 1.2); trySpawnFromCard(ownedCards.find((c) => c.id === 'house') || ownedCards[0], true); trySpawnFromCard(ownedCards.find((c) => c.id === 'convenience') || ownedCards[0], true); }
 function beginRound(round) { state.round = round; state.roundScore = 0; state.balls = 3; updateQuota(); clearRound(); resetToReady(); }
 function restartRun() { state.totalScore = 0; state.exp = 0; state.level = 1; state.levelUpsPending = 0; ownedCards.length = 0; ownedCards.push(structuredClone(cardPool.get('house')), structuredClone(cardPool.get('convenience'))); beginRound(1); }
@@ -2755,7 +2877,7 @@ function spawnPeople(building, amount) {
     person.y = cy + randRange(-6, 6);
     person.vx = Math.cos(angle) * speed;
     person.vy = Math.sin(angle) * speed;
-    person.r = randRange(6, 9);
+    person.r = randRange(4.5, 5.5);
     person.value = 1;
     person.life = life;
     person.active = true;
@@ -2765,8 +2887,66 @@ function spawnPeople(building, amount) {
     person.spriteVariant = Math.floor(randRange(0, 3));
   }
 }
-function gainExp(v) { state.exp += v; while (state.exp >= getNextExp()) { state.exp -= getNextExp(); state.level += 1; state.levelUpsPending += 1; } }
-function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; state.roundScore += building.score; state.totalScore += building.score; spawnPeople(building, Math.max(1, building.exp)); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
+function gainExp(v) { let leveled = false; state.exp += v; while (state.exp >= getNextExp()) { state.exp -= getNextExp(); state.level += 1; state.levelUpsPending += 1; leveled = true; } playSfx(leveled ? 'level' : 'collect', leveled ? 1 : 0.75, worldPan(ball.x)); }
+
+function addScreenShake(amount = 3, duration = 0.12) {
+  screenShake.amount = Math.max(screenShake.amount, amount);
+  screenShake.duration = Math.max(screenShake.duration, duration);
+  screenShake.time = Math.max(screenShake.time, duration);
+}
+function addScorePulse(amount = 1) {
+  scorePulse.amount = Math.max(scorePulse.amount, amount);
+  scorePulse.time = scorePulse.duration;
+}
+function pushBallTrail() {
+  if (!ball.active) return;
+  const last = ballTrail[ballTrail.length - 1];
+  if (last && len2(ball.x - last.x, ball.y - last.y) < 12) return;
+  ballTrail.push({ x: ball.x, y: ball.y, r: ball.r, life: 0.18, maxLife: 0.18 });
+  while (ballTrail.length > MAX_BALL_TRAIL) ballTrail.shift();
+}
+function pushSpark(spark) {
+  hitSparks.push(spark);
+  while (hitSparks.length > MAX_HIT_SPARKS) hitSparks.shift();
+}
+function spawnHitSparks(x, y, count = 6, power = 1) {
+  const colors = ['#fff7bf', '#ffd13a', '#ff9b2f', '#ffffff'];
+  for (let i = 0; i < count; i += 1) {
+    const angle = randRange(0, Math.PI * 2);
+    const speed = randRange(95, 220) * power;
+    pushSpark({
+      x: x + randRange(-4, 4),
+      y: y + randRange(-4, 4),
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - randRange(20, 70) * power,
+      life: randRange(0.22, 0.38),
+      maxLife: 0,
+      size: randRange(2.4, 5) * power,
+      color: colors[Math.floor(randRange(0, colors.length))],
+      stretch: randRange(8, 18) * power,
+    });
+  }
+  for (const spark of hitSparks) if (!spark.maxLife) spark.maxLife = spark.life;
+}
+function spawnScorePopup(x, y, score) {
+  scorePopups.push({ x, y, value: score, life: 0.82, maxLife: 0.82, vy: -42 });
+  if (scorePopups.length > 16) scorePopups.shift();
+}
+function spawnShockwave(x, y, strong = false) {
+  shockwaves.push({ x, y, strong, life: strong ? 0.38 : 0.30, maxLife: strong ? 0.38 : 0.30, radius: strong ? 18 : 12, maxRadius: strong ? 84 : 58, color: strong ? '#ff9b2f' : '#25c8ff', fill: strong ? '#ffd13a' : '#68e4ff' });
+  if (shockwaves.length > 10) shockwaves.shift();
+}
+function spawnDestroyJuice(building, strong = false) {
+  const cx = building.x + building.w * 0.5;
+  const cy = building.y + building.h * 0.5;
+  spawnScorePopup(cx, cy - 8, building.score);
+  spawnShockwave(cx, cy, strong);
+  spawnHitSparks(cx, cy, strong ? 20 : 14, strong ? 1.35 : 1.08);
+  addScreenShake(strong ? 5 : 3, strong ? 0.14 : 0.11);
+  addScorePulse(strong ? 1.25 : 1);
+  playSfx(strong ? 'explode' : 'destroy', strong ? 1.05 : 0.9, worldPan(cx));
+}
+function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; state.roundScore += building.score; state.totalScore += building.score; spawnPeople(building, Math.max(1, building.exp)); spawnDestroyJuice(building, allowExplosion && building.effectId === 'explode'); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
 
 function addCollisionSpin(nx, ny, amount = 0.14) {
   const tangentSpeed = ball.vx * -ny + ball.vy * nx;
@@ -2781,6 +2961,124 @@ function updateBallRotation(dt) {
   }
   ball.spin *= PHYSICS.spinDamping;
   ball.rot += ball.spin * dt;
+}
+function updateJuiceEffects(dt) {
+  for (let i = ballTrail.length - 1; i >= 0; i -= 1) {
+    ballTrail[i].life -= dt;
+    if (ballTrail[i].life <= 0) ballTrail.splice(i, 1);
+  }
+  for (let i = hitSparks.length - 1; i >= 0; i -= 1) {
+    const spark = hitSparks[i];
+    spark.life -= dt;
+    if (spark.life <= 0) { hitSparks.splice(i, 1); continue; }
+    spark.px = spark.x;
+    spark.py = spark.y;
+    spark.vy += 360 * dt;
+    spark.vx *= 0.985;
+    spark.vy *= 0.985;
+    spark.x += spark.vx * dt;
+    spark.y += spark.vy * dt;
+  }
+  for (let i = scorePopups.length - 1; i >= 0; i -= 1) {
+    const popup = scorePopups[i];
+    popup.life -= dt;
+    if (popup.life <= 0) { scorePopups.splice(i, 1); continue; }
+    popup.y += popup.vy * dt;
+    popup.vy *= 0.985;
+  }
+  for (let i = shockwaves.length - 1; i >= 0; i -= 1) {
+    shockwaves[i].life -= dt;
+    if (shockwaves[i].life <= 0) shockwaves.splice(i, 1);
+  }
+  if (screenShake.time > 0) {
+    screenShake.time = Math.max(0, screenShake.time - dt);
+    if (screenShake.time <= 0) screenShake.amount = 0;
+  }
+  if (scorePulse.time > 0) {
+    scorePulse.time = Math.max(0, scorePulse.time - dt);
+    if (scorePulse.time <= 0) scorePulse.amount = 0;
+  }
+}
+function getShakeOffset() {
+  if (screenShake.time <= 0 || screenShake.duration <= 0) return { x: 0, y: 0 };
+  const ratio = screenShake.time / screenShake.duration;
+  const power = screenShake.amount * ratio * ratio;
+  return {
+    x: Math.sin(screenShake.time * 117) * power,
+    y: Math.cos(screenShake.time * 151) * power,
+  };
+}
+function drawJuiceEffects(ctx, sx, sy) {
+  ctx.save();
+  for (const trail of ballTrail) {
+    const t = clamp(trail.life / trail.maxLife, 0, 1);
+    ctx.globalAlpha = t * 0.24;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(trail.x * sx, trail.y * sy, trail.r * sx * (0.65 + t * 0.35), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = t * 0.28;
+    ctx.strokeStyle = '#68e4ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(trail.x * sx, trail.y * sy, trail.r * sx * (0.9 + (1 - t) * 0.25), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  for (const wave of shockwaves) {
+    const t = 1 - wave.life / wave.maxLife;
+    const x = wave.x * sx;
+    const y = wave.y * sy;
+    const r = (wave.radius + (wave.maxRadius - wave.radius) * t) * sx;
+    ctx.globalAlpha = (1 - t) * 0.12;
+    ctx.fillStyle = wave.fill;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = (1 - t) * 0.92;
+    ctx.strokeStyle = wave.color;
+    ctx.lineWidth = wave.strong ? 5 : 4;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = (1 - t) * 0.62;
+    ctx.strokeStyle = '#fff7bf';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.72, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  for (const spark of hitSparks) {
+    const alpha = clamp(spark.life / spark.maxLife, 0, 1);
+    const size = Math.max(1, spark.size * (0.6 + alpha * 0.7));
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = spark.color;
+    ctx.shadowBlur = 7;
+    ctx.strokeStyle = spark.color;
+    ctx.lineWidth = size;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo((spark.px ?? spark.x) * sx, (spark.py ?? spark.y) * sy);
+    ctx.lineTo(spark.x * sx, spark.y * sy);
+    ctx.stroke();
+    ctx.fillStyle = spark.color;
+    ctx.fillRect(spark.x * sx - size * 0.35, spark.y * sy - size * 0.35, size * 0.7, size * 0.7);
+  }
+  ctx.shadowBlur = 0;
+  ctx.textAlign = 'center';
+  for (const popup of scorePopups) {
+    const alpha = clamp(popup.life / popup.maxLife, 0, 1);
+    const scale = 1 + Math.sin((1 - alpha) * Math.PI) * 0.18;
+    ctx.font = `900 ${Math.round(18 * scale)}px ui-monospace, SFMono-Regular, Consolas, monospace`;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#071c31';
+    ctx.strokeText(`+${popup.value}`, popup.x * sx, popup.y * sy);
+    ctx.fillStyle = '#fff7bf';
+    ctx.fillText(`+${popup.value}`, popup.x * sx, popup.y * sy);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'start';
 }
 
 function resolveAABB(b, w, restitution = 0.1) {
@@ -2870,16 +3168,16 @@ function applyFlipperImpulse(f, hit, sdt) {
   const relVy = ball.vy - surfaceVy;
   const relN = relVx * hit.nx + relVy * hit.ny;
   if (relN >= 0) return;
-  const tipPower = 0.52 + hit.t * 0.20;
-  const boost = clamp(((-relN) * 0.68 + Math.abs(omega) * f.length * 0.11) * tipPower, 0, f.upImpulse);
+  const tipPower = 0.54 + hit.t * 0.22;
+  const boost = clamp(((-relN) * 0.74 + Math.abs(omega) * f.length * 0.13) * tipPower, 0, f.upImpulse);
   const tangentX = -ry;
   const tangentY = rx;
   const tangentLen = Math.hypot(tangentX, tangentY) || 1;
   const tx = tangentX / tangentLen;
   const ty = tangentY / tangentLen;
-  ball.vx += hit.nx * boost * 0.50 + tx * boost * 0.14;
-  ball.vy += hit.ny * boost * 0.50 + ty * boost * 0.14;
-  ball.vy -= boost * 0.03;
+  ball.vx += hit.nx * boost * 0.54 + tx * boost * 0.16;
+  ball.vy += hit.ny * boost * 0.54 + ty * boost * 0.16;
+  ball.vy -= boost * 0.04;
   ball.spin = clamp(ball.spin + (boost / Math.max(ball.r, 1)) * (hit.t > 0.5 ? 0.10 : 0.07), -7, 7);
 }
 function clampBallSpeed() { const max = ball.vy < -20 ? PHYSICS.maxUpwardBallSpeed : PHYSICS.maxBallSpeed; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
@@ -2894,17 +3192,37 @@ function applyChoice(i) { const ch = levelUpChoices[i]; if (!ch) return; if (ch.
   else state.mode = 'game_over';
 }
 
-addEventListener('keydown', (e) => { if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true; if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true; if (e.code === 'Space' || e.code === 'KeyW') input.launchTap = true; if (e.code === 'Digit1') applyChoice(0); if (e.code === 'Digit2') applyChoice(1); if (e.code === 'Digit3') applyChoice(2); if (e.code === 'KeyR') restartRun(); });
+addEventListener('keydown', (e) => {
+  unlockAudio();
+  if ((e.code === 'ArrowLeft' || e.code === 'KeyA') && !input.left) { input.left = true; playSfx('flipper', 0.6, -0.45); }
+  if ((e.code === 'ArrowRight' || e.code === 'KeyD') && !input.right) { input.right = true; playSfx('flipper', 0.6, 0.45); }
+  if (e.code === 'Space' || e.code === 'KeyW') input.launchTap = true;
+  if (e.code === 'Digit1') applyChoice(0);
+  if (e.code === 'Digit2') applyChoice(1);
+  if (e.code === 'Digit3') applyChoice(2);
+  if (e.code === 'KeyR') restartRun();
+});
 addEventListener('keyup', (e) => { if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false; if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false; });
-function pointerDown(clientX, clientY) { const rect = wrap.getBoundingClientRect(); const x = clientX - rect.left; const y = clientY - rect.top; if (state.mode === 'level_up') { const top = 200; for (let i = 0; i < 3; i += 1) { const cy = top + i * 70; if (x > 80 && x < rect.width - 80 && y > cy && y < cy + 54) applyChoice(i); } return; } if (state.mode === 'game_over') { restartRun(); return; } if (state.mode === 'ready') { input.launchTap = true; return; } if (x < rect.width * 0.5) { input.left = true; input.pointerSide = 1; } else { input.right = true; input.pointerSide = 2; } }
+function pointerDown(clientX, clientY) {
+  unlockAudio();
+  const rect = wrap.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  if (state.mode === 'level_up') { const top = 200; for (let i = 0; i < 3; i += 1) { const cy = top + i * 70; if (x > 80 && x < rect.width - 80 && y > cy && y < cy + 54) applyChoice(i); } return; }
+  if (state.mode === 'game_over') { restartRun(); return; }
+  if (state.mode === 'ready') { input.launchTap = true; return; }
+  if (x < rect.width * 0.5) { input.left = true; input.pointerSide = 1; playSfx('flipper', 0.6, -0.45); }
+  else { input.right = true; input.pointerSide = 2; playSfx('flipper', 0.6, 0.45); }
+}
 function pointerUp() { if (input.pointerSide === 1) input.left = false; if (input.pointerSide === 2) input.right = false; input.pointerSide = 0; }
 addEventListener('pointerdown', (e) => pointerDown(e.clientX, e.clientY)); addEventListener('pointerup', pointerUp); addEventListener('pointercancel', pointerUp);
 
 function updateFlipper(f, pressed, dt) {
   const target = pressed ? f.active : f.base;
-  const maxStep = (pressed ? 15 : 9) * dt;
+  const maxStep = (pressed ? 13 : 8) * dt;
   f.prev = f.angle;
   f.angle += clamp(target - f.angle, -maxStep, maxStep);
+  f.fxCooldown = Math.max(0, f.fxCooldown - dt);
 }
 function updateFlippers(dt) {
   updateFlipper(flippers.left, input.left, dt);
@@ -2921,6 +3239,11 @@ function resolveFlipperHit(f, pressed, sdt) {
       applyFlipperImpulse(f, hit, sdt);
       clampBallSpeed();
       ensureMinBallSpeed(PHYSICS.minFlipperBallSpeed);
+    }
+    if (f.fxCooldown <= 0) {
+      spawnHitSparks(hit.cx, hit.cy, pressed ? 5 : 3, pressed ? 0.62 : 0.42);
+      playSfx('flipper', pressed ? 0.72 : 0.48, worldPan(hit.cx));
+      f.fxCooldown = pressed ? 0.08 : 0.12;
     }
     return true;
   }
@@ -2961,6 +3284,7 @@ function update(dt) {
     for (let s = 0; s < substeps; s += 1) {
       updateFlippers(sdt);
       ball.vy += PHYSICS.gravity * sdt; ball.vx *= PHYSICS.airDrag * PHYSICS.rollingFriction; ball.vy *= PHYSICS.airDrag; ball.x += ball.vx * sdt; ball.y += ball.vy * sdt; updateBallRotation(sdt); clampBallSpeed();
+      pushBallTrail();
       for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce);
       for (const seg of rails) segmentCapsuleHit(ball, seg, 0.35);
       for (const key of ['left', 'right']) {
@@ -2968,9 +3292,9 @@ function update(dt) {
         const pressed = key === 'left' ? input.left : input.right;
         resolveFlipperHit(f, pressed, sdt);
       }
-      for (const b of buildings) if (b.active && b.hitCooldown <= 0 && resolveAABB(ball, { x: b.x - 4, y: b.y - 4, w: b.w + 8, h: b.h + 8 }, PHYSICS.buildingBounce)) { b.hp -= 1; b.hitCooldown = 0.08; if (b.hp <= 0) { destroyBuilding(b); ball.vx *= 1.03; ball.vy *= 1.03; clampBallSpeed(); } }
+      for (const b of buildings) if (b.active && b.hitCooldown <= 0 && resolveAABB(ball, { x: b.x - 4, y: b.y - 4, w: b.w + 8, h: b.h + 8 }, PHYSICS.buildingBounce)) { spawnHitSparks(ball.x, ball.y, 8, 0.95); playSfx('hit', 0.78, worldPan(ball.x)); b.hp -= 1; b.hitCooldown = 0.08; if (b.hp <= 0) { destroyBuilding(b); ball.vx *= 1.03; ball.vy *= 1.03; clampBallSpeed(); } }
       for (const person of people) if (person.active && len2(ball.x - person.x, ball.y - person.y) <= ball.r + person.r) { person.active = false; gainExp(person.value); }
-      if (ball.y > WORLD.h + 30 || (ball.y > drain.y && ball.x > drain.x0 && ball.x < drain.x1)) { ball.active = false; state.mode = 'ball_lost'; state.ballLostTimer = 0.8; break; }
+      if (ball.y > WORLD.h + 30 || (ball.y > drain.y && ball.x > drain.x0 && ball.x < drain.x1)) { playSfx('drain', 0.9, worldPan(ball.x)); ball.active = false; state.mode = 'ball_lost'; state.ballLostTimer = 0.8; break; }
     }
   } else if (state.mode === 'ball_lost') {
     state.ballLostTimer -= dt;
@@ -2985,6 +3309,7 @@ function update(dt) {
       } else resetToReady();
     }
   }
+  updateJuiceEffects(dt);
   input.launchTap = false;
 }
 
@@ -2996,7 +3321,7 @@ const atlas = new RuntimeAtlas(gl, 2048); registerAtlasSprites(atlas); atlas.upl
 function drawSegmentSprite(entry, x1, y1, x2, y2, thickness, sx, sy) { const dx = x2 - x1; const dy = y2 - y1; const len = Math.hypot(dx, dy); const ang = Math.atan2(dy, dx); renderer.pushSprite(entry, x1 * sx, (y1 - thickness) * sy, len * sx, thickness * 2 * sy, ang, 0, 0.5); }
 function zoneSprite(cell) { return atlas.entries.get(`zone_${cell.tags[0]}`) || atlas.entries.get('zone_small'); }
 function render() {
-  const sx = glCanvas.width / WORLD.w; const sy = glCanvas.height / WORLD.h; renderer.begin();
+  const sx = glCanvas.width / WORLD.w; const sy = glCanvas.height / WORLD.h; const shake = getShakeOffset(); glCanvas.style.transform = shake.x || shake.y ? `translate(${shake.x}px, ${shake.y}px)` : ''; renderer.begin();
   const fieldSpr = atlas.entries.get('playfield'); const wallSpr = atlas.entries.get('wall'); const flipSpr = atlas.entries.get('flipper'); const ballSpr = atlas.entries.get('ball'); const baseSpr = atlas.entries.get('building_base'); const hitBaseSpr = atlas.entries.get('building_hit_base');
   renderer.pushSprite(fieldSpr, 0, 0, glCanvas.width, glCanvas.height);
   for (const w of walls) renderer.pushSprite(wallSpr, w.x * sx, w.y * sy, w.w * sx, w.h * sy);
@@ -3005,7 +3330,10 @@ function render() {
     renderer.pushSprite(b.hitCooldown > 0 ? hitBaseSpr : baseSpr, (b.x - 4) * sx, (b.y - 4) * sy, (b.w + 8) * sx, (b.h + 8) * sy);
     renderer.pushSprite(atlas.entries.get(b.spriteKey), b.x * sx, b.y * sy, b.w * sx, b.h * sy);
   }
-  for (const person of people) if (person.active) { const spr = atlas.entries.get(`person_${person.spriteVariant}_${person.anim}`); if (spr) renderer.pushSprite(spr, (person.x - 5) * sx, (person.y - 5) * sy, 10 * sx, 10 * sy); }
+  for (const person of people) if (person.active) {
+    const spr = atlas.entries.get(`person_${person.spriteVariant}_${person.anim}`);
+    if (spr) renderer.pushSprite(spr, (person.x - 4) * sx, (person.y - 6) * sy, 8 * sx, 10 * sy);
+  }
   for (const key of ['left', 'right']) { const f = flippers[key]; const seg = flipperSegment(f); const ang = Math.atan2(seg.y2 - seg.y1, seg.x2 - seg.x1); renderer.pushSprite(flipSpr, seg.x1 * sx, (seg.y1 - f.radius) * sy, f.length * sx, f.radius * 2 * sy, ang, 0, 0.5); }
   if (ball.active || state.mode === 'ready') renderer.pushSprite(ballSpr, (ball.x - ball.r) * sx, (ball.y - ball.r) * sy, ball.r * 2 * sx, ball.r * 2 * sy, ball.rot);
   renderer.flush(glCanvas.width, glCanvas.height);
@@ -3013,46 +3341,57 @@ function render() {
   uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
 
   uiCtx.save(); uiCtx.scale(dpr, dpr); const vw = uiCanvas.width / dpr; const vh = uiCanvas.height / dpr;
+  if (ballTrail.length || hitSparks.length || scorePopups.length || shockwaves.length) {
+    uiCtx.save();
+    uiCtx.translate(shake.x, shake.y);
+    drawJuiceEffects(uiCtx, vw / WORLD.w, vh / WORLD.h);
+    uiCtx.restore();
+  }
   const cardLabel = (card) => ({ house: 'HOME', convenience: 'SHOP', apartment: 'APT', gas_station: 'GAS', tower: 'TOWER' }[card?.id] || 'CARD');
-  const hudW = Math.min(440, vw - 20);
+  const hudW = Math.min(400, vw - 22);
   const hudX = (vw - hudW) * 0.5;
-  const hudY = 6;
-  const hudH = 94;
-  pxRect(uiCtx, hudX, hudY, hudW, hudH, '#f5d8a7');
-  pxRect(uiCtx, hudX + 4, hudY + 4, hudW - 8, hudH - 8, '#102a44');
-  pxCutPanel(uiCtx, hudX + 8, hudY + 8, hudW - 16, hudH - 12, '#176aa3', '#0a223a', '#68e4ff');
-  const boardX = hudX + 18;
-  const boardW = hudW - 36;
-  pxFrame(uiCtx, boardX, hudY + 12, boardW, 48, '#124f82', '#071c31', '#68e4ff', false);
-  refStar(uiCtx, boardX + 19, hudY + 36, 15, '#ffd33f', '#8a4d10');
-  uiCtx.fillStyle = '#7ee9ff';
+  const hudY = 8;
+  const hudH = 76;
+  pxRect(uiCtx, hudX, hudY, hudW, hudH, '#ffcf3a');
+  pxRect(uiCtx, hudX + 4, hudY + 4, hudW - 8, hudH - 8, '#071c31');
+  pxFrame(uiCtx, hudX + 9, hudY + 9, hudW - 18, hudH - 18, '#0f5a8c', '#071c31', '#7ef5ff', false);
+  pxRect(uiCtx, hudX + 18, hudY + 16, 58, 17, '#ff4fa3');
+  pxRect(uiCtx, hudX + 22, hudY + 20, 50, 2, '#fff36b');
+  uiCtx.fillStyle = '#ffffff';
   uiCtx.font = '900 9px ui-monospace, SFMono-Regular, Consolas, monospace';
-  uiCtx.fillText('SCORE', boardX + 39, hudY + 31);
-  uiCtx.fillStyle = '#fff3bd';
-  uiCtx.font = '900 30px ui-monospace, SFMono-Regular, Consolas, monospace';
   uiCtx.textAlign = 'center';
-  uiCtx.fillText(String(state.totalScore).padStart(7, '0'), hudX + hudW * 0.5, hudY + 54);
-  uiCtx.textAlign = 'start';
-  const infoFrameY = hudY + 66;
-  const infoTextY = infoFrameY + 15;
-  const roundText = `ROUND ${state.round}`;
+  uiCtx.fillText('SCORE!', hudX + 47, hudY + 29);
+  const scorePulseT = scorePulse.duration > 0 ? scorePulse.time / scorePulse.duration : 0;
+  const scoreScale = 1 + scorePulse.amount * Math.sin(scorePulseT * Math.PI) * 0.05;
+  if (scorePulseT > 0) {
+    uiCtx.fillStyle = `rgba(255, 243, 107, ${0.16 * scorePulseT})`;
+    uiCtx.fillRect(hudX + 82, hudY + 15, hudW - 100, 30);
+  }
+  const scoreText = String(state.totalScore).padStart(7, '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  uiCtx.font = `900 ${Math.round(32 * scoreScale)}px ui-monospace, SFMono-Regular, Consolas, monospace`;
+  uiCtx.lineWidth = 4;
+  uiCtx.strokeStyle = '#071c31';
+  uiCtx.strokeText(scoreText, hudX + hudW * 0.58, hudY + 42);
+  uiCtx.fillStyle = '#fff36b';
+  uiCtx.fillText(scoreText, hudX + hudW * 0.58, hudY + 42);
   const goalText = `GOAL ${state.roundScore}/${state.quota}`;
   const expMax = Math.max(1, getNextExp());
   const expRatio = clamp(state.exp / expMax, 0, 1);
-  pxFrame(uiCtx, boardX, infoFrameY, boardW, 22, '#0e3457', '#071c31', '#46d6ff', false);
-  uiCtx.fillStyle = '#bce9ff';
-  uiCtx.font = '900 9px ui-monospace, SFMono-Regular, Consolas, monospace';
-  uiCtx.fillText(roundText, boardX + 10, infoTextY);
+  const chipY = hudY + 51;
+  pxRect(uiCtx, hudX + 18, chipY, 40, 12, '#25c8ff');
+  pxRect(uiCtx, hudX + hudW - 58, chipY, 40, 12, '#9dff6e');
+  pxRect(uiCtx, hudX + hudW * 0.5 - 60, chipY, 120, 12, '#ff4fa3');
+  uiCtx.fillStyle = '#071c31';
+  uiCtx.font = '900 8px ui-monospace, SFMono-Regular, Consolas, monospace';
+  uiCtx.textAlign = 'left';
+  uiCtx.fillText(`R-${state.round}`, hudX + 23, chipY + 9);
   uiCtx.textAlign = 'center';
-  uiCtx.fillText(goalText, hudX + hudW * 0.5, infoTextY);
+  uiCtx.fillText(goalText, hudX + hudW * 0.5, chipY + 9);
+  uiCtx.textAlign = 'right';
+  uiCtx.fillText(`LV.${state.level}`, hudX + hudW - 22, chipY + 9);
   uiCtx.textAlign = 'start';
-  const expX = boardX + boardW - 100;
-  const expBarW = 58;
-  pxDisk(uiCtx, expX - 8, infoFrameY + 11, 5, '#ffd33f', '#8a4d10', '#fff7bf');
-  uiCtx.fillStyle = '#bce9ff';
-  uiCtx.fillText(`LV ${state.level}`, expX, infoTextY);
-  pxRect(uiCtx, expX + 34, infoFrameY + 8, expBarW, 7, '#08213b');
-  pxRect(uiCtx, expX + 36, infoFrameY + 10, Math.floor((expBarW - 4) * expRatio), 3, '#25c8ff');
+  pxRect(uiCtx, hudX + 18, hudY + 68, hudW - 36, 3, '#09243f');
+  pxRect(uiCtx, hudX + 18, hudY + 68, Math.floor((hudW - 36) * expRatio), 3, '#fff36b');
   if (state.mode === 'ready') {
     pxRect(uiCtx, vw * 0.5 - 24, vh - 42, 48, 4, '#ffd13a');
   }
