@@ -13,7 +13,7 @@ const PHYSICS = {
   railBounce: 0.04,
   buildingBounce: 0.22,
   flipperBounce: 0.03,
-  flipperFriction: 0.90,
+  flipperFriction: 0.985,
   maxBallSpeed: 760,
   maxUpwardBallSpeed: 1040,
   minFlipperBallSpeed: 300,
@@ -2856,8 +2856,6 @@ function segmentCapsuleHit(b, seg, rollingBias = 0) {
   const newVt = vt * grip;
   b.vx += (newVt - vt) * tx;
   b.vy += (newVt - vt) * ty;
-  b.vx *= seg.friction;
-  b.vy *= seg.friction;
   return { nx, ny, t, cx, cy };
 }
 function flipperSegment(f, angle = f.angle) { return { x1: f.pivot.x, y1: f.pivot.y, x2: f.pivot.x + Math.cos(angle) * f.length, y2: f.pivot.y + Math.sin(angle) * f.length, r: f.radius, restitution: PHYSICS.flipperBounce, friction: PHYSICS.flipperFriction }; }
