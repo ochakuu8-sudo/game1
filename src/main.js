@@ -28,6 +28,8 @@ const TERRAIN = {
   cell: 4,
   left: 58,
   top: 110,
+  digStartY: 620,
+  digEndBuffer: 18,
   pixels: [],
 };
 const GRID = {
@@ -3037,7 +3039,7 @@ function makeTerrainCell(depth){
 function initTerrain(){
   TERRAIN.pixels=Array.from({length:TERRAIN.rows},(_,row)=>Array.from({length:TERRAIN.cols},(_,col)=>{
     const worldY=TERRAIN.top+row*TERRAIN.cell;
-    const inSafeZone=worldY>660 || (col>TERRAIN.cols-14) || worldY<140 || (worldY<280 && col>74);
+    const inSafeZone=worldY>(flippers.left.pivot.y-TERRAIN.digEndBuffer) || (col>TERRAIN.cols-14) || worldY<TERRAIN.digStartY || (worldY<280 && col>74);
     if(inSafeZone) return {type:'empty',hp:0,maxHp:0,value:0,solid:false,ore:false};
     return makeTerrainCell(state.depthLevel+row);
   }));
@@ -3068,7 +3070,9 @@ function resolveTerrainCollision(body){
   if(!hits) return false;
   const len=Math.hypot(nx,ny)||1; nx/=len; ny/=len;
   const digRadius=body.r*(0.85+state.miningPower*0.05);
-  digTerrain(body.x,body.y,clamp(digRadius,body.r*0.8,body.r*1.25),state.miningPower);
+  const impact=Math.max(0,-(body.vx*nx+body.vy*ny));
+  const impactPower=Math.max(1,Math.floor(impact/145));
+  digTerrain(body.x,body.y,clamp(digRadius,body.r*0.8,body.r*1.25),state.miningPower+impactPower);
   body.x+=nx*(0.9+hardness/hits*2.3); body.y+=ny*(0.9+hardness/hits*2.3);
   const vn=body.vx*nx+body.vy*ny; if(vn<0){body.vx-=(1+b)*vn*nx; body.vy-=(1+b)*vn*ny;}
   body.vx*=0.987; body.vy*=0.987;
