@@ -2867,11 +2867,10 @@ registerAtlasSprites = function registerAtlasSpritesRef(atlas) {
 const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, money: 0, miningPower: 1, oreMultiplier: 1, blocksMined: 0, depthLevel: 0, upgradeCost: 100, ballLostTimer: 0, scrollTextTimer: 0 };
 const START_POS = { x: 430, y: 640 };
 const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot: 0, spin: 0, active: false };
-const input = { left: false, right: false, charging: false, launchCharge: 0, pointerSide: 0 };
+const input = { left: false, right: false, pointerSide: 0 };
 const touchState = {
   leftPointerId: null,
   rightPointerId: null,
-  chargePointerId: null,
 };
 const blocks = []; const floatingTexts=[]; const hitSparks=[]; const screenShake={time:0,duration:0,amount:0};
 const BLOCK_DEFS={dirt:{hp:1,value:1,color:'#7a5230'},stone:{hp:2,value:2,color:'#7f8791'},copper:{hp:2,value:10,color:'#c87f4b'},iron:{hp:3,value:25,color:'#b5bbc8'},gold:{hp:4,value:80,color:'#f0c94d'},diamond:{hp:5,value:250,color:'#65e8ff'},bedrock:{hp:9999,value:0,color:'#2e3440'}};
@@ -2998,15 +2997,15 @@ function blockAt(row,col){return blocks.find(b=>b.row===row&&b.col===col)}
 function pickBlockType(depth){const p=Math.random()*100; if(depth<5){if(p<70)return'dirt';if(p<95)return'stone';return'copper';} if(depth<15){if(p<35)return'dirt';if(p<75)return'stone';if(p<93)return'copper';return'iron';} if(depth<30){if(p<45)return'stone';if(p<65)return'copper';if(p<90)return'iron';return'gold';} if(p<35)return'stone';if(p<65)return'iron';if(p<90)return'gold';if(p<98)return'diamond';return'bedrock';}
 function makeBlock(row,col){const depth=state.depthLevel+row; const type=pickBlockType(depth); const def=BLOCK_DEFS[type]; const hp=type==='bedrock'?def.hp:def.hp+Math.floor(depth/12); const value=type==='bedrock'?0:Math.floor(def.value*(1+depth*0.03)); return {type,hp,maxHp:hp,value,broken:false,depth,x:GRID.left+col*GRID.cellSize,y:GRID.top+row*GRID.cellSize,row,col,hitCooldown:0};}
 function initMine(){blocks.length=0; for(let r=0;r<GRID.rows;r++)for(let c=0;c<GRID.cols;c++)blocks.push(makeBlock(r,c));}
-function launchBall(){const p=clamp(input.launchCharge,0,1); ball.active=true; ball.vx=-120+220*p; ball.vy=-(760+520*p); ball.spin=-1.2; state.mode='playing'; input.launchCharge=0; playSfx('launch',1,worldPan(ball.x));}
+function launchBall(){if(state.mode!=='ready') return; ball.active=true; ball.vx=0; ball.vy=-980; ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));}
 function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready'}
 function restartRun(){state.money=0;state.miningPower=1;state.oreMultiplier=1;state.blocksMined=0;state.depthLevel=0;state.upgradeCost=100;state.scrollTextTimer=0;floatingTexts.length=0;hitSparks.length=0;initMine();resetBall();}
 function shouldScrollMine(){const rows=[GRID.rows-1,GRID.rows-2,GRID.rows-3]; let total=0,broken=0; for(const b of blocks){if(rows.includes(b.row)){total++;if(b.broken)broken++;}} return total>0 && broken/total>0.55;}
 function scrollMineForward(rows=2){state.depthLevel+=rows; for(const b of blocks){b.row-=rows; b.y-=rows*GRID.cellSize;} for(let i=blocks.length-1;i>=0;i--) if(blocks[i].row<0) blocks.splice(i,1); for(let r=GRID.rows-rows;r<GRID.rows;r++) for(let c=0;c<GRID.cols;c++) blocks.push(makeBlock(r,c)); state.scrollTextTimer=0.6; floatingTexts.push({x:WORLD.w*0.5,y:170,text:`DEPTH +${rows}m`,color:'#8fd8ff',life:0.6}); playSfx('level',0.9,0);}
 function hitBlock(b){if(b.broken||b.type==='bedrock') return; b.hp-=state.miningPower; b.hitCooldown=0.08; hitSparks.push({x:ball.x,y:ball.y,life:0.2,color:BLOCK_DEFS[b.type].color}); if(b.hp<=0){b.broken=true; state.blocksMined+=1; const gain=Math.floor(b.value*state.oreMultiplier); state.money+=gain; floatingTexts.push({x:b.x+GRID.cellSize*0.5,y:b.y+22,text:`+$${gain}`,color:BLOCK_DEFS[b.type].color,life:0.9}); playSfx(b.type==='diamond'?'explode':b.type==='gold'?'destroy':'collect',1.0,worldPan(b.x)); addScreenShake(b.type==='diamond'?7:3,0.12);} else playSfx('hit',0.8,worldPan(b.x)); }
 function tryUpgrade(){if(state.money<state.upgradeCost) return; state.money-=state.upgradeCost; state.miningPower+=1; state.upgradeCost=Math.floor(state.upgradeCost*1.6); floatingTexts.push({x:WORLD.w*0.5,y:140,text:`POWER ${state.miningPower}!`,color:'#fff36b',life:0.8}); playSfx('upgrade',1,0)}
-addEventListener('keydown',(e)=>{unlockAudio(); if((e.code==='ArrowLeft'||e.code==='KeyA')&&!input.left){input.left=true;playSfx('flipper',0.6,-0.45);} if((e.code==='ArrowRight'||e.code==='KeyD')&&!input.right){input.right=true;playSfx('flipper',0.6,0.45);} if(e.code==='Space') input.charging=true; if(e.code==='KeyU') tryUpgrade(); if(e.code==='KeyR') restartRun();});
-addEventListener('keyup',(e)=>{if(e.code==='ArrowLeft'||e.code==='KeyA') input.left=false; if(e.code==='ArrowRight'||e.code==='KeyD') input.right=false; if(e.code==='Space'&&state.mode==='ready'){input.charging=false;launchBall();}});
+addEventListener('keydown',(e)=>{unlockAudio(); if((e.code==='ArrowLeft'||e.code==='KeyA')&&!input.left){input.left=true;playSfx('flipper',0.6,-0.45);} if((e.code==='ArrowRight'||e.code==='KeyD')&&!input.right){input.right=true;playSfx('flipper',0.6,0.45);} if(e.code==='Space') launchBall(); if(e.code==='KeyU') tryUpgrade(); if(e.code==='KeyR') restartRun();});
+addEventListener('keyup',(e)=>{if(e.code==='ArrowLeft'||e.code==='KeyA') input.left=false; if(e.code==='ArrowRight'||e.code==='KeyD') input.right=false;});
 function pointerToWorld(clientX, clientY) {
   const rect = uiCanvas.getBoundingClientRect();
   const x = (clientX - rect.left) * (WORLD.w / rect.width);
@@ -3017,9 +3016,11 @@ function handlePointerDown(e) {
   unlockAudio();
   const pt = pointerToWorld(e.clientX, e.clientY);
   const isBottomHalf = pt.y > WORLD.h * 0.52;
-  if (state.mode === 'ready' && !input.charging && pt.y > WORLD.h * 0.40) {
-    touchState.chargePointerId = e.pointerId;
-    input.charging = true;
+  if (state.mode === 'ready') {
+    launchBall();
+    uiCanvas.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+    return;
   }
   if (isBottomHalf) {
     if (pt.x < WORLD.w * 0.5 && touchState.leftPointerId === null) {
@@ -3044,15 +3045,6 @@ function releasePointer(pointerId) {
     touchState.rightPointerId = null;
     input.right = false;
   }
-  if (touchState.chargePointerId === pointerId) {
-    touchState.chargePointerId = null;
-    if (state.mode === 'ready') {
-      input.charging = false;
-      launchBall();
-    } else {
-      input.charging = false;
-    }
-  }
 }
 function handlePointerUp(e) {
   releasePointer(e.pointerId);
@@ -3063,7 +3055,7 @@ uiCanvas.addEventListener('pointerdown', handlePointerDown, { passive: false });
 uiCanvas.addEventListener('pointerup', handlePointerUp, { passive: false });
 uiCanvas.addEventListener('pointercancel', handlePointerUp, { passive: false });
 function updateFlipper(f, pressed, dt){const target=pressed?f.active:f.base; const maxStep=(pressed?13:8)*dt; f.prev=f.angle; f.angle+=clamp(target-f.angle,-maxStep,maxStep);}
-function update(dt){state.fpsS+=dt;state.fpsN+=1;if(state.fpsS>0.3){state.fps=Math.round(state.fpsN/state.fpsS);state.fpsS=0;state.fpsN=0;} if(screenShake.time>0){screenShake.time=Math.max(0,screenShake.time-dt); if(screenShake.time<=0)screenShake.amount=0;} if(state.mode==='ready'&&input.charging) input.launchCharge=clamp(input.launchCharge+dt*0.9,0,1);
+function update(dt){state.fpsS+=dt;state.fpsN+=1;if(state.fpsS>0.3){state.fps=Math.round(state.fpsN/state.fpsS);state.fpsS=0;state.fpsN=0;} if(screenShake.time>0){screenShake.time=Math.max(0,screenShake.time-dt); if(screenShake.time<=0)screenShake.amount=0;}
 for(const b of blocks) if(b.hitCooldown>0) b.hitCooldown-=dt; for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){hitSparks[i].life-=dt;if(hitSparks[i].life<=0)hitSparks.splice(i,1);} updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0) resetBall(); return;}
 const speed=len2(ball.vx,ball.vy); const substeps=clamp(Math.ceil((speed*dt)/(ball.r*0.32)),1,8); const sdt=dt/substeps;
@@ -3090,7 +3082,7 @@ function render(){const sx=glCanvas.width/WORLD.w, sy=glCanvas.height/WORLD.h, s
 uiCtx.clearRect(0,0,uiCanvas.width,uiCanvas.height); uiCtx.save(); uiCtx.scale(dpr,dpr); const vw=uiCanvas.width/dpr,vh=uiCanvas.height/dpr;
 for(const b of blocks){if(b.broken) continue; const x=b.x*(vw/WORLD.w), y=b.y*(vh/WORLD.h), cs=GRID.cellSize*(vw/WORLD.w); uiCtx.fillStyle=BLOCK_DEFS[b.type].color; uiCtx.fillRect(x+1,y+1,cs-2,cs-2); if(b.hp<b.maxHp && b.type!=='bedrock'){uiCtx.strokeStyle='rgba(255,255,255,0.8)'; uiCtx.beginPath(); uiCtx.moveTo(x+4,y+4); uiCtx.lineTo(x+cs-6,y+cs-8); uiCtx.stroke();} }
 for(const s of hitSparks){uiCtx.globalAlpha=s.life/0.2; uiCtx.fillStyle=s.color; uiCtx.fillRect(s.x*(vw/WORLD.w)-2,s.y*(vh/WORLD.h)-2,4,4);} uiCtx.globalAlpha=1;
-uiCtx.fillStyle='rgba(10,22,34,0.8)'; uiCtx.fillRect(10,8,380,96); uiCtx.fillStyle='#fff'; uiCtx.font='700 18px monospace'; uiCtx.fillText(`MONEY $${state.money.toLocaleString()}`,20,30); uiCtx.fillText(`POWER ${state.miningPower}`,20,50); uiCtx.fillText(`DEPTH ${state.depthLevel}m`,20,70); uiCtx.fillText(`MINED ${state.blocksMined}`,180,50); uiCtx.fillText(`UPGRADE U: $${state.upgradeCost}`,180,70); uiCtx.font='600 14px monospace'; uiCtx.fillText('KEY: ←/A →/D SPACE U R  |  TOUCH: 下半分左右+離して発射',20,92);
-if(state.mode==='ready'){uiCtx.fillStyle='#ffd13a'; uiCtx.fillText(`CHARGE ${(input.launchCharge*100|0)}%`,360,750);} for(const t of floatingTexts){uiCtx.globalAlpha=clamp(t.life,0,1); uiCtx.fillStyle=t.color; uiCtx.font='700 20px monospace'; uiCtx.fillText(t.text,t.x*(vw/WORLD.w),t.y*(vh/WORLD.h));} uiCtx.globalAlpha=1; uiCtx.restore();}
+uiCtx.fillStyle='rgba(10,22,34,0.8)'; uiCtx.fillRect(10,8,380,96); uiCtx.fillStyle='#fff'; uiCtx.font='700 18px monospace'; uiCtx.fillText(`MONEY $${state.money.toLocaleString()}`,20,30); uiCtx.fillText(`POWER ${state.miningPower}`,20,50); uiCtx.fillText(`DEPTH ${state.depthLevel}m`,20,70); uiCtx.fillText(`MINED ${state.blocksMined}`,180,50); uiCtx.fillText(`UPGRADE U: $${state.upgradeCost}`,180,70); uiCtx.font='600 14px monospace'; uiCtx.fillText('KEY: ←/A →/D SPACE U R  |  TOUCH: 下半分左右タップで操作',20,92);
+for(const t of floatingTexts){uiCtx.globalAlpha=clamp(t.life,0,1); uiCtx.fillStyle=t.color; uiCtx.font='700 20px monospace'; uiCtx.fillText(t.text,t.x*(vw/WORLD.w),t.y*(vh/WORLD.h));} uiCtx.globalAlpha=1; uiCtx.restore();}
 let last=performance.now(); function loop(now){const dt=clamp((now-last)/1000,0,1/30); last=now; update(dt); render(); requestAnimationFrame(loop);} 
 restartRun(); resize(); requestAnimationFrame(loop);
