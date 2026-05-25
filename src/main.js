@@ -3135,7 +3135,9 @@ uiCanvas.addEventListener('pointerdown', handlePointerDown, { passive: false });
 uiCanvas.addEventListener('pointerup', handlePointerUp, { passive: false });
 uiCanvas.addEventListener('pointercancel', handlePointerUp, { passive: false });
 function updateFlipper(f, pressed, dt){const target=pressed?f.active:f.base; const maxStep=(pressed?13:8)*dt; f.prev=f.angle; f.angle+=clamp(target-f.angle,-maxStep,maxStep); f.fxCooldown=Math.max(0,f.fxCooldown-dt);}
-function update(dt){state.fpsS+=dt;state.fpsN+=1;if(state.fpsS>0.3){state.fps=Math.round(state.fpsN/state.fpsS);state.fpsS=0;state.fpsN=0;} if(screenShake.time>0){screenShake.time=Math.max(0,screenShake.time-dt); if(screenShake.time<=0)screenShake.amount=0;}
+function isFiniteBallState(){return Number.isFinite(ball.x)&&Number.isFinite(ball.y)&&Number.isFinite(ball.vx)&&Number.isFinite(ball.vy)&&Number.isFinite(ball.spin)&&Number.isFinite(ball.rot);}
+function recoverFromBrokenPhysics(){floatingTexts.push({x:WORLD.w*0.5,y:150,text:'PHYSICS RESET',color:'#ffd38f',life:0.8}); playSfx('levelReady',0.8,0); resetBall();}
+function update(dt){if(!isFiniteBallState()){recoverFromBrokenPhysics();return;} state.fpsS+=dt;state.fpsN+=1;if(state.fpsS>0.3){state.fps=Math.round(state.fpsN/state.fpsS);state.fpsS=0;state.fpsN=0;} if(screenShake.time>0){screenShake.time=Math.max(0,screenShake.time-dt); if(screenShake.time<=0)screenShake.amount=0;}
 for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){hitSparks[i].life-=dt;if(hitSparks[i].life<=0)hitSparks.splice(i,1);} updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0) resetBall(); return;}
 const speed=len2(ball.vx,ball.vy); const substeps=clamp(Math.ceil((speed*dt)/(ball.r*0.32)),1,8); const sdt=dt/substeps;
@@ -3164,5 +3166,17 @@ for(let row=0;row<TERRAIN.rows;row++)for(let col=0;col<TERRAIN.cols;col++){const
 for(const s of hitSparks){uiCtx.globalAlpha=s.life/0.2; uiCtx.fillStyle=s.color; uiCtx.fillRect(s.x*(vw/WORLD.w)-2,s.y*(vh/WORLD.h)-2,4,4);} uiCtx.globalAlpha=1;
 uiCtx.fillStyle='rgba(10,22,34,0.8)'; uiCtx.fillRect(10,8,380,96); uiCtx.fillStyle='#fff'; uiCtx.font='700 18px monospace'; uiCtx.fillText(`MONEY $${state.money.toLocaleString()}`,20,30); uiCtx.fillText(`POWER ${state.miningPower}`,20,50); uiCtx.fillText(`DEPTH ${state.depthLevel}m`,20,70); uiCtx.fillText(`MINED ${state.cellsMined}`,180,50); uiCtx.fillText(`UPGRADE U: $${state.upgradeCost}`,180,70); uiCtx.font='600 14px monospace'; uiCtx.fillText('KEY: ←/A →/D SPACE U R  |  TOUCH: 下半分左右タップで操作',20,92);
 for(const t of floatingTexts){uiCtx.globalAlpha=clamp(t.life,0,1); uiCtx.fillStyle=t.color; uiCtx.font='700 20px monospace'; uiCtx.fillText(t.text,t.x*(vw/WORLD.w),t.y*(vh/WORLD.h));} uiCtx.globalAlpha=1; uiCtx.restore();}
-let last=performance.now(); function loop(now){const dt=clamp((now-last)/1000,0,1/30); last=now; update(dt); render(); requestAnimationFrame(loop);} 
+let last=performance.now();
+function loop(now){
+  const dt=clamp((now-last)/1000,0,1/30);
+  last=now;
+  try {
+    update(dt);
+    render();
+  } catch (err) {
+    console.error('Frame error recovered', err);
+    recoverFromBrokenPhysics();
+  }
+  requestAnimationFrame(loop);
+}
 restartRun(); resize(); requestAnimationFrame(loop);
