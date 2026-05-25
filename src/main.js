@@ -2870,11 +2870,11 @@ const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot
 const input = { left: false, right: false, launchTap: false, pointerSide: 0 };
 
 const allCards = [
-  { id: 'house', name: '住宅', level: 1, rarity: 'common', cooldownSec: 7, cooldownTimer: 0, footprint: { w: 1, h: 1 }, score: 100, hp: 1, peopleCount: 1, tags: ['residential', 'small'], preferredTags: ['residential', 'small'], forbiddenTags: ['danger'], maxActive: 8, effectId: null, spriteKey: 'building_house' },
-  { id: 'convenience', name: 'コンビニ', level: 1, rarity: 'common', cooldownSec: 10, cooldownTimer: 1, footprint: { w: 1, h: 1 }, score: 180, hp: 1, peopleCount: 2, tags: ['commercial', 'small'], preferredTags: ['commercial', 'small'], forbiddenTags: [], maxActive: 4, effectId: null, spriteKey: 'building_convenience' },
-  { id: 'apartment', name: 'アパート', level: 1, rarity: 'uncommon', cooldownSec: 15, cooldownTimer: 2, footprint: { w: 1, h: 2 }, score: 450, hp: 2, peopleCount: 4, tags: ['residential', 'medium'], preferredTags: ['residential', 'medium'], forbiddenTags: ['danger'], maxActive: 3, effectId: null, spriteKey: 'building_apartment' },
-  { id: 'gas_station', name: 'ガソリンスタンド', level: 1, rarity: 'uncommon', cooldownSec: 20, cooldownTimer: 3, footprint: { w: 2, h: 1 }, score: 300, hp: 1, peopleCount: 2, tags: ['commercial', 'danger', 'explosive'], preferredTags: ['danger', 'commercial'], forbiddenTags: [], maxActive: 2, effectId: 'explode', spriteKey: 'building_gas' },
-  { id: 'tower', name: 'タワー', level: 1, rarity: 'rare', cooldownSec: 28, cooldownTimer: 5, footprint: { w: 2, h: 2 }, score: 1600, hp: 4, peopleCount: 8, tags: ['large', 'landmark'], preferredTags: ['large', 'danger'], forbiddenTags: ['residential'], maxActive: 1, effectId: null, spriteKey: 'building_tower' },
+  { id: 'house', name: '住宅', level: 1, rarity: 'common', cooldownSec: 1, cooldownTimer: 0, footprint: { w: 1, h: 1 }, score: 100, hp: 1, peopleCount: 1, tags: ['residential', 'small'], preferredTags: ['residential', 'small'], forbiddenTags: ['danger'], maxActive: 8, effectId: null, spriteKey: 'building_house' },
+  { id: 'convenience', name: 'コンビニ', level: 1, rarity: 'common', cooldownSec: 1, cooldownTimer: 0, footprint: { w: 1, h: 1 }, score: 180, hp: 1, peopleCount: 2, tags: ['commercial', 'small'], preferredTags: ['commercial', 'small'], forbiddenTags: [], maxActive: 4, effectId: null, spriteKey: 'building_convenience' },
+  { id: 'apartment', name: 'アパート', level: 1, rarity: 'uncommon', cooldownSec: 1, cooldownTimer: 0, footprint: { w: 1, h: 2 }, score: 450, hp: 2, peopleCount: 4, tags: ['residential', 'medium'], preferredTags: ['residential', 'medium'], forbiddenTags: ['danger'], maxActive: 3, effectId: null, spriteKey: 'building_apartment' },
+  { id: 'gas_station', name: 'ガソリンスタンド', level: 1, rarity: 'uncommon', cooldownSec: 1, cooldownTimer: 0, footprint: { w: 2, h: 1 }, score: 300, hp: 1, peopleCount: 2, tags: ['commercial', 'danger', 'explosive'], preferredTags: ['danger', 'commercial'], forbiddenTags: [], maxActive: 2, effectId: 'explode', spriteKey: 'building_gas' },
+  { id: 'tower', name: 'タワー', level: 1, rarity: 'rare', cooldownSec: 1, cooldownTimer: 0, footprint: { w: 2, h: 2 }, score: 1600, hp: 4, peopleCount: 8, tags: ['large', 'landmark'], preferredTags: ['large', 'danger'], forbiddenTags: ['residential'], maxActive: 1, effectId: null, spriteKey: 'building_tower' },
 ];
 const cardPool = new Map(allCards.map((card) => [card.id, card]));
 const ownedCards = [structuredClone(cardPool.get('house')), structuredClone(cardPool.get('convenience'))];
@@ -3372,7 +3372,7 @@ function applyBallFlowAssist(dt) {
 const CARD_LABELS = { house: 'HOME', convenience: 'SHOP', apartment: 'APT', gas_station: 'GAS', tower: 'TOWER' };
 const UPGRADE_DEFS = [
   { stat: 'score', label: 'SCORE +25%', get: (c) => c.score, next: (c) => Math.floor(c.score * 1.25), apply: (c) => { c.score = Math.floor(c.score * 1.25); } },
-  { stat: 'cooldownSec', label: 'CD -12%', get: (c) => c.cooldownSec, next: (c) => Math.max(2.4, Math.round(c.cooldownSec * 0.88 * 10) / 10), apply: (c) => { c.cooldownSec = Math.max(2.4, Math.round(c.cooldownSec * 0.88 * 10) / 10); } },
+  { stat: 'cooldownSec', label: 'CD -12%', get: (c) => c.cooldownSec, next: (c) => Math.max(1, Math.round(c.cooldownSec * 0.88 * 10) / 10), apply: (c) => { c.cooldownSec = Math.max(1, Math.round(c.cooldownSec * 0.88 * 10) / 10); } },
   { stat: 'peopleCount', label: 'PEOPLE +1', get: (c) => c.peopleCount, next: (c) => c.peopleCount + 1, apply: (c) => { c.peopleCount += 1; } },
   { stat: 'hp', label: 'HP +1', get: (c) => c.hp, next: (c) => c.hp + 1, apply: (c) => { c.hp += 1; } },
   { stat: 'maxActive', label: 'MAX +1', get: (c) => c.maxActive, next: (c) => c.maxActive + 1, apply: (c) => { c.maxActive += 1; } },
