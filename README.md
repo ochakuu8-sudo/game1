@@ -1,26 +1,42 @@
-# game1
+# Mining Pinball
 
-WebGL Runtime Atlas + Canvas2D UI を使った軽量ピンボールプロトタイプです。ゲームオブジェクトは WebGL、HUD は Canvas2D で描画します。
+ピンボールのボールを地面ブロックに当てて掘り進め、鉱石を掘り当ててお金を増やすゲームです。
 
-## Rendering
+- 自動収益（放置で毎秒増える収益）はありません。
+- お金は**ブロック破壊時のみ**増えます。
+- 一定深度まで掘ると盤面がスクロールし、より深い地層へ進みます。
 
-- ゲームオブジェクトは WebGL スプライトとして描画
-- スプライトは Canvas2D で実行時生成し、RuntimeAtlas に pack
-- HUD は別 Canvas の Canvas2D で描画
+## Gameplay
 
-## Install
+1. Space 長押しでチャージしてボールを打ち出す
+2. フリッパー（←/A, →/D）でボールを操作する
+3. ボールを地面/岩/鉱石ブロックに当てて HP を削る
+4. HP 0 でブロック破壊（鉱石は高額）
+5. 壊れたブロックは通過可能になり、深部へ進みやすくなる
+6. 下層を一定割合掘ると盤面スクロール
+
+## Controls
+
+- 左フリッパー: `←` / `A`
+- 右フリッパー: `→` / `D`
+- 打ち出しチャージ: `Space`（長押し→離す）
+- 採掘力アップグレード: `U`
+- リスタート: `R`
+
+## HUD
+
+- MONEY
+- POWER
+- DEPTH
+- MINED
+- UPGRADE COST
+
+## Development
 
 ```bash
 npm install
-```
-
-## Local Development
-
-```bash
 npm run dev
 ```
-
-ブラウザで表示された URL を開くと、ホットリロードつきで開発できます。
 
 ## Build
 
@@ -28,26 +44,3 @@ npm run dev
 npm run check
 npm run build
 ```
-
-ビルド成果物は `dist/` に出力されます。
-
-## なぜ dist/ をコミットするのか
-
-このリポジトリは `main` ブランチ内の `dist/` をそのまま静的公開対象（GitHub Pages / 各種静的ホスティング）として使う運用を想定しています。
-そのため通常の「dist を ignore する」方針ではなく、意図的に `dist/` をコミット対象にしています。
-
-## Deploy
-
-- ローカルでは `npm run build` で `dist/` を更新
-- CI（GitHub Actions）は push / PR 時に `npm install` → `npm run check` → `npm run build` を実行
-- ビルド成果物 `dist/` は Actions の artifact として取得可能
-- 静的ホスティングでは `dist/index.html` をエントリとして配置
-
-`vite.config.js` では `base: './'` を使用しているため、サブディレクトリ配信でも相対パスで参照しやすくしています。
-
-## Controls
-
-- 左フリッパー: `←` または `A`
-- 右フリッパー: `→` または `D`
-- 打ち出し: `Space`（長押しでチャージ）
-- リスタート: `R`
