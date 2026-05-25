@@ -22,17 +22,19 @@ const PHYSICS = {
   rollingSpinGain: 0.42,
 };
 
+const GRID_AREA_SIZE = 52 * 8;
+
 const GRID = {
-  cols: 8,
-  rows: 8,
-  cellSize: 52,
+  cols: 12,
+  rows: 12,
+  cellSize: GRID_AREA_SIZE / 12,
   left: 90,
   top: GRID_TOP_Y,
   get width() { return this.cols * this.cellSize; },
   get height() { return this.rows * this.cellSize; },
 };
 
-const ZONE_TEMPLATE = [
+const ZONE_TEMPLATE_BASE = [
   ['danger', 'danger', 'large', 'large', 'large', 'large', 'danger', 'danger'],
   ['danger', 'medium', 'medium', 'large', 'large', 'medium', 'medium', 'danger'],
   ['medium', 'medium', 'commercial', 'commercial', 'commercial', 'commercial', 'medium', 'medium'],
@@ -42,6 +44,14 @@ const ZONE_TEMPLATE = [
   ['residential', 'residential', 'residential', 'small', 'small', 'residential', 'residential', 'residential'],
   ['residential', 'residential', 'residential', 'small', 'small', 'residential', 'residential', 'residential'],
 ];
+
+const ZONE_TEMPLATE = Array.from({ length: GRID.rows }, (_, row) => (
+  Array.from({ length: GRID.cols }, (_, col) => {
+    const srcRow = Math.min(ZONE_TEMPLATE_BASE.length - 1, Math.floor((row / GRID.rows) * ZONE_TEMPLATE_BASE.length));
+    const srcCol = Math.min(ZONE_TEMPLATE_BASE[0].length - 1, Math.floor((col / GRID.cols) * ZONE_TEMPLATE_BASE[0].length));
+    return ZONE_TEMPLATE_BASE[srcRow][srcCol];
+  })
+));
 
 const THEME = {
   clear: [0.92, 0.98, 1.00, 1],
