@@ -2989,6 +2989,8 @@ function applyFlipperImpulse(f, hit, sdt) {
 function clampBallSpeed() { const max = ball.vy < -20 ? PHYSICS.maxUpwardBallSpeed : PHYSICS.maxBallSpeed; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
 function ensureMinBallSpeed(min = 360) { const speed = Math.hypot(ball.vx, ball.vy); if (speed > 0 && speed < min) { const k = min / speed; ball.vx *= k; ball.vy *= k; } }
 
+function circleOverlapsBox(body, box) { const nearestX = clamp(body.x, box.x, box.x + box.w); const nearestY = clamp(body.y, box.y, box.y + box.h); const dx = body.x - nearestX; const dy = body.y - nearestY; return dx * dx + dy * dy <= body.r * body.r; }
+
 function resolveFlipperHit(f, pressed, sdt) {
   const delta = f.angle - f.prev;
   const sweepSteps = clamp(Math.ceil(Math.abs(delta) / 0.08), 1, 8);
@@ -3015,8 +3017,8 @@ function resolveFlipperHit(f, pressed, sdt) {
 const drain = { x0: 228, x1: 272, y: 760 };
 function addScreenShake(a=2,d=0.08){screenShake.amount=Math.max(screenShake.amount,a);screenShake.duration=Math.max(screenShake.duration,d);screenShake.time=Math.max(screenShake.time,d)}
 function blockAt(row,col){return blocks.find(b=>b.row===row&&b.col===col)}
-function pickBlockType(depth){const p=Math.random()*100; if(depth<5){if(p<70)return'dirt';if(p<95)return'stone';return'copper';} if(depth<15){if(p<35)return'dirt';if(p<75)return'stone';if(p<93)return'copper';return'iron';} if(depth<30){if(p<45)return'stone';if(p<65)return'copper';if(p<90)return'iron';return'gold';} if(p<35)return'stone';if(p<65)return'iron';if(p<90)return'gold';if(p<98)return'diamond';return'bedrock';}
-function makeBlock(row,col){const depth=state.depthLevel+row; const type=pickBlockType(depth); const def=BLOCK_DEFS[type]; const hp=type==='bedrock'?def.hp:def.hp+Math.floor(depth/12); const value=type==='bedrock'?0:Math.floor(def.value*(1+depth*0.03)); return {type,hp,maxHp:hp,value,broken:false,depth,x:GRID.left+col*GRID.cellSize,y:GRID.top+row*GRID.cellSize,row,col,hitCooldown:0};}
+function pickBlockType(depth){const p=Math.random()*100; if(depth<30){if(p<70)return'dirt';if(p<87)return'stone';if(p<96)return'copper';return'iron';} if(depth<80){if(p<70)return'dirt';if(p<85)return'stone';if(p<93)return'iron';if(p<98)return'gold';return'diamond';} if(p<70)return'dirt';if(p<82)return'stone';if(p<90)return'iron';if(p<96)return'gold';if(p<99)return'diamond';return'bedrock';}
+function makeBlock(row,col){const depth=state.depthLevel+row; const type=pickBlockType(depth); const def=BLOCK_DEFS[type]; const hp=type==='bedrock'?def.hp:type==='dirt'?1:def.hp+Math.floor(depth/12); const value=type==='bedrock'?0:Math.floor(def.value*(1+depth*0.03)); return {type,hp,maxHp:hp,value,broken:false,depth,x:GRID.left+col*GRID.cellSize,y:GRID.top+row*GRID.cellSize,row,col,hitCooldown:0};}
 function initMine(){blocks.length=0; for(let r=0;r<GRID.rows;r++)for(let c=0;c<GRID.cols;c++)blocks.push(makeBlock(r,c));}
 function launchBall(){if(state.mode!=='ready') return; ball.active=true; ball.vx=0; ball.vy=-980; ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));}
 function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready'}
@@ -3081,7 +3083,7 @@ for(const b of blocks) if(b.hitCooldown>0) b.hitCooldown-=dt; for(let i=floating
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0) resetBall(); return;}
 const speed=len2(ball.vx,ball.vy); const substeps=clamp(Math.ceil((speed*dt)/(ball.r*0.32)),1,8); const sdt=dt/substeps;
 for(let s=0;s<substeps;s++){ball.vy+=PHYSICS.gravity*sdt; ball.vx*=PHYSICS.airDrag; ball.vy*=PHYSICS.airDrag; ball.x+=ball.vx*sdt; ball.y+=ball.vy*sdt; for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce); for (const seg of rails) segmentCapsuleHit(ball, seg); for(const key of ['left','right']) resolveFlipperHit(flippers[key],key==='left'?input.left:input.right,sdt);
-for(const b of blocks){ if(b.broken) continue; if(resolveAABB(ball,{x:b.x,y:b.y,w:GRID.cellSize,h:GRID.cellSize},0.28)){ hitBlock(b);} }
+for(const b of blocks){ if(b.broken) continue; const hitBox={x:b.x,y:b.y,w:GRID.cellSize,h:GRID.cellSize}; if(b.type==='dirt'){ if(circleOverlapsBox(ball,hitBox)) hitBlock(b); continue; } if(resolveAABB(ball,hitBox,0.28)){ hitBlock(b);} }
 ball.vx *= PHYSICS.rollingFriction;
 ball.vy *= PHYSICS.rollingFriction;
 ball.spin *= PHYSICS.spinDamping;
