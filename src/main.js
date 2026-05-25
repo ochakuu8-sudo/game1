@@ -2838,6 +2838,15 @@ registerAtlasSprites = function registerAtlasSpritesRef(atlas) {
   packHiDpi(atlas, 'building_apartment', 40, 80, (c, x, y, w, h) => drawApartmentSprite(c, x, y, w, h));
   packHiDpi(atlas, 'building_gas', 80, 40, (c, x, y, w, h) => drawGasSprite(c, x, y, w, h));
   packHiDpi(atlas, 'building_tower', 80, 80, (c, x, y, w, h) => drawTowerSprite(c, x, y, w, h));
+  packHiDpi(atlas, 'building_ore', 40, 40, (ctx, x, y, w, h) => {
+    pxRect(ctx, x + 5, y + h - 2, w - 10, 4, 'rgba(9,22,35,.30)');
+    pxFrame(ctx, x + 3, y + 6, w - 6, h - 9, '#6f6f80', '#1d2430', '#c8d3dd', false);
+    pxRect(ctx, x + 9, y + 12, w - 18, h - 17, '#7d7d90');
+    pxRect(ctx, x + 11, y + 14, 7, 6, '#7ad4ff');
+    pxRect(ctx, x + 21, y + 10, 6, 5, '#ffd15c');
+    pxRect(ctx, x + 24, y + 22, 7, 6, '#ff8d7b');
+    pxRect(ctx, x + 15, y + 25, 5, 4, '#9cff8f');
+  });
   const personPalettes = [
     { fill: '#dceee7' },
     { fill: '#e9eadf' },
@@ -2870,17 +2879,13 @@ const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot
 const input = { left: false, right: false, launchTap: false, pointerSide: 0 };
 
 const allCards = [
-  { id: 'house', name: '住宅', level: 1, rarity: 'common', cooldownSec: 1, cooldownTimer: 0, footprint: { w: 1, h: 1 }, score: 100, hp: 1, peopleCount: 1, tags: ['residential', 'small'], preferredTags: ['residential', 'small'], forbiddenTags: ['danger'], maxActive: 8, effectId: null, spriteKey: 'building_house' },
-  { id: 'convenience', name: 'コンビニ', level: 1, rarity: 'common', cooldownSec: 1, cooldownTimer: 0, footprint: { w: 1, h: 1 }, score: 180, hp: 1, peopleCount: 2, tags: ['commercial', 'small'], preferredTags: ['commercial', 'small'], forbiddenTags: [], maxActive: 4, effectId: null, spriteKey: 'building_convenience' },
-  { id: 'apartment', name: 'アパート', level: 1, rarity: 'uncommon', cooldownSec: 1, cooldownTimer: 0, footprint: { w: 1, h: 2 }, score: 450, hp: 2, peopleCount: 4, tags: ['residential', 'medium'], preferredTags: ['residential', 'medium'], forbiddenTags: ['danger'], maxActive: 3, effectId: null, spriteKey: 'building_apartment' },
-  { id: 'gas_station', name: 'ガソリンスタンド', level: 1, rarity: 'uncommon', cooldownSec: 1, cooldownTimer: 0, footprint: { w: 2, h: 1 }, score: 300, hp: 1, peopleCount: 2, tags: ['commercial', 'danger', 'explosive'], preferredTags: ['danger', 'commercial'], forbiddenTags: [], maxActive: 2, effectId: 'explode', spriteKey: 'building_gas' },
-  { id: 'tower', name: 'タワー', level: 1, rarity: 'rare', cooldownSec: 1, cooldownTimer: 0, footprint: { w: 2, h: 2 }, score: 1600, hp: 4, peopleCount: 8, tags: ['large', 'landmark'], preferredTags: ['large', 'danger'], forbiddenTags: ['residential'], maxActive: 1, effectId: null, spriteKey: 'building_tower' },
+  { id: 'ore', name: '鉱石', level: 1, rarity: 'common', cooldownSec: 9999, cooldownTimer: 0, footprint: { w: 1, h: 1 }, score: 0, hp: 1, peopleCount: 0, tags: ['ore'], preferredTags: [], forbiddenTags: [], maxActive: GRID.cols * GRID.rows, effectId: null, spriteKey: 'building_ore' },
 ];
 const cardPool = new Map(allCards.map((card) => [card.id, card]));
-const ownedCards = [structuredClone(cardPool.get('house')), structuredClone(cardPool.get('convenience'))];
+const ownedCards = [structuredClone(cardPool.get('ore'))];
 
 const grid = []; let nextBuildingId = 1; const buildings = []; const people = []; let levelUpChoices = [];
-const MAX_PEOPLE = 80;
+
 const MAX_HIT_SPARKS = 120;
 const MAX_BALL_TRAIL = 12;
 const hitSparks = [];
@@ -2910,16 +2915,20 @@ function clearJuiceEffects() { hitSparks.length = 0; ballTrail.length = 0; score
 function resetGridOccupancy() { for (const row of grid) for (const cell of row) cell.occupiedBy = null; buildings.length = 0; people.length = 0; clearJuiceEffects(); }
 function resetToReady() { ball.x = START_POS.x; ball.y = START_POS.y; ball.vx = 0; ball.vy = 0; ball.rot = 0; ball.spin = 0; ball.active = false; state.mode = 'ready'; }
 function launchBall() { ball.active = true; ball.vx = -90; ball.vy = -1080; ball.spin = -1.2; state.mode = 'playing'; playSfx('launch', 1, worldPan(ball.x)); }
-function clearRound() { resetGridOccupancy(); for (const card of ownedCards) card.cooldownTimer = randRange(card.cooldownSec * 0.7, card.cooldownSec * 1.2); trySpawnFromCard(ownedCards.find((c) => c.id === 'house') || ownedCards[0], true); trySpawnFromCard(ownedCards.find((c) => c.id === 'convenience') || ownedCards[0], true); }
+function fillGridWithOre() {
+  const oreCard = ownedCards[0];
+  for (let row = 0; row < GRID.rows; row += 1) for (let col = 0; col < GRID.cols; col += 1) trySpawnFromCard(oreCard, true, col, row);
+}
+function clearRound() { resetGridOccupancy(); fillGridWithOre(); }
 function beginRound(round) { state.round = round; state.roundScore = 0; state.balls = 3; updateQuota(); clearRound(); resetToReady(); }
-function restartRun() { state.totalScore = 0; state.exp = 0; state.level = 1; state.levelUpsPending = 0; ownedCards.length = 0; ownedCards.push(structuredClone(cardPool.get('house')), structuredClone(cardPool.get('convenience'))); beginRound(1); }
+function restartRun() { state.totalScore = 0; state.exp = 0; state.level = 1; state.levelUpsPending = 0; ownedCards.length = 0; ownedCards.push(structuredClone(cardPool.get('ore'))); beginRound(1); }
 
 function canPlace(card, col, row) { for (let dy = 0; dy < card.footprint.h; dy += 1) for (let dx = 0; dx < card.footprint.w; dx += 1) { const cell = grid[row + dy]?.[col + dx]; if (!cell || cell.occupiedBy) return false; if (card.forbiddenTags.some((tag) => cell.tags.includes(tag))) return false; } return true; }
 function getCandidates(card) { const list = []; for (let row = 0; row < GRID.rows; row += 1) for (let col = 0; col < GRID.cols; col += 1) { if (!canPlace(card, col, row)) continue; let weight = 1; for (let dy = 0; dy < card.footprint.h; dy += 1) for (let dx = 0; dx < card.footprint.w; dx += 1) for (const tag of grid[row + dy][col + dx].tags) if (card.preferredTags.includes(tag)) weight += 3; list.push({ col, row, weight }); } return list; }
 function weightedPick(cands) { const total = cands.reduce((a, c) => a + c.weight, 0); let v = Math.random() * total; for (const c of cands) { v -= c.weight; if (v <= 0) return c; } return cands[cands.length - 1]; }
 function occupancy() { let used = 0; for (const r of grid) for (const c of r) if (c.occupiedBy) used += 1; return used / (GRID.cols * GRID.rows); }
 function activeCount(cardId) { return buildings.filter((b) => b.active && b.cardId === cardId).length; }
-function trySpawnFromCard(card, force = false) { if (!card) return false; if (!force) { if (occupancy() > 0.72) return false; if (activeCount(card.id) >= card.maxActive) return false; } const cands = getCandidates(card); if (!cands.length) return false; const pick = weightedPick(cands); const x = GRID.left + pick.col * GRID.cellSize; const y = GRID.top + pick.row * GRID.cellSize; const inset = 4; const w = card.footprint.w * GRID.cellSize - inset * 2; const h = card.footprint.h * GRID.cellSize - inset * 2; const b = { instanceId: nextBuildingId++, cardId: card.id, name: card.name, level: card.level, col: pick.col, row: pick.row, footprint: structuredClone(card.footprint), x: x + inset, y: y + inset, w, h, hp: card.hp, maxHp: card.hp, score: card.score, peopleCount: card.peopleCount, tags: [...card.tags], effectId: card.effectId, spriteKey: card.spriteKey, active: true, hitCooldown: 0 };
+function trySpawnFromCard(card, force = false, fixedCol = null, fixedRow = null) { if (!card) return false; if (!force) { if (occupancy() > 0.72) return false; if (activeCount(card.id) >= card.maxActive) return false; } const pick = fixedCol != null && fixedRow != null ? { col: fixedCol, row: fixedRow } : weightedPick(getCandidates(card)); if (!pick) return false; const x = GRID.left + pick.col * GRID.cellSize; const y = GRID.top + pick.row * GRID.cellSize; const inset = 4; const w = card.footprint.w * GRID.cellSize - inset * 2; const h = card.footprint.h * GRID.cellSize - inset * 2; const b = { instanceId: nextBuildingId++, cardId: card.id, name: card.name, level: card.level, col: pick.col, row: pick.row, footprint: structuredClone(card.footprint), x: x + inset, y: y + inset, w, h, hp: card.hp, maxHp: card.hp, score: card.score, peopleCount: card.peopleCount, tags: [...card.tags], effectId: card.effectId, spriteKey: card.spriteKey, active: true, hitCooldown: 0 };
   buildings.push(b); for (let dy = 0; dy < card.footprint.h; dy += 1) for (let dx = 0; dx < card.footprint.w; dx += 1) grid[pick.row + dy][pick.col + dx].occupiedBy = b.instanceId; return true; }
 function spawnPeople(building, amount) {
   const cx = building.x + building.w * 0.5;
@@ -3065,7 +3074,7 @@ function spawnDestroyJuice(building, strong = false) {
   addScorePulse(strong ? 1.45 : 1.15);
   playSfx(strong ? 'explode' : 'destroy', strong ? 1.25 : 1.15, worldPan(cx));
 }
-function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; state.roundScore += building.score; state.totalScore += building.score; spawnPeople(building, Math.max(1, building.peopleCount)); spawnDestroyJuice(building, allowExplosion && building.effectId === 'explode'); addFlowHit(); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
+function destroyBuilding(building, allowExplosion = true) { if (!building.active) return; building.active = false; for (let dy = 0; dy < building.footprint.h; dy += 1) for (let dx = 0; dx < building.footprint.w; dx += 1) if (grid[building.row + dy]?.[building.col + dx]?.occupiedBy === building.instanceId) grid[building.row + dy][building.col + dx].occupiedBy = null; const reward = Math.floor(randRange(1, 11)); state.roundScore += reward; state.totalScore += reward; spawnDestroyJuice(building, allowExplosion && building.effectId === 'explode'); addFlowHit(); if (allowExplosion && building.effectId === 'explode') { const cx = building.x + building.w * 0.5; const cy = building.y + building.h * 0.5; for (const other of buildings) { if (!other.active || other.instanceId === building.instanceId) continue; const ox = other.x + other.w * 0.5; const oy = other.y + other.h * 0.5; if (len2(cx - ox, cy - oy) <= 60) { other.hp -= 1; if (other.hp <= 0) destroyBuilding(other, false); } } } }
 function crushPerson(person) {
   person.active = false;
   spawnHitSparks(person.x, person.y, 7, 0.62);
@@ -3536,29 +3545,8 @@ function update(dt) {
   }
   if (state.mode !== 'playing' || !ball.active) updateFlippers(dt);
 
-  if (state.mode === 'playing') {
-    for (const card of ownedCards) { card.cooldownTimer -= dt; if (card.cooldownTimer <= 0) { trySpawnFromCard(card); card.cooldownTimer += card.cooldownSec; } }
-  }
 
   for (const b of buildings) if (b.active && b.hitCooldown > 0) b.hitCooldown -= dt;
-  for (const person of people) if (person.active) {
-    person.life -= dt;
-    if (person.life <= 0) { person.active = false; continue; }
-    person.animTimer += dt;
-    if (person.animTimer > 0.1) { person.animTimer = 0; person.anim = (person.anim + 1) % 3; }
-    const wobble = person.seed + person.life * 3;
-    person.vx += Math.cos(wobble * 1.7) * 25 * dt + randRange(-10, 10) * dt;
-    person.vy += Math.sin(wobble * 1.3) * 25 * dt + randRange(-10, 10) * dt;
-    const speed = Math.hypot(person.vx, person.vy) || 1;
-    const targetSpeed = 76;
-    person.vx = (person.vx / speed) * targetSpeed;
-    person.vy = (person.vy / speed) * targetSpeed;
-    person.x += person.vx * dt;
-    person.y += person.vy * dt;
-    const minX = 28; const maxX = WORLD.w - 28; const minY = 28; const maxY = WORLD.h - 28;
-    if (person.x < minX || person.x > maxX) { person.x = clamp(person.x, minX, maxX); person.vx *= -1; }
-    if (person.y < minY || person.y > maxY) { person.y = clamp(person.y, minY, maxY); person.vy *= -1; }
-  }
 
   if (state.mode === 'ready') { ball.x = START_POS.x; ball.y = START_POS.y; if (input.launchTap) launchBall(); }
   else if (state.mode === 'playing' && ball.active) {
@@ -3590,7 +3578,6 @@ function update(dt) {
           addScreenFlash('#fff7bf', 0.045, 0.04);
         }
       }
-      for (const person of people) if (person.active && len2(ball.x - person.x, ball.y - person.y) <= ball.r + person.r) crushPerson(person);
       if (state.mode !== 'playing') break;
       if (ball.y > WORLD.h + 30 || (ball.y > drain.y && ball.x > drain.x0 && ball.x < drain.x1)) { playSfx('drain', 0.9, worldPan(ball.x)); ball.active = false; state.mode = 'ball_lost'; state.ballLostTimer = 0.8; break; }
     }
@@ -3621,10 +3608,6 @@ function render() {
   for (const b of buildings) if (b.active) {
     renderer.pushSprite(b.hitCooldown > 0 ? hitBaseSpr : baseSpr, (b.x - 4) * sx, (b.y - 4) * sy, (b.w + 8) * sx, (b.h + 8) * sy);
     renderer.pushSprite(atlas.entries.get(b.spriteKey), b.x * sx, b.y * sy, b.w * sx, b.h * sy);
-  }
-  for (const person of people) if (person.active) {
-    const spr = atlas.entries.get(`person_${person.spriteVariant}_${person.anim}`);
-    if (spr) renderer.pushSprite(spr, (person.x - 4) * sx, (person.y - 6) * sy, 8 * sx, 10 * sy);
   }
   for (const key of ['left', 'right']) { const f = flippers[key]; const seg = flipperSegment(f); const ang = Math.atan2(seg.y2 - seg.y1, seg.x2 - seg.x1); renderer.pushSprite(flipSpr, seg.x1 * sx, (seg.y1 - f.radius) * sy, f.length * sx, f.radius * 2 * sy, ang, 0, 0.5); }
   if (ball.active || state.mode === 'ready') renderer.pushSprite(ballSpr, (ball.x - ball.r) * sx, (ball.y - ball.r) * sy, ball.r * 2 * sx, ball.r * 2 * sy, ball.rot);
