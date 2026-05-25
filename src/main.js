@@ -2903,7 +2903,6 @@ const flippers = {
   right: { pivot: { x: 340, y: 704 }, length: 84, radius: 11, base: Math.PI - 0.46, active: Math.PI + 0.50, angle: Math.PI - 0.46, prev: Math.PI - 0.46, upImpulse: 680, fxCooldown: 0 },
 };
 const drain = { x0: 228, x1: 272, y: 760 };
-const maxBuildings = 8;
 
 function getNextExp() { return 5 + state.level * 3; }
 function updateQuota() { state.quota = Math.floor(3000 * Math.pow(1.75, state.round - 1)); }
@@ -2920,7 +2919,7 @@ function getCandidates(card) { const list = []; for (let row = 0; row < GRID.row
 function weightedPick(cands) { const total = cands.reduce((a, c) => a + c.weight, 0); let v = Math.random() * total; for (const c of cands) { v -= c.weight; if (v <= 0) return c; } return cands[cands.length - 1]; }
 function occupancy() { let used = 0; for (const r of grid) for (const c of r) if (c.occupiedBy) used += 1; return used / (GRID.cols * GRID.rows); }
 function activeCount(cardId) { return buildings.filter((b) => b.active && b.cardId === cardId).length; }
-function trySpawnFromCard(card, force = false) { if (!card) return false; if (!force) { if (buildings.filter((b) => b.active).length >= maxBuildings) return false; if (occupancy() > 0.72) return false; if (activeCount(card.id) >= card.maxActive) return false; } const cands = getCandidates(card); if (!cands.length) return false; const pick = weightedPick(cands); const x = GRID.left + pick.col * GRID.cellSize; const y = GRID.top + pick.row * GRID.cellSize; const inset = 4; const w = card.footprint.w * GRID.cellSize - inset * 2; const h = card.footprint.h * GRID.cellSize - inset * 2; const b = { instanceId: nextBuildingId++, cardId: card.id, name: card.name, level: card.level, col: pick.col, row: pick.row, footprint: structuredClone(card.footprint), x: x + inset, y: y + inset, w, h, hp: card.hp, maxHp: card.hp, score: card.score, peopleCount: card.peopleCount, tags: [...card.tags], effectId: card.effectId, spriteKey: card.spriteKey, active: true, hitCooldown: 0 };
+function trySpawnFromCard(card, force = false) { if (!card) return false; if (!force) { if (occupancy() > 0.72) return false; if (activeCount(card.id) >= card.maxActive) return false; } const cands = getCandidates(card); if (!cands.length) return false; const pick = weightedPick(cands); const x = GRID.left + pick.col * GRID.cellSize; const y = GRID.top + pick.row * GRID.cellSize; const inset = 4; const w = card.footprint.w * GRID.cellSize - inset * 2; const h = card.footprint.h * GRID.cellSize - inset * 2; const b = { instanceId: nextBuildingId++, cardId: card.id, name: card.name, level: card.level, col: pick.col, row: pick.row, footprint: structuredClone(card.footprint), x: x + inset, y: y + inset, w, h, hp: card.hp, maxHp: card.hp, score: card.score, peopleCount: card.peopleCount, tags: [...card.tags], effectId: card.effectId, spriteKey: card.spriteKey, active: true, hitCooldown: 0 };
   buildings.push(b); for (let dy = 0; dy < card.footprint.h; dy += 1) for (let dx = 0; dx < card.footprint.w; dx += 1) grid[pick.row + dy][pick.col + dx].occupiedBy = b.instanceId; return true; }
 function spawnPeople(building, amount) {
   const cx = building.x + building.w * 0.5;
