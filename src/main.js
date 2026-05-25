@@ -23,13 +23,14 @@ const PHYSICS = {
 };
 
 const TERRAIN = {
-  cols: 80,
-  rows: 120,
-  cell: 5,
-  left: 55,
-  top: 120,
-  digStartY: 150,
-  digEndBuffer: 140,
+  cols: 50,
+  rows: 76,
+  cell: 8,
+  left: 50,
+  top: 132,
+  digStartY: 142,
+  digEndBuffer: 150,
+  launcherCols: 8,
   pixels: [],
 };
 const GRID = {
@@ -2754,11 +2755,19 @@ drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
   const laneBottom = h - 30;
   const deckTop = laneTop + 15;
   const deckBottom = h - 47;
-  pxRect(ctx, x, y, w, h, '#cfd8dd');
-  pxFrame(ctx, x + 8, y + 6, w - 16, h - 10, '#d8dfdb', '#42515a', '#edf2ee');
-  pxFrame(ctx, x + 22, y + laneTop, w - 44, laneBottom - laneTop, '#c7cfd2', '#55646c', '#ecf0f1');
-  pxRect(ctx, x + 34, y + deckTop, w - 68, deckBottom - deckTop, '#dde3e4');
-  drawMiniDistrict(ctx, x, y);
+  pxRect(ctx, x, y, w, h, '#27485a');
+  pxFrame(ctx, x + 8, y + 6, w - 16, h - 10, '#7a6041', '#24313a', '#c99b5b');
+  pxFrame(ctx, x + 22, y + laneTop, w - 44, laneBottom - laneTop, '#4b3829', '#2b2520', '#94704a');
+  pxRect(ctx, x + 34, y + deckTop, w - 68, deckBottom - deckTop, '#5d4430');
+  for (let yy = deckTop + 18; yy < deckBottom - 12; yy += 36) {
+    const band = yy % 72 === 0 ? '#6d5138' : '#503927';
+    pxRect(ctx, x + 42, y + yy, w - 132, 10, band);
+    pxRect(ctx, x + 50, y + yy + 3, w - 148, 2, 'rgba(255,255,255,.12)');
+  }
+  pxFrame(ctx, x + 392, y + deckTop - 8, 46, deckBottom - deckTop + 16, '#826239', '#2b2520', '#d7ac67');
+  for (let yy = deckTop + 8; yy < deckBottom - 20; yy += 34) pxRect(ctx, x + 405, y + yy, 20, 4, '#cda05f');
+  pxRect(ctx, x + 56, y + deckTop + 8, 316, 3, '#d0a05c');
+  pxRect(ctx, x + 56, y + deckBottom - 12, 316, 3, '#3b2a20');
 };
 
 function refCityFurniture(ctx, x, y) {
@@ -2880,8 +2889,11 @@ const touchState = {
   leftPointerId: null,
   rightPointerId: null,
 };
+const uiButtons = {
+  upgrade: { x: 338, y: 18, w: 134, h: 44 },
+};
 const floatingTexts=[]; const hitSparks=[]; const screenShake={time:0,duration:0,amount:0};
-const TERRAIN_DEFS={dirt:{hp:1,value:1,color:'#7a5230',bounce:0.12},stone:{hp:3,value:2,color:'#7f8791',bounce:0.2},copper:{hp:2,value:10,color:'#c87f4b',bounce:0.18},iron:{hp:4,value:25,color:'#9eafbf',bounce:0.22},gold:{hp:5,value:80,color:'#f0c94d',bounce:0.24},diamond:{hp:6,value:250,color:'#78ecff',bounce:0.27},bedrock:{hp:9999,value:0,color:'#2e3440',bounce:0.32},empty:{hp:0,value:0,color:'transparent',bounce:0}};
+const TERRAIN_DEFS={dirt:{hp:1,value:1,color:'#8b5f36',light:'#b9824d',dark:'#5c3d26',bounce:0.08},stone:{hp:2,value:2,color:'#7f8791',light:'#a7b0ba',dark:'#565f68',bounce:0.14},copper:{hp:2,value:10,color:'#c87f4b',light:'#f0b071',dark:'#8b4f31',bounce:0.13},iron:{hp:3,value:25,color:'#9eafbf',light:'#c5d3df',dark:'#647482',bounce:0.16},gold:{hp:4,value:80,color:'#f0c94d',light:'#ffe687',dark:'#b88928',bounce:0.18},diamond:{hp:5,value:250,color:'#78ecff',light:'#d8fbff',dark:'#2791ad',bounce:0.2},bedrock:{hp:9999,value:0,color:'#2e3440',light:'#566071',dark:'#151a22',bounce:0.24},empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0}};
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
 const flippers={left:{pivot:{x:160,y:704},length:84,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:680,fxCooldown:0},right:{pivot:{x:340,y:704},length:84,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:680,fxCooldown:0}};
@@ -3030,34 +3042,82 @@ function pickTerrainType(depth){
   if(depth<80){if(p<42)return'dirt';if(p<73)return'stone';if(p<86)return'iron';if(p<96)return'gold';return'diamond';}
   if(p<22)return'dirt';if(p<58)return'stone';if(p<79)return'iron';if(p<93)return'gold';if(p<98)return'diamond';return'bedrock';
 }
-function makeTerrainCell(depth){
+function emptyTerrainCell(){
+  return {type:'empty',hp:0,maxHp:0,value:0,solid:false,ore:false,seed:0};
+}
+function terrainMineBottomY(){
+  return flippers.left.pivot.y-TERRAIN.digEndBuffer;
+}
+function isTerrainSafeCell(row,col){
+  const worldY=TERRAIN.top+row*TERRAIN.cell;
+  return worldY<TERRAIN.digStartY || worldY>terrainMineBottomY() || col>=TERRAIN.cols-TERRAIN.launcherCols;
+}
+function makeTerrainCell(depth,row=0,col=0){
+  if(isTerrainSafeCell(row,col)) return emptyTerrainCell();
   const type=pickTerrainType(depth); const def=TERRAIN_DEFS[type];
   const hp=type==='bedrock'?def.hp:def.hp+Math.floor(depth/20);
   const value=type==='bedrock'?0:Math.floor(def.value*(1+depth*0.03));
-  return {type,hp,maxHp:hp,value,solid:true,ore:type!=='dirt'&&type!=='stone'&&type!=='bedrock'};
+  return {type,hp,maxHp:hp,value,solid:true,ore:type!=='dirt'&&type!=='stone'&&type!=='bedrock',seed:Math.random()};
 }
 function initTerrain(){
   TERRAIN.pixels=Array.from({length:TERRAIN.rows},(_,row)=>Array.from({length:TERRAIN.cols},(_,col)=>{
-    const worldY=TERRAIN.top+row*TERRAIN.cell;
-    const inSafeZone=worldY>(flippers.left.pivot.y-TERRAIN.digEndBuffer) || (col>TERRAIN.cols-14) || worldY<TERRAIN.digStartY || (worldY<280 && col>74);
-    if(inSafeZone) return {type:'empty',hp:0,maxHp:0,value:0,solid:false,ore:false};
-    return makeTerrainCell(state.depthLevel+row);
+    return makeTerrainCell(state.depthLevel+row,row,col);
   }));
 }
-function digTerrain(cx,cy,radius,power){
+function terrainCellBox(row,col){
+  return {x:TERRAIN.left+col*TERRAIN.cell,y:TERRAIN.top+row*TERRAIN.cell,w:TERRAIN.cell,h:TERRAIN.cell};
+}
+function circleIntersectsCell(cx,cy,radius,row,col){
+  const box=terrainCellBox(row,col);
+  const px=clamp(cx,box.x,box.x+box.w);
+  const py=clamp(cy,box.y,box.y+box.h);
+  const dx=cx-px,dy=cy-py;
+  return dx*dx+dy*dy<=radius*radius;
+}
+function addTerrainSparks(x,y,color,count=4,force=1){
+  const room=Math.max(0,120-hitSparks.length);
+  const n=Math.min(room,count);
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2;
+    const sp=randRange(24,92)*force;
+    hitSparks.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-randRange(10,48),life:randRange(0.18,0.34),maxLife:0.34,color,size:randRange(2,4)});
+  }
+}
+function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
+  const cell=TERRAIN.pixels[row]?.[col];
+  if(!cell?.solid || cell.type==='bedrock') return {hit:false,broken:false};
+  const def=TERRAIN_DEFS[cell.type];
+  cell.hp-=Math.max(1,damage);
+  addTerrainSparks(hitX,hitY,def.light,cell.hp<=0?5:2,cell.hp<=0?1.15:0.75);
+  if(cell.hp>0) return {hit:true,broken:false};
+  cell.solid=false; cell.type='empty'; cell.hp=0; state.cellsMined+=1;
+  if(cell.value>0){
+    const gain=Math.floor(cell.value*state.oreMultiplier);
+    state.money+=gain;
+    floatingTexts.push({x:hitX,y:hitY,text:`+$${gain}`,color:def.light,life:0.72});
+  }
+  if(impact>220) addScreenShake(clamp(impact/220,1.2,4.2),0.08);
+  return {hit:true,broken:true};
+}
+function digTerrain(cx,cy,radius,power,impact=0){
   const minCol=Math.max(0,Math.floor((cx-radius-TERRAIN.left)/TERRAIN.cell));
   const maxCol=Math.min(TERRAIN.cols-1,Math.floor((cx+radius-TERRAIN.left)/TERRAIN.cell));
   const minRow=Math.max(0,Math.floor((cy-radius-TERRAIN.top)/TERRAIN.cell));
   const maxRow=Math.min(TERRAIN.rows-1,Math.floor((cy+radius-TERRAIN.top)/TERRAIN.cell));
-  const rr=radius*radius;
+  let touched=0,broken=0;
   for(let row=minRow;row<=maxRow;row++) for(let col=minCol;col<=maxCol;col++){
-    const cell=TERRAIN.pixels[row][col]; if(!cell.solid || cell.type==='bedrock') continue;
-    const ccx=TERRAIN.left+col*TERRAIN.cell+TERRAIN.cell*0.5; const ccy=TERRAIN.top+row*TERRAIN.cell+TERRAIN.cell*0.5;
-    const dx=ccx-cx,dy=ccy-cy; if(dx*dx+dy*dy>rr) continue;
-    cell.hp-=power; if(cell.hp>0) continue;
-    cell.solid=false; cell.type='empty'; state.cellsMined+=1;
-    if(cell.value>0){const gain=Math.floor(cell.value*state.oreMultiplier); state.money+=gain; floatingTexts.push({x:ccx,y:ccy,text:`+$${gain}`,color:'#9ff',life:0.7});}
+    const cell=TERRAIN.pixels[row]?.[col]; if(!cell?.solid || cell.type==='bedrock') continue;
+    if(!circleIntersectsCell(cx,cy,radius,row,col)) continue;
+    const box=terrainCellBox(row,col);
+    const ccx=box.x+box.w*0.5,ccy=box.y+box.h*0.5;
+    const dist=Math.hypot(ccx-cx,ccy-cy);
+    const falloff=clamp(1-dist/Math.max(1,radius+TERRAIN.cell),0.35,1);
+    const result=damageTerrainCell(row,col,Math.floor(power*falloff),ccx,ccy,impact);
+    if(result.hit)touched+=1;
+    if(result.broken)broken+=1;
   }
+  if(touched>0) playSfx(broken>0?'crush':'hit',clamp(0.45+broken*0.12+impact/900,0.45,1.15),worldPan(cx));
+  return {touched,broken};
 }
 function resolveTerrainCollision(body){
   const rad=body.r+2;
@@ -3065,24 +3125,64 @@ function resolveTerrainCollision(body){
   const maxCol=Math.min(TERRAIN.cols-1,Math.floor((body.x+rad-TERRAIN.left)/TERRAIN.cell));
   const minRow=Math.max(0,Math.floor((body.y-rad-TERRAIN.top)/TERRAIN.cell));
   const maxRow=Math.min(TERRAIN.rows-1,Math.floor((body.y+rad-TERRAIN.top)/TERRAIN.cell));
-  let nx=0,ny=0,hits=0,b=0.18,hardness=0;
-  for(let row=minRow;row<=maxRow;row++) for(let col=minCol;col<=maxCol;col++){const cell=TERRAIN.pixels[row][col]; if(!cell.solid) continue; const cx=TERRAIN.left+col*TERRAIN.cell+TERRAIN.cell*0.5; const cy=TERRAIN.top+row*TERRAIN.cell+TERRAIN.cell*0.5; const dx=body.x-cx,dy=body.y-cy; const d2=dx*dx+dy*dy; if(d2>(body.r+TERRAIN.cell*0.7)**2) continue; nx+=dx; ny+=dy; hits+=1; hardness+=TERRAIN_DEFS[cell.type].bounce; b=Math.max(b,TERRAIN_DEFS[cell.type].bounce);}
+  let nx=0,ny=0,hits=0,b=0.1,maxPen=0,contactX=body.x,contactY=body.y;
+  for(let row=minRow;row<=maxRow;row++) for(let col=minCol;col<=maxCol;col++){
+    const cell=TERRAIN.pixels[row]?.[col]; if(!cell?.solid) continue;
+    const box=terrainCellBox(row,col);
+    let px=clamp(body.x,box.x,box.x+box.w);
+    let py=clamp(body.y,box.y,box.y+box.h);
+    let dx=body.x-px,dy=body.y-py;
+    let d2=dx*dx+dy*dy;
+    if(d2>body.r*body.r) continue;
+    let d=Math.sqrt(Math.max(d2,1e-8));
+    let cnx=dx/d,cny=dy/d;
+    if(d2<1e-8){
+      const dl=Math.abs(body.x-box.x),dr=Math.abs(box.x+box.w-body.x),dt=Math.abs(body.y-box.y),db=Math.abs(box.y+box.h-body.y);
+      const m=Math.min(dl,dr,dt,db);
+      if(m===dl){cnx=-1;cny=0;px=box.x;py=body.y;}
+      else if(m===dr){cnx=1;cny=0;px=box.x+box.w;py=body.y;}
+      else if(m===dt){cnx=0;cny=-1;px=body.x;py=box.y;}
+      else{cnx=0;cny=1;px=body.x;py=box.y+box.h;}
+      d=0;
+    }
+    const pen=body.r-d;
+    nx+=cnx*Math.max(0.2,pen);
+    ny+=cny*Math.max(0.2,pen);
+    hits+=1;
+    if(pen>maxPen){maxPen=pen;contactX=px;contactY=py;}
+    b=Math.max(b,TERRAIN_DEFS[cell.type].bounce);
+  }
   if(!hits) return false;
   const len=Math.hypot(nx,ny)||1; nx/=len; ny/=len;
-  const digRadius=body.r*(0.85+state.miningPower*0.05);
   const impact=Math.max(0,-(body.vx*nx+body.vy*ny));
-  const impactPower=Math.max(1,Math.floor(impact/145));
-  digTerrain(body.x,body.y,clamp(digRadius,body.r*0.8,body.r*1.25),state.miningPower+impactPower);
-  body.x+=nx*(0.9+hardness/hits*2.3); body.y+=ny*(0.9+hardness/hits*2.3);
-  const vn=body.vx*nx+body.vy*ny; if(vn<0){body.vx-=(1+b)*vn*nx; body.vy-=(1+b)*vn*ny;}
-  body.vx*=0.987; body.vy*=0.987;
+  const impactPower=Math.max(1,Math.floor(impact/190));
+  const digRadius=clamp(body.r*(1.08+state.miningPower*0.08)+impact*0.012,body.r*1.05,body.r*1.85);
+  const dig=digTerrain(contactX,contactY,digRadius,state.miningPower+impactPower,impact);
+  body.x+=nx*(maxPen+0.65); body.y+=ny*(maxPen+0.65);
+  const vn=body.vx*nx+body.vy*ny;
+  const rebound=dig.broken>0?b*0.55:b;
+  if(vn<0){body.vx-=(1+rebound)*vn*nx; body.vy-=(1+rebound)*vn*ny;}
+  const drag=dig.broken>0?0.952:0.982;
+  body.vx*=drag; body.vy*=drag;
   return true;
 }
 function launchBall(){if(state.mode!=='ready') return; ball.active=true; ball.vx=0; ball.vy=-980; ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));}
 function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready'}
 function restartRun(){state.money=0;state.miningPower=1;state.oreMultiplier=1;state.cellsMined=0;state.depthLevel=0;state.upgradeCost=100;state.scrollTextTimer=0;floatingTexts.length=0;hitSparks.length=0;initTerrain();resetBall();}
-function shouldScrollTerrain(){let solid=0,empty=0; for(let r=TERRAIN.rows-20;r<TERRAIN.rows;r++){for(let c=0;c<TERRAIN.cols;c++){const cell=TERRAIN.pixels[r][c]; if(cell.solid) solid++; else empty++;}} return (solid+empty)>0 && empty/(solid+empty)>0.68;}
-function scrollTerrainForward(rows=10){state.depthLevel+=rows; TERRAIN.pixels.splice(0,rows); for(let r=0;r<rows;r++){const rowIdx=TERRAIN.rows-rows+r; TERRAIN.pixels.push(Array.from({length:TERRAIN.cols},(_,c)=>makeTerrainCell(state.depthLevel+rowIdx)));} state.scrollTextTimer=0.6; floatingTexts.push({x:WORLD.w*0.5,y:170,text:`DEPTH +${rows}m`,color:'#8fd8ff',life:0.6}); playSfx('level',0.9,0);}
+function shouldScrollTerrain(){
+  const bottomRow=clamp(Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell),0,TERRAIN.rows-1);
+  const topRow=Math.max(0,bottomRow-12);
+  let solid=0,empty=0;
+  for(let r=topRow;r<=bottomRow;r++){
+    for(let c=0;c<TERRAIN.cols-TERRAIN.launcherCols;c++){
+      const cell=TERRAIN.pixels[r]?.[c];
+      if(!cell) continue;
+      if(cell.solid) solid++; else empty++;
+    }
+  }
+  return (solid+empty)>0 && empty/(solid+empty)>0.76;
+}
+function scrollTerrainForward(rows=8){state.depthLevel+=rows; initTerrain(); state.scrollTextTimer=0.6; floatingTexts.push({x:WORLD.w*0.5,y:170,text:`DEPTH +${rows}m`,color:'#8fd8ff',life:0.6}); playSfx('level',0.9,0);}
 function tryUpgrade(){if(state.money<state.upgradeCost) return; state.money-=state.upgradeCost; state.miningPower+=1; state.upgradeCost=Math.floor(state.upgradeCost*1.6); floatingTexts.push({x:WORLD.w*0.5,y:140,text:`POWER ${state.miningPower}!`,color:'#fff36b',life:0.8}); playSfx('upgrade',1,0)}
 addEventListener('keydown',(e)=>{unlockAudio(); if((e.code==='ArrowLeft'||e.code==='KeyA')&&!input.left){input.left=true;playSfx('flipper',0.6,-0.45);} if((e.code==='ArrowRight'||e.code==='KeyD')&&!input.right){input.right=true;playSfx('flipper',0.6,0.45);} if(e.code==='Space') launchBall(); if(e.code==='KeyU') tryUpgrade(); if(e.code==='KeyR') restartRun();});
 addEventListener('keyup',(e)=>{if(e.code==='ArrowLeft'||e.code==='KeyA') input.left=false; if(e.code==='ArrowRight'||e.code==='KeyD') input.right=false;});
@@ -3092,9 +3192,18 @@ function pointerToWorld(clientX, clientY) {
   const y = (clientY - rect.top) * (WORLD.h / rect.height);
   return { x, y };
 }
+function pointInRect(pt, rect) {
+  return pt.x >= rect.x && pt.x <= rect.x + rect.w && pt.y >= rect.y && pt.y <= rect.y + rect.h;
+}
 function handlePointerDown(e) {
   unlockAudio();
   const pt = pointerToWorld(e.clientX, e.clientY);
+  if (pointInRect(pt, uiButtons.upgrade)) {
+    tryUpgrade();
+    uiCanvas.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+    return;
+  }
   const isBottomHalf = pt.y > WORLD.h * 0.52;
   if (state.mode === 'ready') {
     launchBall();
@@ -3134,11 +3243,12 @@ uiCanvas.style.touchAction = 'none';
 uiCanvas.addEventListener('pointerdown', handlePointerDown, { passive: false });
 uiCanvas.addEventListener('pointerup', handlePointerUp, { passive: false });
 uiCanvas.addEventListener('pointercancel', handlePointerUp, { passive: false });
+addEventListener('blur',()=>{input.left=false;input.right=false;touchState.leftPointerId=null;touchState.rightPointerId=null;});
 function updateFlipper(f, pressed, dt){const target=pressed?f.active:f.base; const maxStep=(pressed?13:8)*dt; f.prev=f.angle; f.angle+=clamp(target-f.angle,-maxStep,maxStep); f.fxCooldown=Math.max(0,f.fxCooldown-dt);}
 function isFiniteBallState(){return Number.isFinite(ball.x)&&Number.isFinite(ball.y)&&Number.isFinite(ball.vx)&&Number.isFinite(ball.vy)&&Number.isFinite(ball.spin)&&Number.isFinite(ball.rot);}
 function recoverFromBrokenPhysics(){floatingTexts.push({x:WORLD.w*0.5,y:150,text:'PHYSICS RESET',color:'#ffd38f',life:0.8}); playSfx('levelReady',0.8,0); resetBall();}
 function update(dt){if(!isFiniteBallState()){recoverFromBrokenPhysics();return;} state.fpsS+=dt;state.fpsN+=1;if(state.fpsS>0.3){state.fps=Math.round(state.fpsN/state.fpsS);state.fpsS=0;state.fpsN=0;} if(screenShake.time>0){screenShake.time=Math.max(0,screenShake.time-dt); if(screenShake.time<=0)screenShake.amount=0;}
-for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){hitSparks[i].life-=dt;if(hitSparks[i].life<=0)hitSparks.splice(i,1);} updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
+for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){const s=hitSparks[i];s.life-=dt;s.x+=(s.vx||0)*dt;s.y+=(s.vy||0)*dt;s.vy=(s.vy||0)+180*dt;if(s.life<=0)hitSparks.splice(i,1);} updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0) resetBall(); return;}
 const speed=len2(ball.vx,ball.vy); const substeps=clamp(Math.ceil((speed*dt)/(ball.r*0.32)),1,8); const sdt=dt/substeps;
 for(let s=0;s<substeps;s++){ball.vy+=PHYSICS.gravity*sdt; ball.vx*=PHYSICS.airDrag; ball.vy*=PHYSICS.airDrag; ball.x+=ball.vx*sdt; ball.y+=ball.vy*sdt; for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce); for (const seg of rails) segmentCapsuleHit(ball, seg); for(const key of ['left','right']) resolveFlipperHit(flippers[key],key==='left'?input.left:input.right,sdt);
@@ -3160,12 +3270,99 @@ if(shouldScrollTerrain()) scrollTerrainForward(8);
 let dpr=1; function resize(){dpr=Math.min(window.devicePixelRatio||1,DPR_MAX); const rect=wrap.getBoundingClientRect(); const w=Math.floor(rect.width*dpr); const h=Math.floor(rect.height*dpr); glCanvas.width=w; glCanvas.height=h; uiCanvas.width=w; uiCanvas.height=h; gl.viewport(0,0,w,h);} addEventListener('resize',resize);
 const atlas = new RuntimeAtlas(gl, 2048); registerAtlasSprites(atlas); atlas.upload(); const renderer = new SpriteRenderer(gl, atlas);
 function getShakeOffset(){if(screenShake.time<=0||screenShake.duration<=0) return {x:0,y:0}; const r=screenShake.time/screenShake.duration; const p=screenShake.amount*r*r; return {x:Math.sin(screenShake.time*117)*p,y:Math.cos(screenShake.time*151)*p};}
-function render(){const sx=glCanvas.width/WORLD.w, sy=glCanvas.height/WORLD.h, shake=getShakeOffset(); glCanvas.style.transform=shake.x||shake.y?`translate(${shake.x}px, ${shake.y}px)`:''; renderer.begin(); const fieldSpr=atlas.entries.get('playfield'); const wallSpr=atlas.entries.get('wall'); const flipSpr=atlas.entries.get('flipper'); const ballSpr=atlas.entries.get('ball'); renderer.pushSprite(fieldSpr,0,0,glCanvas.width,glCanvas.height); for(const w of walls) renderer.pushSprite(wallSpr,w.x*sx,w.y*sy,w.w*sx,w.h*sy); for(const seg of rails){const dx=seg.x2-seg.x1,dy=seg.y2-seg.y1,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx); renderer.pushSprite(wallSpr,seg.x1*sx,(seg.y1-seg.r)*sy,len*sx,seg.r*2*sy,ang,0,0.5);} for(const key of ['left','right']){const f=flippers[key]; const seg=flipperSegment(f); const ang=Math.atan2(seg.y2-seg.y1,seg.x2-seg.x1); renderer.pushSprite(flipSpr,seg.x1*sx,(seg.y1-f.radius)*sy,f.length*sx,f.radius*2*sy,ang,0,0.5);} if(ball.active||state.mode==='ready') renderer.pushSprite(ballSpr,(ball.x-ball.r)*sx,(ball.y-ball.r)*sy,ball.r*2*sx,ball.r*2*sy,ball.rot); renderer.flush(glCanvas.width,glCanvas.height);
+function renderLegacy(){const sx=glCanvas.width/WORLD.w, sy=glCanvas.height/WORLD.h, shake=getShakeOffset(); glCanvas.style.transform=shake.x||shake.y?`translate(${shake.x}px, ${shake.y}px)`:''; renderer.begin(); const fieldSpr=atlas.entries.get('playfield'); const wallSpr=atlas.entries.get('wall'); const flipSpr=atlas.entries.get('flipper'); const ballSpr=atlas.entries.get('ball'); renderer.pushSprite(fieldSpr,0,0,glCanvas.width,glCanvas.height); for(const w of walls) renderer.pushSprite(wallSpr,w.x*sx,w.y*sy,w.w*sx,w.h*sy); for(const seg of rails){const dx=seg.x2-seg.x1,dy=seg.y2-seg.y1,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx); renderer.pushSprite(wallSpr,seg.x1*sx,(seg.y1-seg.r)*sy,len*sx,seg.r*2*sy,ang,0,0.5);} for(const key of ['left','right']){const f=flippers[key]; const seg=flipperSegment(f); const ang=Math.atan2(seg.y2-seg.y1,seg.x2-seg.x1); renderer.pushSprite(flipSpr,seg.x1*sx,(seg.y1-f.radius)*sy,f.length*sx,f.radius*2*sy,ang,0,0.5);} if(ball.active||state.mode==='ready') renderer.pushSprite(ballSpr,(ball.x-ball.r)*sx,(ball.y-ball.r)*sy,ball.r*2*sx,ball.r*2*sy,ball.rot); renderer.flush(glCanvas.width,glCanvas.height);
 uiCtx.clearRect(0,0,uiCanvas.width,uiCanvas.height); uiCtx.save(); uiCtx.scale(dpr,dpr); const vw=uiCanvas.width/dpr,vh=uiCanvas.height/dpr;
 for(let row=0;row<TERRAIN.rows;row++)for(let col=0;col<TERRAIN.cols;col++){const cell=TERRAIN.pixels[row][col]; if(!cell?.solid) continue; const x=(TERRAIN.left+col*TERRAIN.cell)*(vw/WORLD.w), y=(TERRAIN.top+row*TERRAIN.cell)*(vh/WORLD.h), cs=TERRAIN.cell*(vw/WORLD.w); uiCtx.fillStyle=TERRAIN_DEFS[cell.type].color; uiCtx.fillRect(x,y,cs,cs); if(cell.hp<cell.maxHp && cell.type!=='bedrock'){uiCtx.strokeStyle='rgba(0,0,0,0.25)'; uiCtx.beginPath(); uiCtx.moveTo(x+1,y+1); uiCtx.lineTo(x+cs-1,y+cs-1); uiCtx.stroke();}}
 for(const s of hitSparks){uiCtx.globalAlpha=s.life/0.2; uiCtx.fillStyle=s.color; uiCtx.fillRect(s.x*(vw/WORLD.w)-2,s.y*(vh/WORLD.h)-2,4,4);} uiCtx.globalAlpha=1;
 uiCtx.fillStyle='rgba(10,22,34,0.8)'; uiCtx.fillRect(10,8,380,96); uiCtx.fillStyle='#fff'; uiCtx.font='700 18px monospace'; uiCtx.fillText(`MONEY $${state.money.toLocaleString()}`,20,30); uiCtx.fillText(`POWER ${state.miningPower}`,20,50); uiCtx.fillText(`DEPTH ${state.depthLevel}m`,20,70); uiCtx.fillText(`MINED ${state.cellsMined}`,180,50); uiCtx.fillText(`UPGRADE U: $${state.upgradeCost}`,180,70); uiCtx.font='600 14px monospace'; uiCtx.fillText('KEY: ←/A →/D SPACE U R  |  TOUCH: 下半分左右タップで操作',20,92);
 for(const t of floatingTexts){uiCtx.globalAlpha=clamp(t.life,0,1); uiCtx.fillStyle=t.color; uiCtx.font='700 20px monospace'; uiCtx.fillText(t.text,t.x*(vw/WORLD.w),t.y*(vh/WORLD.h));} uiCtx.globalAlpha=1; uiCtx.restore();}
+function drawTerrainLayer(vw,vh){
+  const sx=vw/WORLD.w, sy=vh/WORLD.h;
+  for(let row=0;row<TERRAIN.rows;row++)for(let col=0;col<TERRAIN.cols;col++){
+    const cell=TERRAIN.pixels[row][col]; if(!cell?.solid) continue;
+    const def=TERRAIN_DEFS[cell.type];
+    const x=(TERRAIN.left+col*TERRAIN.cell)*sx, y=(TERRAIN.top+row*TERRAIN.cell)*sy, cw=TERRAIN.cell*sx, ch=TERRAIN.cell*sy;
+    uiCtx.fillStyle=def.color; uiCtx.fillRect(x,y,cw+0.5,ch+0.5);
+    uiCtx.fillStyle=def.light; uiCtx.globalAlpha=0.22+(cell.seed||0)*0.16; uiCtx.fillRect(x+1,y+1,Math.max(1,cw-2),1);
+    uiCtx.fillStyle=def.dark; uiCtx.globalAlpha=0.22; uiCtx.fillRect(x+1,y+ch-2,Math.max(1,cw-2),1);
+    uiCtx.globalAlpha=1;
+    if(cell.hp<cell.maxHp && cell.type!=='bedrock'){
+      const hurt=1-cell.hp/cell.maxHp;
+      uiCtx.strokeStyle=`rgba(28,20,15,${0.28+hurt*0.42})`;
+      uiCtx.lineWidth=Math.max(1,sx);
+      uiCtx.beginPath();
+      uiCtx.moveTo(x+cw*0.18,y+ch*0.22);
+      uiCtx.lineTo(x+cw*0.72,y+ch*0.78);
+      if(hurt>0.55){uiCtx.moveTo(x+cw*0.78,y+ch*0.24);uiCtx.lineTo(x+cw*0.38,y+ch*0.58);}
+      uiCtx.stroke();
+    }
+  }
+}
+function drawUiBall(vw,vh){
+  if(!ball.active&&state.mode!=='ready') return;
+  const sx=vw/WORLD.w, sy=vh/WORLD.h, x=ball.x*sx, y=ball.y*sy, r=ball.r*sx;
+  uiCtx.save();
+  uiCtx.translate(x,y);
+  uiCtx.rotate(ball.rot);
+  const g=uiCtx.createRadialGradient(-r*0.35,-r*0.35,r*0.08,0,0,r);
+  g.addColorStop(0,'#ffffff'); g.addColorStop(0.45,'#cdd6dc'); g.addColorStop(1,'#56616b');
+  uiCtx.fillStyle='rgba(8,13,18,.25)'; uiCtx.beginPath(); uiCtx.ellipse(r*0.14,r*0.22,r*0.92,r*0.82,0,0,Math.PI*2); uiCtx.fill();
+  uiCtx.fillStyle=g; uiCtx.beginPath(); uiCtx.arc(0,0,r,0,Math.PI*2); uiCtx.fill();
+  uiCtx.strokeStyle='#34404a'; uiCtx.lineWidth=Math.max(2,r*0.12); uiCtx.beginPath(); uiCtx.arc(0,0,r*0.76,-0.15,1.75); uiCtx.stroke();
+  uiCtx.fillStyle='rgba(255,255,255,.72)'; uiCtx.fillRect(-r*0.34,-r*0.42,r*0.44,r*0.12);
+  uiCtx.restore();
+}
+function drawHud(vw,vh){
+  const sx=vw/WORLD.w, sy=vh/WORLD.h;
+  uiCtx.fillStyle='rgba(18,34,42,0.82)'; uiCtx.fillRect(10,8,314,76);
+  uiCtx.strokeStyle='#9fd8ec'; uiCtx.lineWidth=2; uiCtx.strokeRect(10.5,8.5,313,75);
+  uiCtx.fillStyle='#fff7cf'; uiCtx.font='900 19px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(`$${state.money.toLocaleString()}`,22,33);
+  uiCtx.fillStyle='#bfeeff'; uiCtx.font='700 13px ui-monospace, SFMono-Regular, Consolas, monospace';
+  uiCtx.fillText(`PWR ${state.miningPower}`,22,57); uiCtx.fillText(`DEPTH ${state.depthLevel}m`,100,57); uiCtx.fillText(`MINED ${state.cellsMined}`,202,57);
+  const b=uiButtons.upgrade, bx=b.x*sx, by=b.y*sy, bw=b.w*sx, bh=b.h*sy;
+  const can=state.money>=state.upgradeCost;
+  uiCtx.fillStyle=can?'#fff06a':'rgba(255,255,255,.22)'; uiCtx.fillRect(bx,by,bw,bh);
+  uiCtx.strokeStyle=can?'#26343d':'rgba(255,255,255,.35)'; uiCtx.lineWidth=2; uiCtx.strokeRect(bx+0.5,by+0.5,bw-1,bh-1);
+  uiCtx.fillStyle=can?'#20313c':'rgba(255,255,255,.7)'; uiCtx.font='900 13px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.textAlign='center';
+  uiCtx.fillText('UPGRADE',bx+bw*0.5,by+bh*0.42);
+  uiCtx.font='700 11px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(`$${state.upgradeCost}`,bx+bw*0.5,by+bh*0.72);
+  uiCtx.textAlign='left';
+  if(state.mode==='ready'){
+    uiCtx.fillStyle='rgba(255,255,255,.88)'; uiCtx.font='900 18px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.textAlign='center';
+    uiCtx.fillText('READY',vw*0.5,vh*0.18); uiCtx.textAlign='left';
+  }
+}
+function drawTouchPads(vw,vh){
+  const coarse=matchMedia('(pointer: coarse)').matches||vw<430;
+  if(!coarse) return;
+  const y=vh*0.70,h=vh*0.28,w=vw*0.5;
+  uiCtx.globalAlpha=0.22;
+  uiCtx.fillStyle=input.left?'#fff06a':'#ffffff'; uiCtx.fillRect(0,y,w,h);
+  uiCtx.fillStyle=input.right?'#fff06a':'#ffffff'; uiCtx.fillRect(w,y,w,h);
+  uiCtx.globalAlpha=0.48; uiCtx.fillStyle='#182c36'; uiCtx.font='900 34px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.textAlign='center';
+  uiCtx.fillText('<',w*0.5,y+h*0.56); uiCtx.fillText('>',w+w*0.5,y+h*0.56);
+  uiCtx.textAlign='left'; uiCtx.globalAlpha=1;
+}
+function render(){
+  const sx=glCanvas.width/WORLD.w, sy=glCanvas.height/WORLD.h, shake=getShakeOffset();
+  glCanvas.style.transform=shake.x||shake.y?`translate(${shake.x}px, ${shake.y}px)`:'';
+  renderer.begin();
+  const fieldSpr=atlas.entries.get('playfield'); const wallSpr=atlas.entries.get('wall'); const flipSpr=atlas.entries.get('flipper');
+  renderer.pushSprite(fieldSpr,0,0,glCanvas.width,glCanvas.height);
+  for(const w of walls) renderer.pushSprite(wallSpr,w.x*sx,w.y*sy,w.w*sx,w.h*sy);
+  for(const seg of rails){const dx=seg.x2-seg.x1,dy=seg.y2-seg.y1,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx); renderer.pushSprite(wallSpr,seg.x1*sx,(seg.y1-seg.r)*sy,len*sx,seg.r*2*sy,ang,0,0.5);}
+  for(const key of ['left','right']){const f=flippers[key]; const seg=flipperSegment(f); const ang=Math.atan2(seg.y2-seg.y1,seg.x2-seg.x1); renderer.pushSprite(flipSpr,seg.x1*sx,(seg.y1-f.radius)*sy,f.length*sx,f.radius*2*sy,ang,0,0.5);}
+  renderer.flush(glCanvas.width,glCanvas.height);
+  uiCtx.clearRect(0,0,uiCanvas.width,uiCanvas.height); uiCtx.save(); uiCtx.scale(dpr,dpr); const vw=uiCanvas.width/dpr,vh=uiCanvas.height/dpr;
+  drawTerrainLayer(vw,vh);
+  for(const s of hitSparks){uiCtx.globalAlpha=clamp(s.life/(s.maxLife||0.2),0,1); uiCtx.fillStyle=s.color; const size=s.size||4; uiCtx.fillRect(s.x*(vw/WORLD.w)-size*0.5,s.y*(vh/WORLD.h)-size*0.5,size,size);}
+  uiCtx.globalAlpha=1;
+  drawUiBall(vw,vh);
+  drawTouchPads(vw,vh);
+  drawHud(vw,vh);
+  for(const t of floatingTexts){uiCtx.globalAlpha=clamp(t.life,0,1); uiCtx.fillStyle=t.color; uiCtx.font='900 19px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(t.text,t.x*(vw/WORLD.w),t.y*(vh/WORLD.h));}
+  uiCtx.globalAlpha=1; uiCtx.restore();
+}
 let last=performance.now();
 function loop(now){
   const dt=clamp((now-last)/1000,0,1/30);
