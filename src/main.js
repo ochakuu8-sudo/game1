@@ -2876,7 +2876,7 @@ const blocks = []; const floatingTexts=[]; const hitSparks=[]; const screenShake
 const BLOCK_DEFS={dirt:{hp:1,value:1,color:'#7a5230'},stone:{hp:2,value:2,color:'#7f8791'},copper:{hp:2,value:10,color:'#c87f4b'},iron:{hp:3,value:25,color:'#b5bbc8'},gold:{hp:4,value:80,color:'#f0c94d'},diamond:{hp:5,value:250,color:'#65e8ff'},bedrock:{hp:9999,value:0,color:'#2e3440'}};
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
-const flippers={left:{pivot:{x:160,y:704},length:84,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:680},right:{pivot:{x:340,y:704},length:84,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:680}};
+const flippers={left:{pivot:{x:160,y:704},length:84,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:680,fxCooldown:0},right:{pivot:{x:340,y:704},length:84,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:680,fxCooldown:0}};
 function resolveAABB(body, box, restitution = PHYSICS.wallBounce) {
   const px = clamp(body.x, box.x, box.x + box.w);
   const py = clamp(body.y, box.y, box.y + box.h);
@@ -2911,42 +2911,39 @@ function resolveAABB(body, box, restitution = PHYSICS.wallBounce) {
 }
 
 function segmentCapsuleHit(body, seg, rollingBias = 0) {
-  const sx = seg.x2 - seg.x1;
-  const sy = seg.y2 - seg.y1;
-  const lenSq = sx * sx + sy * sy || 1;
-  const t = clamp(((body.x - seg.x1) * sx + (body.y - seg.y1) * sy) / lenSq, 0, 1);
-  const px = seg.x1 + sx * t;
-  const py = seg.y1 + sy * t;
-  let dx = body.x - px;
-  let dy = body.y - py;
-  let dist = Math.hypot(dx, dy);
-  const radius = (body.r || BALL_RADIUS) + (seg.r || 0);
-  if (dist >= radius) return false;
-
-  if (dist < 0.00001) {
-    dx = -sy;
-    dy = sx;
-    dist = Math.hypot(dx, dy) || 1;
-  }
-  const nx = dx / dist;
-  const ny = dy / dist;
-  const pen = radius - dist + 0.5;
+  const abx = seg.x2 - seg.x1;
+  const aby = seg.y2 - seg.y1;
+  const apx = body.x - seg.x1;
+  const apy = body.y - seg.y1;
+  const ab2 = abx * abx + aby * aby;
+  const t = clamp((apx * abx + apy * aby) / ab2, 0, 1);
+  const cx = seg.x1 + abx * t;
+  const cy = seg.y1 + aby * t;
+  const dx = body.x - cx;
+  const dy = body.y - cy;
+  const rr = body.r + seg.r;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= rr * rr) return null;
+  const d = Math.max(0.0001, Math.sqrt(d2));
+  const nx = dx / d;
+  const ny = dy / d;
+  const pen = rr - d;
   body.x += nx * pen;
   body.y += ny * pen;
-
-  const velN = body.vx * nx + body.vy * ny;
-  if (velN < 0) {
-    const restitution = seg.restitution ?? PHYSICS.railBounce;
-    body.vx -= (1 + restitution) * velN * nx;
-    body.vy -= (1 + restitution) * velN * ny;
+  const vn = body.vx * nx + body.vy * ny;
+  if (vn < 0) {
+    const rebound = (1 + seg.restitution) * vn;
+    body.vx -= rebound * nx;
+    body.vy -= rebound * ny;
   }
   const tx = -ny;
   const ty = nx;
-  const vt = (body.vx * tx + body.vy * ty) + rollingBias;
-  const friction = seg.friction ?? PHYSICS.railFriction;
-  body.vx += tx * vt * (friction - 1);
-  body.vy += ty * vt * (friction - 1);
-  return true;
+  const vt = body.vx * tx + body.vy * ty;
+  const grip = clamp(seg.friction + rollingBias * 0.08, 0, 0.999);
+  const newVt = vt * grip;
+  body.vx += (newVt - vt) * tx;
+  body.vy += (newVt - vt) * ty;
+  return { nx, ny, t, cx, cy };
 }
 
 function flipperSegment(f, angle = f.angle) {
@@ -2958,37 +2955,61 @@ function flipperSegment(f, angle = f.angle) {
   };
 }
 
-function resolveFlipperHit(f, pressed, dt) {
-  const sweep = 5;
-  const step = (f.angle - f.prev) / sweep;
-  let hit = false;
-  for (let i = 1; i <= sweep; i += 1) {
-    if (segmentCapsuleHit(ball, flipperSegment(f, f.prev + step * i))) {
-      hit = true;
-      break;
-    }
-  }
-  if (!hit) return false;
+function applyFlipperImpulse(f, hit, sdt) {
+  const omega = (f.angle - f.prev) / Math.max(sdt, 0.0001);
+  const rx = hit.cx - f.pivot.x;
+  const ry = hit.cy - f.pivot.y;
+  const surfaceVx = -omega * ry;
+  const surfaceVy = omega * rx;
+  const relVx = ball.vx - surfaceVx;
+  const relVy = ball.vy - surfaceVy;
+  const relN = relVx * hit.nx + relVy * hit.ny;
+  if (relN >= 0) return null;
+  const tipPower = 0.54 + hit.t * 0.22;
+  const boost = clamp(((-relN) * 0.74 + Math.abs(omega) * f.length * 0.13) * tipPower, 0, f.upImpulse);
+  const side = f.pivot.x < WORLD.w * 0.5 ? 1 : -1;
+  const sweet = hit.t >= 0.42 && hit.t <= 0.88;
+  const tangentX = -ry;
+  const tangentY = rx;
+  const tangentLen = Math.hypot(tangentX, tangentY) || 1;
+  const tx = tangentX / tangentLen;
+  const ty = tangentY / tangentLen;
+  ball.vx += hit.nx * boost * 0.54 + tx * boost * 0.16;
+  ball.vy += hit.ny * boost * 0.54 + ty * boost * 0.16;
+  ball.vy -= boost * 0.04;
+  const targetVx = side * (220 + hit.t * 230);
+  const targetVy = -(560 + hit.t * 360 + (sweet ? 90 : 0));
+  const blend = sweet ? 0.32 : 0.20;
+  ball.vx += (targetVx - ball.vx) * blend;
+  ball.vy += (targetVy - ball.vy) * blend;
+  ball.spin = clamp(ball.spin + (boost / Math.max(ball.r, 1)) * (hit.t > 0.5 ? 0.10 : 0.07), -7, 7);
+  return { sweet, side, power: boost };
+}
 
-  const angularVel = (f.angle - f.prev) / Math.max(dt, 0.0001);
-  const dx = ball.x - f.pivot.x;
-  const dy = ball.y - f.pivot.y;
-  const along = clamp((dx * Math.cos(f.angle) + dy * Math.sin(f.angle)) / f.length, 0, 1);
-  const tipGain = 0.35 + along * 0.75;
-  if (pressed && angularVel !== 0) {
-    const impulse = Math.abs(angularVel) * 24 * tipGain;
-    const nudgeX = -Math.sin(f.angle) * impulse;
-    const nudgeY = Math.cos(f.angle) * impulse;
-    ball.vx += nudgeX * (f.pivot.x < WORLD.w * 0.5 ? 1 : -1);
-    ball.vy -= Math.max(PHYSICS.minFlipperBallSpeed, f.upImpulse * tipGain) * 0.018;
+function clampBallSpeed() { const max = ball.vy < -20 ? PHYSICS.maxUpwardBallSpeed : PHYSICS.maxBallSpeed; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
+function ensureMinBallSpeed(min = 360) { const speed = Math.hypot(ball.vx, ball.vy); if (speed > 0 && speed < min) { const k = min / speed; ball.vx *= k; ball.vy *= k; } }
+
+function resolveFlipperHit(f, pressed, sdt) {
+  const delta = f.angle - f.prev;
+  const sweepSteps = clamp(Math.ceil(Math.abs(delta) / 0.08), 1, 8);
+  for (let i = 0; i <= sweepSteps; i += 1) {
+    const angle = f.prev + delta * (i / sweepSteps);
+    const hit = segmentCapsuleHit(ball, flipperSegment(f, angle), 0.75);
+    if (!hit) continue;
+    let shot = null;
+    if (pressed && Math.abs(delta) > 0.0005) {
+      shot = applyFlipperImpulse(f, hit, sdt);
+      clampBallSpeed();
+      ensureMinBallSpeed(shot?.sweet ? PHYSICS.minFlipperBallSpeed + 80 : PHYSICS.minFlipperBallSpeed);
+    }
+    if (f.fxCooldown <= 0) {
+      hitSparks.push({x:hit.cx,y:hit.cy,life:0.16,color:shot?.sweet?'#68e4ff':'#fff7bf'});
+      playSfx(shot?.sweet ? 'sweet' : 'flipper', shot?.sweet ? 0.96 : pressed ? 0.72 : 0.48, worldPan(hit.cx));
+      f.fxCooldown = pressed ? 0.08 : 0.12;
+    }
+    return true;
   }
-  const speed = Math.hypot(ball.vx, ball.vy);
-  if (pressed && speed < PHYSICS.minFlipperBallSpeed) {
-    const scale = PHYSICS.minFlipperBallSpeed / Math.max(speed, 1);
-    ball.vx *= scale; ball.vy *= scale;
-  }
-  playSfx('flipper', 0.45, worldPan(ball.x));
-  return true;
+  return false;
 }
 
 const drain = { x0: 228, x1: 272, y: 760 };
@@ -3054,7 +3075,7 @@ uiCanvas.style.touchAction = 'none';
 uiCanvas.addEventListener('pointerdown', handlePointerDown, { passive: false });
 uiCanvas.addEventListener('pointerup', handlePointerUp, { passive: false });
 uiCanvas.addEventListener('pointercancel', handlePointerUp, { passive: false });
-function updateFlipper(f, pressed, dt){const target=pressed?f.active:f.base; const maxStep=(pressed?13:8)*dt; f.prev=f.angle; f.angle+=clamp(target-f.angle,-maxStep,maxStep);}
+function updateFlipper(f, pressed, dt){const target=pressed?f.active:f.base; const maxStep=(pressed?13:8)*dt; f.prev=f.angle; f.angle+=clamp(target-f.angle,-maxStep,maxStep); f.fxCooldown=Math.max(0,f.fxCooldown-dt);}
 function update(dt){state.fpsS+=dt;state.fpsN+=1;if(state.fpsS>0.3){state.fps=Math.round(state.fpsN/state.fpsS);state.fpsS=0;state.fpsN=0;} if(screenShake.time>0){screenShake.time=Math.max(0,screenShake.time-dt); if(screenShake.time<=0)screenShake.amount=0;}
 for(const b of blocks) if(b.hitCooldown>0) b.hitCooldown-=dt; for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){hitSparks[i].life-=dt;if(hitSparks[i].life<=0)hitSparks.splice(i,1);} updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0) resetBall(); return;}
