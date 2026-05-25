@@ -2874,47 +2874,39 @@ const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFI
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
 const flippers={left:{pivot:{x:160,y:704},length:84,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:680},right:{pivot:{x:340,y:704},length:84,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:680}};
 function resolveAABB(body, box, restitution = PHYSICS.wallBounce) {
-  const cx = clamp(body.x, box.x, box.x + box.w);
-  const cy = clamp(body.y, box.y, box.y + box.h);
-  let dx = body.x - cx;
-  let dy = body.y - cy;
-  const radius = body.r || BALL_RADIUS;
-  const distSq = dx * dx + dy * dy;
-  if (distSq >= radius * radius) return false;
-
-  let dist = Math.sqrt(distSq);
-  let nx = 0;
-  let ny = 0;
-
-  if (dist > 0.00001) {
-    nx = dx / dist;
-    ny = dy / dist;
-  } else {
-    const left = Math.abs(body.x - box.x);
-    const right = Math.abs(box.x + box.w - body.x);
-    const top = Math.abs(body.y - box.y);
-    const bottom = Math.abs(box.y + box.h - body.y);
-    const min = Math.min(left, right, top, bottom);
-    if (min === left) { nx = -1; ny = 0; }
-    else if (min === right) { nx = 1; ny = 0; }
-    else if (min === top) { nx = 0; ny = -1; }
+  const px = clamp(body.x, box.x, box.x + box.w);
+  const py = clamp(body.y, box.y, box.y + box.h);
+  let nx = body.x - px;
+  let ny = body.y - py;
+  let d2 = nx * nx + ny * ny;
+  if (d2 > body.r * body.r) return false;
+  if (d2 < 1e-10) {
+    const dl = Math.abs(body.x - box.x);
+    const dr = Math.abs(box.x + box.w - body.x);
+    const dt = Math.abs(body.y - box.y);
+    const db = Math.abs(box.y + box.h - body.y);
+    const m = Math.min(dl, dr, dt, db);
+    if (m === dl) { nx = -1; ny = 0; }
+    else if (m === dr) { nx = 1; ny = 0; }
+    else if (m === dt) { nx = 0; ny = -1; }
     else { nx = 0; ny = 1; }
-    dist = 0;
+    d2 = 1;
+  } else {
+    const d = Math.sqrt(d2);
+    nx /= d; ny /= d;
   }
-
-  const penetration = radius - dist + 0.5;
-  body.x += nx * penetration;
-  body.y += ny * penetration;
-
-  const velN = body.vx * nx + body.vy * ny;
-  if (velN < 0) {
-    body.vx -= (1 + restitution) * velN * nx;
-    body.vy -= (1 + restitution) * velN * ny;
+  const pen = body.r - Math.sqrt(Math.max(d2, 1e-10)) + 0.55;
+  body.x += nx * pen;
+  body.y += ny * pen;
+  const vn = body.vx * nx + body.vy * ny;
+  if (vn < 0) {
+    body.vx -= (1 + restitution) * vn * nx;
+    body.vy -= (1 + restitution) * vn * ny;
   }
   return true;
 }
 
-function segmentCapsuleHit(body, seg) {
+function segmentCapsuleHit(body, seg, rollingBias = 0) {
   const sx = seg.x2 - seg.x1;
   const sy = seg.y2 - seg.y1;
   const lenSq = sx * sx + sy * sy || 1;
@@ -2944,10 +2936,9 @@ function segmentCapsuleHit(body, seg) {
     body.vx -= (1 + restitution) * velN * nx;
     body.vy -= (1 + restitution) * velN * ny;
   }
-
   const tx = -ny;
   const ty = nx;
-  const vt = body.vx * tx + body.vy * ty;
+  const vt = (body.vx * tx + body.vy * ty) + rollingBias;
   const friction = seg.friction ?? PHYSICS.railFriction;
   body.vx += tx * vt * (friction - 1);
   body.vy += ty * vt * (friction - 1);
@@ -2981,9 +2972,10 @@ function resolveFlipperHit(f, pressed, dt) {
   const along = clamp((dx * Math.cos(f.angle) + dy * Math.sin(f.angle)) / f.length, 0, 1);
   const tipGain = 0.35 + along * 0.75;
   if (pressed && angularVel !== 0) {
-    const side = f.pivot.x < WORLD.w * 0.5 ? 1 : -1;
-    const impulse = Math.abs(angularVel) * 26 * tipGain;
-    ball.vx += Math.cos(f.angle) * impulse * side;
+    const impulse = Math.abs(angularVel) * 24 * tipGain;
+    const nudgeX = -Math.sin(f.angle) * impulse;
+    const nudgeY = Math.cos(f.angle) * impulse;
+    ball.vx += nudgeX * (f.pivot.x < WORLD.w * 0.5 ? 1 : -1);
     ball.vy -= Math.max(PHYSICS.minFlipperBallSpeed, f.upImpulse * tipGain) * 0.018;
   }
   const speed = Math.hypot(ball.vx, ball.vy);
@@ -3017,6 +3009,17 @@ if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state
 const speed=len2(ball.vx,ball.vy); const substeps=clamp(Math.ceil((speed*dt)/(ball.r*0.32)),1,8); const sdt=dt/substeps;
 for(let s=0;s<substeps;s++){ball.vy+=PHYSICS.gravity*sdt; ball.vx*=PHYSICS.airDrag; ball.vy*=PHYSICS.airDrag; ball.x+=ball.vx*sdt; ball.y+=ball.vy*sdt; for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce); for (const seg of rails) segmentCapsuleHit(ball, seg); for(const key of ['left','right']) resolveFlipperHit(flippers[key],key==='left'?input.left:input.right,sdt);
 for(const b of blocks){ if(b.broken) continue; if(resolveAABB(ball,{x:b.x,y:b.y,w:GRID.cellSize,h:GRID.cellSize},0.28)){ hitBlock(b);} }
+ball.vx *= PHYSICS.rollingFriction;
+ball.vy *= PHYSICS.rollingFriction;
+ball.spin *= PHYSICS.spinDamping;
+ball.rot += ball.spin * sdt;
+const speedNow = Math.hypot(ball.vx, ball.vy);
+if (speedNow > PHYSICS.maxBallSpeed) {
+  const scale = PHYSICS.maxBallSpeed / speedNow;
+  ball.vx *= scale;
+  ball.vy *= scale;
+}
+if (ball.vy < -PHYSICS.maxUpwardBallSpeed) ball.vy = -PHYSICS.maxUpwardBallSpeed;
 if(ball.y>WORLD.h+30||(ball.y>drain.y&&ball.x>drain.x0&&ball.x<drain.x1)){playSfx('drain',0.9,worldPan(ball.x)); ball.active=false; state.mode='ball_lost'; state.ballLostTimer=0.7; break;}}
 if(shouldScrollMine()) scrollMineForward(2);
 }
