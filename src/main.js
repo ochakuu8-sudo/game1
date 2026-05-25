@@ -23,13 +23,13 @@ const PHYSICS = {
 };
 
 const TERRAIN = {
-  cols: 96,
-  rows: 140,
-  cell: 4,
-  left: 58,
-  top: 110,
-  digStartY: 620,
-  digEndBuffer: 18,
+  cols: 80,
+  rows: 120,
+  cell: 5,
+  left: 55,
+  top: 120,
+  digStartY: 150,
+  digEndBuffer: 140,
   pixels: [],
 };
 const GRID = {
