@@ -3039,9 +3039,9 @@ const drain = { x0: 228, x1: 272, y: 760 };
 function addScreenShake(a=2,d=0.08){screenShake.amount=Math.max(screenShake.amount,a);screenShake.duration=Math.max(screenShake.duration,d);screenShake.time=Math.max(screenShake.time,d)}
 function pickTerrainType(depth){
   const p=Math.random()*100;
-  if(depth<30){if(p<80)return'dirt';if(p<97)return'stone';if(p<99.2)return'copper';return'iron';}
-  if(depth<90){if(p<80)return'dirt';if(p<95)return'stone';if(p<97.8)return'iron';if(p<99.2)return'gold';return'diamond';}
-  if(p<78)return'dirt';if(p<92)return'stone';if(p<95.5)return'iron';if(p<97.8)return'gold';if(p<99.4)return'diamond';return'bedrock';
+  if(depth<45){if(p<92)return'dirt';if(p<99.5)return'stone';return'copper';}
+  if(depth<110){if(p<89)return'dirt';if(p<98.9)return'stone';return'iron';}
+  if(p<86)return'dirt';if(p<98.2)return'stone';return'bedrock';
 }
 function emptyTerrainCell(){
   return {type:'empty',hp:0,maxHp:0,value:0,solid:false,ore:false,seed:0,clusterId:null};
@@ -3062,25 +3062,31 @@ function makeTerrainCell(depth,row=0,col=0){
 }
 function applyOreClusters(){
   const leftCols=TERRAIN.cols-TERRAIN.launcherCols;
-  const clusterCount=Math.max(10,Math.floor(TERRAIN.rows*0.55));
+  const clusterCount=Math.max(14,Math.floor(TERRAIN.rows*0.32));
   for(let i=0;i<clusterCount;i++){
-    const row=Math.floor(randRange(0,TERRAIN.rows));
-    const col=Math.floor(randRange(0,leftCols));
+    const row=Math.floor(randRange(2,TERRAIN.rows-2));
+    const col=Math.floor(randRange(1,leftCols-1));
     if(isTerrainSafeCell(row,col)) continue;
     const source=TERRAIN.pixels[row]?.[col];
     if(!source?.solid || source.type==='bedrock') continue;
     const depth=state.depthLevel+(TERRAIN.rows-1-row);
-    const oreType=pickTerrainType(depth);
-    if(!['copper','iron','gold','diamond'].includes(oreType)) continue;
-    const radius=Math.floor(randRange(1,3));
+    const p=Math.random()*100;
+    const oreType=depth<30?(p<78?'copper':p<97?'iron':'gold'):depth<90?(p<62?'iron':p<90?'gold':'diamond'):(p<48?'gold':'diamond');
+    const radius=Math.floor(randRange(3,6));
+    const wobble=randRange(0.75,1.35);
     for(let rr=row-radius;rr<=row+radius;rr++) for(let cc=col-radius;cc<=col+radius;cc++){
       if(rr<0||rr>=TERRAIN.rows||cc<0||cc>=leftCols||isTerrainSafeCell(rr,cc)) continue;
-      if(Math.hypot(rr-row,cc-col)>radius+0.15) continue;
+      const dx=(cc-col)*wobble;
+      const dy=(rr-row)/(wobble||1);
+      const dist=Math.hypot(dx,dy);
+      if(dist>radius+randRange(-0.7,0.25)) continue;
       const cell=TERRAIN.pixels[rr]?.[cc];
       if(!cell?.solid || cell.type==='bedrock') continue;
+      if(cell.type!=='dirt'&&Math.random()<0.18) continue;
       const def=TERRAIN_DEFS[oreType];
-      const hp=def.hp+Math.floor(depth/20);
-      const value=Math.floor(def.value*(1+depth*0.03));
+      const localDepth=state.depthLevel+(TERRAIN.rows-1-rr);
+      const hp=def.hp+Math.floor(localDepth/20);
+      const value=Math.floor(def.value*(1+localDepth*0.03));
       TERRAIN.pixels[rr][cc]={type:oreType,hp,maxHp:hp,value,solid:true,ore:true,seed:Math.random(),clusterId:null};
     }
   }
