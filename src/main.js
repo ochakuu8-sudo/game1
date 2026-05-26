@@ -2893,6 +2893,7 @@ const uiButtons = {
   upgrade: { x: 338, y: 18, w: 134, h: 44 },
 };
 const floatingTexts=[]; const hitSparks=[]; const screenShake={time:0,duration:0,amount:0};
+let materialClusters=new Map();
 const TERRAIN_DEFS={dirt:{hp:1,value:1,color:'#8b5f36',light:'#b9824d',dark:'#5c3d26',bounce:0.08},stone:{hp:2,value:2,color:'#7f8791',light:'#a7b0ba',dark:'#565f68',bounce:0.14},copper:{hp:2,value:10,color:'#c87f4b',light:'#f0b071',dark:'#8b4f31',bounce:0.13},iron:{hp:3,value:25,color:'#9eafbf',light:'#c5d3df',dark:'#647482',bounce:0.16},gold:{hp:4,value:80,color:'#f0c94d',light:'#ffe687',dark:'#b88928',bounce:0.18},diamond:{hp:5,value:250,color:'#78ecff',light:'#d8fbff',dark:'#2791ad',bounce:0.2},bedrock:{hp:9999,value:0,color:'#2e3440',light:'#566071',dark:'#151a22',bounce:0.24},empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0}};
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
@@ -3043,7 +3044,7 @@ function pickTerrainType(depth){
   if(p<78)return'dirt';if(p<92)return'stone';if(p<95.5)return'iron';if(p<97.8)return'gold';if(p<99.4)return'diamond';return'bedrock';
 }
 function emptyTerrainCell(){
-  return {type:'empty',hp:0,maxHp:0,value:0,solid:false,ore:false,seed:0};
+  return {type:'empty',hp:0,maxHp:0,value:0,solid:false,ore:false,seed:0,clusterId:null};
 }
 function terrainMineBottomY(){
   return flippers.left.pivot.y-TERRAIN.digEndBuffer;
@@ -3057,7 +3058,7 @@ function makeTerrainCell(depth,row=0,col=0){
   const type=pickTerrainType(depth); const def=TERRAIN_DEFS[type];
   const hp=type==='bedrock'?def.hp:def.hp+Math.floor(depth/20);
   const value=type==='bedrock'?0:Math.floor(def.value*(1+depth*0.03));
-  return {type,hp,maxHp:hp,value,solid:true,ore:type!=='dirt'&&type!=='stone'&&type!=='bedrock',seed:Math.random()};
+  return {type,hp,maxHp:hp,value,solid:true,ore:type!=='dirt'&&type!=='stone'&&type!=='bedrock',seed:Math.random(),clusterId:null};
 }
 function applyOreClusters(){
   const leftCols=TERRAIN.cols-TERRAIN.launcherCols;
@@ -3080,8 +3081,37 @@ function applyOreClusters(){
       const def=TERRAIN_DEFS[oreType];
       const hp=def.hp+Math.floor(depth/20);
       const value=Math.floor(def.value*(1+depth*0.03));
-      TERRAIN.pixels[rr][cc]={type:oreType,hp,maxHp:hp,value,solid:true,ore:true,seed:Math.random()};
+      TERRAIN.pixels[rr][cc]={type:oreType,hp,maxHp:hp,value,solid:true,ore:true,seed:Math.random(),clusterId:null};
     }
+  }
+}
+function rebuildMaterialClusters(){
+  materialClusters=new Map();
+  let nextId=1;
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  for(let row=0;row<TERRAIN.rows;row++) for(let col=0;col<TERRAIN.cols;col++){
+    const start=TERRAIN.pixels[row]?.[col];
+    if(!start?.solid || start.type==='dirt' || start.type==='bedrock' || start.clusterId) continue;
+    const id=`cluster_${nextId++}`;
+    const stack=[[row,col]];
+    let totalHp=0,totalValue=0,count=0;
+    start.clusterId=id;
+    while(stack.length){
+      const [r,c]=stack.pop();
+      const cell=TERRAIN.pixels[r]?.[c];
+      if(!cell?.solid || cell.type!==start.type || cell.clusterId!==id) continue;
+      totalHp+=Math.max(1,cell.hp);
+      totalValue+=Math.max(0,cell.value);
+      count+=1;
+      for(const [dr,dc] of dirs){
+        const rr=r+dr,cc=c+dc;
+        const n=TERRAIN.pixels[rr]?.[cc];
+        if(!n?.solid || n.type!==start.type || n.clusterId) continue;
+        n.clusterId=id;
+        stack.push([rr,cc]);
+      }
+    }
+    materialClusters.set(id,{id,type:start.type,hp:totalHp,maxHp:totalHp,value:totalValue,cells:count});
   }
 }
 function initTerrain(){
@@ -3090,6 +3120,7 @@ function initTerrain(){
     return makeTerrainCell(depth,row,col);
   }));
   applyOreClusters();
+  rebuildMaterialClusters();
 }
 function terrainCellBox(row,col){
   return {x:TERRAIN.left+col*TERRAIN.cell,y:TERRAIN.top+row*TERRAIN.cell,w:TERRAIN.cell,h:TERRAIN.cell};
@@ -3114,6 +3145,29 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   const cell=TERRAIN.pixels[row]?.[col];
   if(!cell?.solid || cell.type==='bedrock') return {hit:false,broken:false};
   const def=TERRAIN_DEFS[cell.type];
+  if(cell.type!=='dirt' && cell.clusterId){
+    const cluster=materialClusters.get(cell.clusterId);
+    if(!cluster || cluster.hp<=0) return {hit:false,broken:false};
+    cluster.hp-=Math.max(1,damage);
+    addTerrainSparks(hitX,hitY,def.light,cluster.hp<=0?6:2,cluster.hp<=0?1.2:0.75);
+    if(cluster.hp>0) return {hit:true,broken:false};
+    let destroyed=0;
+    for(let r=0;r<TERRAIN.rows;r++) for(let c=0;c<TERRAIN.cols;c++){
+      const target=TERRAIN.pixels[r]?.[c];
+      if(!target?.solid || target.clusterId!==cluster.id) continue;
+      target.solid=false; target.type='empty'; target.hp=0; target.clusterId=null;
+      destroyed+=1;
+    }
+    state.cellsMined+=destroyed;
+    if(cluster.value>0){
+      const gain=Math.floor(cluster.value*state.oreMultiplier);
+      state.money+=gain;
+      floatingTexts.push({x:hitX,y:hitY,text:`+$${gain}`,color:def.light,life:0.72});
+    }
+    materialClusters.delete(cluster.id);
+    if(impact>220) addScreenShake(clamp(impact/220,1.2,4.2),0.08);
+    return {hit:true,broken:true};
+  }
   cell.hp-=Math.max(1,damage);
   addTerrainSparks(hitX,hitY,def.light,cell.hp<=0?5:2,cell.hp<=0?1.15:0.75);
   if(cell.hp>0) return {hit:true,broken:false};
@@ -3319,8 +3373,11 @@ function drawTerrainLayer(vw,vh){
     uiCtx.fillStyle=def.light; uiCtx.globalAlpha=0.22+(cell.seed||0)*0.16; uiCtx.fillRect(x+1,y+1,Math.max(1,cw-2),1);
     uiCtx.fillStyle=def.dark; uiCtx.globalAlpha=0.22; uiCtx.fillRect(x+1,y+ch-2,Math.max(1,cw-2),1);
     uiCtx.globalAlpha=1;
-    if(cell.hp<cell.maxHp && cell.type!=='bedrock'){
-      const hurt=1-cell.hp/cell.maxHp;
+    const cluster=cell.clusterId?materialClusters.get(cell.clusterId):null;
+    const hpBase=cluster?cluster.maxHp:cell.maxHp;
+    const hpNow=cluster?cluster.hp:cell.hp;
+    if(hpNow<hpBase && cell.type!=='bedrock'){
+      const hurt=1-hpNow/hpBase;
       uiCtx.strokeStyle=`rgba(28,20,15,${0.28+hurt*0.42})`;
       uiCtx.lineWidth=Math.max(1,sx);
       uiCtx.beginPath();
