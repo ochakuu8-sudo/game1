@@ -3038,9 +3038,9 @@ const drain = { x0: 228, x1: 272, y: 760 };
 function addScreenShake(a=2,d=0.08){screenShake.amount=Math.max(screenShake.amount,a);screenShake.duration=Math.max(screenShake.duration,d);screenShake.time=Math.max(screenShake.time,d)}
 function pickTerrainType(depth){
   const p=Math.random()*100;
-  if(depth<26){if(p<64)return'dirt';if(p<85)return'stone';if(p<95)return'copper';return'iron';}
-  if(depth<80){if(p<42)return'dirt';if(p<73)return'stone';if(p<86)return'iron';if(p<96)return'gold';return'diamond';}
-  if(p<22)return'dirt';if(p<58)return'stone';if(p<79)return'iron';if(p<93)return'gold';if(p<98)return'diamond';return'bedrock';
+  if(depth<30){if(p<80)return'dirt';if(p<97)return'stone';if(p<99.2)return'copper';return'iron';}
+  if(depth<90){if(p<80)return'dirt';if(p<95)return'stone';if(p<97.8)return'iron';if(p<99.2)return'gold';return'diamond';}
+  if(p<78)return'dirt';if(p<92)return'stone';if(p<95.5)return'iron';if(p<97.8)return'gold';if(p<99.4)return'diamond';return'bedrock';
 }
 function emptyTerrainCell(){
   return {type:'empty',hp:0,maxHp:0,value:0,solid:false,ore:false,seed:0};
@@ -3059,10 +3059,37 @@ function makeTerrainCell(depth,row=0,col=0){
   const value=type==='bedrock'?0:Math.floor(def.value*(1+depth*0.03));
   return {type,hp,maxHp:hp,value,solid:true,ore:type!=='dirt'&&type!=='stone'&&type!=='bedrock',seed:Math.random()};
 }
+function applyOreClusters(){
+  const leftCols=TERRAIN.cols-TERRAIN.launcherCols;
+  const clusterCount=Math.max(10,Math.floor(TERRAIN.rows*0.55));
+  for(let i=0;i<clusterCount;i++){
+    const row=Math.floor(randRange(0,TERRAIN.rows));
+    const col=Math.floor(randRange(0,leftCols));
+    if(isTerrainSafeCell(row,col)) continue;
+    const source=TERRAIN.pixels[row]?.[col];
+    if(!source?.solid || source.type==='bedrock') continue;
+    const depth=state.depthLevel+(TERRAIN.rows-1-row);
+    const oreType=pickTerrainType(depth);
+    if(!['copper','iron','gold','diamond'].includes(oreType)) continue;
+    const radius=Math.floor(randRange(1,3));
+    for(let rr=row-radius;rr<=row+radius;rr++) for(let cc=col-radius;cc<=col+radius;cc++){
+      if(rr<0||rr>=TERRAIN.rows||cc<0||cc>=leftCols||isTerrainSafeCell(rr,cc)) continue;
+      if(Math.hypot(rr-row,cc-col)>radius+0.15) continue;
+      const cell=TERRAIN.pixels[rr]?.[cc];
+      if(!cell?.solid || cell.type==='bedrock') continue;
+      const def=TERRAIN_DEFS[oreType];
+      const hp=def.hp+Math.floor(depth/20);
+      const value=Math.floor(def.value*(1+depth*0.03));
+      TERRAIN.pixels[rr][cc]={type:oreType,hp,maxHp:hp,value,solid:true,ore:true,seed:Math.random()};
+    }
+  }
+}
 function initTerrain(){
   TERRAIN.pixels=Array.from({length:TERRAIN.rows},(_,row)=>Array.from({length:TERRAIN.cols},(_,col)=>{
-    return makeTerrainCell(state.depthLevel+row,row,col);
+    const depth=state.depthLevel+(TERRAIN.rows-1-row);
+    return makeTerrainCell(depth,row,col);
   }));
+  applyOreClusters();
 }
 function terrainCellBox(row,col){
   return {x:TERRAIN.left+col*TERRAIN.cell,y:TERRAIN.top+row*TERRAIN.cell,w:TERRAIN.cell,h:TERRAIN.cell};
@@ -3128,6 +3155,12 @@ function resolveTerrainCollision(body){
   let nx=0,ny=0,hits=0,b=0.1,maxPen=0,contactX=body.x,contactY=body.y;
   for(let row=minRow;row<=maxRow;row++) for(let col=minCol;col<=maxCol;col++){
     const cell=TERRAIN.pixels[row]?.[col]; if(!cell?.solid) continue;
+    if(cell.type==='dirt'){
+      const box=terrainCellBox(row,col);
+      const dirtImpact=Math.max(120,Math.hypot(body.vx,body.vy)*0.35);
+      damageTerrainCell(row,col,Math.max(1,state.miningPower),box.x+box.w*0.5,box.y+box.h*0.5,dirtImpact);
+      continue;
+    }
     const box=terrainCellBox(row,col);
     let px=clamp(body.x,box.x,box.x+box.w);
     let py=clamp(body.y,box.y,box.y+box.h);
