@@ -2894,7 +2894,7 @@ const uiButtons = {
 };
 const floatingTexts=[]; const hitSparks=[]; const screenShake={time:0,duration:0,amount:0};
 let materialClusters=new Map();
-const TERRAIN_DEFS={dirt:{hp:1,value:1,color:'#8b5f36',light:'#b9824d',dark:'#5c3d26',bounce:0.08},stone:{hp:2,value:2,color:'#7f8791',light:'#a7b0ba',dark:'#565f68',bounce:0.14},copper:{hp:2,value:10,color:'#c87f4b',light:'#f0b071',dark:'#8b4f31',bounce:0.13},iron:{hp:3,value:25,color:'#9eafbf',light:'#c5d3df',dark:'#647482',bounce:0.16},gold:{hp:4,value:80,color:'#f0c94d',light:'#ffe687',dark:'#b88928',bounce:0.18},diamond:{hp:5,value:250,color:'#78ecff',light:'#d8fbff',dark:'#2791ad',bounce:0.2},bedrock:{hp:9999,value:0,color:'#2e3440',light:'#566071',dark:'#151a22',bounce:0.24},empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0}};
+const TERRAIN_DEFS={dirt:{hp:1,value:0,color:'#8b5f36',light:'#b9824d',dark:'#5c3d26',bounce:0.08},stone:{hp:2,value:0,color:'#7f8791',light:'#a7b0ba',dark:'#565f68',bounce:0.14},copper:{hp:2,value:3,color:'#c87f4b',light:'#f0b071',dark:'#8b4f31',bounce:0.13},iron:{hp:3,value:5,color:'#9eafbf',light:'#c5d3df',dark:'#647482',bounce:0.16},gold:{hp:4,value:7,color:'#f0c94d',light:'#ffe687',dark:'#b88928',bounce:0.18},diamond:{hp:5,value:9,color:'#78ecff',light:'#d8fbff',dark:'#2791ad',bounce:0.2},bedrock:{hp:9999,value:0,color:'#2e3440',light:'#566071',dark:'#151a22',bounce:0.24},empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0}};
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
 const flippers={left:{pivot:{x:160,y:704},length:84,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:680,fxCooldown:0},right:{pivot:{x:340,y:704},length:84,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:680,fxCooldown:0}};
@@ -3062,7 +3062,7 @@ function makeTerrainCell(depth,row=0,col=0){
 }
 function applyOreClusters(){
   const leftCols=TERRAIN.cols-TERRAIN.launcherCols;
-  const clusterCount=Math.max(14,Math.floor(TERRAIN.rows*0.32));
+  const clusterCount=Math.max(8,Math.floor(TERRAIN.rows*0.18));
   for(let i=0;i<clusterCount;i++){
     const row=Math.floor(randRange(2,TERRAIN.rows-2));
     const col=Math.floor(randRange(1,leftCols-1));
@@ -3072,7 +3072,7 @@ function applyOreClusters(){
     const depth=state.depthLevel+(TERRAIN.rows-1-row);
     const p=Math.random()*100;
     const oreType=depth<30?(p<78?'copper':p<97?'iron':'gold'):depth<90?(p<62?'iron':p<90?'gold':'diamond'):(p<48?'gold':'diamond');
-    const radius=Math.floor(randRange(3,6));
+    const radius=Math.floor(randRange(2,4));
     const wobble=randRange(0.75,1.35);
     for(let rr=row-radius;rr<=row+radius;rr++) for(let cc=col-radius;cc<=col+radius;cc++){
       if(rr<0||rr>=TERRAIN.rows||cc<0||cc>=leftCols||isTerrainSafeCell(rr,cc)) continue;
@@ -3082,7 +3082,7 @@ function applyOreClusters(){
       if(dist>radius+randRange(-0.7,0.25)) continue;
       const cell=TERRAIN.pixels[rr]?.[cc];
       if(!cell?.solid || cell.type==='bedrock') continue;
-      if(cell.type!=='dirt'&&Math.random()<0.18) continue;
+      if(cell.type!=='dirt'&&Math.random()<0.45) continue;
       const def=TERRAIN_DEFS[oreType];
       const localDepth=state.depthLevel+(TERRAIN.rows-1-rr);
       const hp=def.hp+Math.floor(localDepth/20);
@@ -3147,6 +3147,8 @@ function addTerrainSparks(x,y,color,count=4,force=1){
     hitSparks.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-randRange(10,48),life:randRange(0.18,0.34),maxLife:0.34,color,size:randRange(2,4)});
   }
 }
+function isOreType(type){ return type==='copper' || type==='iron' || type==='gold' || type==='diamond'; }
+function formatOreGain(value){ return clamp(Math.floor(value),1,9); }
 function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   const cell=TERRAIN.pixels[row]?.[col];
   if(!cell?.solid || cell.type==='bedrock') return {hit:false,broken:false};
@@ -3165,8 +3167,8 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
       destroyed+=1;
     }
     state.cellsMined+=destroyed;
-    if(cluster.value>0){
-      const gain=Math.floor(cluster.value*state.oreMultiplier);
+    if(isOreType(cluster.type) && cluster.value>0){
+      const gain=formatOreGain(cluster.value*state.oreMultiplier);
       state.money+=gain;
       floatingTexts.push({x:hitX,y:hitY,text:`+$${gain}`,color:def.light,life:0.72});
     }
@@ -3178,8 +3180,8 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   addTerrainSparks(hitX,hitY,def.light,cell.hp<=0?5:2,cell.hp<=0?1.15:0.75);
   if(cell.hp>0) return {hit:true,broken:false};
   cell.solid=false; cell.type='empty'; cell.hp=0; state.cellsMined+=1;
-  if(cell.value>0){
-    const gain=Math.floor(cell.value*state.oreMultiplier);
+  if(cell.ore && cell.value>0){
+    const gain=formatOreGain(cell.value*state.oreMultiplier);
     state.money+=gain;
     floatingTexts.push({x:hitX,y:hitY,text:`+$${gain}`,color:def.light,life:0.72});
   }
