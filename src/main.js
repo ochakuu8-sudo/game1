@@ -19,8 +19,8 @@ const PHYSICS = {
   flipperFriction: 0.985,
   railFriction: 0.996,
   maxBallSpeed: 900,
-  maxUpwardBallSpeed: 1320,
-  minFlipperBallSpeed: 470,
+  maxUpwardBallSpeed: 1600,
+  minFlipperBallSpeed: 620,
   spinDamping: 0.988,
   rollingSpinGain: 0.42,
 };
@@ -3475,7 +3475,7 @@ const TERRAIN_DEFS={
 };
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
-const flippers={left:{pivot:{x:160,y:704},length:76,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:820,fxCooldown:0},right:{pivot:{x:340,y:704},length:76,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:820,fxCooldown:0}};
+const flippers={left:{pivot:{x:160,y:704},length:76,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:1080,fxCooldown:0},right:{pivot:{x:340,y:704},length:76,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:1080,fxCooldown:0}};
 function resolveAABB(body, box, restitution = PHYSICS.wallBounce) {
   const px = clamp(body.x, box.x, box.x + box.w);
   const py = clamp(body.y, box.y, box.y + box.h);
@@ -3565,7 +3565,7 @@ function applyFlipperImpulse(f, hit, sdt) {
   const relN = relVx * hit.nx + relVy * hit.ny;
   if (relN >= 0) return null;
   const tipPower = 0.54 + hit.t * 0.22;
-  const boost = clamp(((-relN) * 0.86 + Math.abs(omega) * f.length * 0.16) * tipPower, 0, f.upImpulse);
+  const boost = clamp(((-relN) * 0.96 + Math.abs(omega) * f.length * 0.21) * tipPower, 0, f.upImpulse);
   const side = f.pivot.x < WORLD.w * 0.5 ? 1 : -1;
   const sweet = hit.t >= 0.42 && hit.t <= 0.88;
   const tangentX = -ry;
@@ -3573,14 +3573,16 @@ function applyFlipperImpulse(f, hit, sdt) {
   const tangentLen = Math.hypot(tangentX, tangentY) || 1;
   const tx = tangentX / tangentLen;
   const ty = tangentY / tangentLen;
-  ball.vx += hit.nx * boost * 0.62 + tx * boost * 0.18;
-  ball.vy += hit.ny * boost * 0.62 + ty * boost * 0.18;
-  ball.vy -= boost * 0.07;
+  ball.vx += hit.nx * boost * 0.68 + tx * boost * 0.19;
+  ball.vy += hit.ny * boost * 0.68 + ty * boost * 0.19;
+  ball.vy -= boost * 0.10;
   const targetVx = side * (220 + hit.t * 230);
-  const targetVy = -(640 + hit.t * 430 + (sweet ? 130 : 0));
-  const blend = sweet ? 0.38 : 0.26;
+  const targetVy = -(780 + hit.t * 520 + (sweet ? 180 : 0));
+  const blend = sweet ? 0.44 : 0.32;
   ball.vx += (targetVx - ball.vx) * blend;
   ball.vy += (targetVy - ball.vy) * blend;
+  const climbVy = -(1120 + hit.t * 180 + (sweet ? 120 : 0));
+  if (ball.vy > climbVy) ball.vy = climbVy;
   ball.spin = clamp(ball.spin + (boost / Math.max(ball.r, 1)) * (hit.t > 0.5 ? 0.10 : 0.07), -7, 7);
   return { sweet, side, power: boost };
 }
