@@ -26,13 +26,13 @@ const PHYSICS = {
 };
 
 const TERRAIN = {
-  cols: 50,
-  rows: 76,
-  cell: 8,
-  left: 50,
+  cols: 66,
+  rows: 92,
+  cell: 6,
+  left: 52,
   top: 132,
   digStartY: 142,
-  digEndBuffer: 150,
+  digEndBuffer: 90,
   launcherCols: 0,
   pixels: [],
 };
@@ -2758,17 +2758,28 @@ drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
   const laneBottom = h - 30;
   const deckTop = laneTop + 15;
   const deckBottom = h - 47;
-  pxRect(ctx, x, y, w, h, '#27485a');
-  pxFrame(ctx, x + 8, y + 6, w - 16, h - 10, '#7a6041', '#24313a', '#c99b5b');
-  pxFrame(ctx, x + 22, y + laneTop, w - 44, laneBottom - laneTop, '#4b3829', '#2b2520', '#94704a');
-  pxRect(ctx, x + 34, y + deckTop, w - 68, deckBottom - deckTop, '#5d4430');
-  for (let yy = deckTop + 18; yy < deckBottom - 12; yy += 36) {
-    const band = yy % 72 === 0 ? '#6d5138' : '#503927';
-    pxRect(ctx, x + 42, y + yy, w - 84, 10, band);
-    pxRect(ctx, x + 50, y + yy + 3, w - 100, 2, 'rgba(255,255,255,.12)');
+  const grad = ctx.createLinearGradient(x, y, x, y + h);
+  grad.addColorStop(0, '#77d8ff');
+  grad.addColorStop(0.52, '#a7f0d0');
+  grad.addColorStop(1, '#ffe08a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, w, h);
+  pxFrame(ctx, x + 8, y + 6, w - 16, h - 10, '#fff4cf', '#245a78', '#ffffff');
+  pxFrame(ctx, x + 22, y + laneTop, w - 44, laneBottom - laneTop, '#c6f4ff', '#26739a', '#ffffff');
+  ctx.fillStyle = '#ecfbff';
+  roundCanvasRect(ctx, x + 34, y + deckTop, w - 68, deckBottom - deckTop, 18);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(89,183,168,.18)';
+  for (let yy = deckTop + 28; yy < deckBottom - 16; yy += 54) {
+    roundCanvasRect(ctx, x + 48, y + yy, w - 96, 8, 4);
+    ctx.fill();
   }
-  pxRect(ctx, x + 56, y + deckTop + 8, w - 112, 3, '#d0a05c');
-  pxRect(ctx, x + 56, y + deckBottom - 12, w - 112, 3, '#3b2a20');
+  ctx.fillStyle = '#ffd35a';
+  roundCanvasRect(ctx, x + 54, y + deckTop + 8, w - 108, 6, 3);
+  ctx.fill();
+  ctx.fillStyle = '#4aa3df';
+  roundCanvasRect(ctx, x + 54, y + deckBottom - 16, w - 108, 6, 3);
+  ctx.fill();
 };
 
 function refCityFurniture(ctx, x, y) {
@@ -3080,6 +3091,35 @@ function makeTerrainCell(depth,row=0,col=0){
 function applyOreClusters(){
   // City lots are generated directly by makeTerrainCell; no ore pass is used.
 }
+function createCityRng(seed=12345){
+  let value=seed>>>0;
+  return () => {
+    value=(value*1664525+1013904223)>>>0;
+    return value/4294967296;
+  };
+}
+function chooseBuildingType(rng,w,h,row){
+  const area=w*h;
+  const roll=rng();
+  if(area>70 || h>=10) return roll<0.58?'tower':'office';
+  if(row<18 && roll<0.5) return 'office';
+  if(roll<0.34) return 'house';
+  if(roll<0.58) return 'shop';
+  if(roll<0.82) return 'office';
+  return 'civic';
+}
+function placeCityBuilding(clusterId,row,col,w,h,type,rng){
+  const def=TERRAIN_DEFS[type];
+  const hp=(def.hp||2)+Math.floor((w*h)/24);
+  let count=0;
+  for(let rr=row;rr<row+h;rr++) for(let cc=col;cc<col+w;cc++){
+    if(rr<0||rr>=TERRAIN.rows||cc<0||cc>=TERRAIN.cols) continue;
+    TERRAIN.pixels[rr][cc]={type,hp,maxHp:hp,value:0,solid:true,seed:rng(),clusterId};
+    count+=1;
+  }
+  const maxHp=Math.max(2,Math.ceil(Math.sqrt(count))*(def.hp||2));
+  materialClusters.set(clusterId,{id:clusterId,type,hp:maxHp,maxHp,value:0,cells:count,minRow:row,maxRow:row+h-1,minCol:col,maxCol:col+w-1});
+}
 function rebuildMaterialClusters(){
   materialClusters=new Map();
   let nextId=1;
@@ -3113,12 +3153,45 @@ function rebuildMaterialClusters(){
   }
 }
 function initTerrain(){
-  TERRAIN.pixels=Array.from({length:TERRAIN.rows},(_,row)=>Array.from({length:TERRAIN.cols},(_,col)=>{
-    const depth=state.depthLevel+(TERRAIN.rows-1-row);
-    return makeTerrainCell(depth,row,col);
-  }));
-  applyOreClusters();
-  rebuildMaterialClusters();
+  const rng=createCityRng(0xC0FFEE+state.depthLevel);
+  materialClusters=new Map();
+  TERRAIN.pixels=Array.from({length:TERRAIN.rows},()=>Array.from({length:TERRAIN.cols},()=>emptyTerrainCell()));
+  const startRow=Math.max(2,Math.ceil((TERRAIN.digStartY-TERRAIN.top)/TERRAIN.cell)+1);
+  const endRow=Math.min(TERRAIN.rows-4,Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell)-1);
+  const columns=[1,10,20,31,43,54];
+  let nextId=1;
+  for(let band=startRow;band<endRow;band+=10+Math.floor(rng()*5)){
+    const bandH=8+Math.floor(rng()*8);
+    for(let i=0;i<columns.length;i++){
+      const baseCol=columns[i]+Math.floor(rng()*3);
+      const maxW=Math.min(11,TERRAIN.cols-baseCol-2);
+      const w=clamp(5+Math.floor(rng()*maxW),4,maxW);
+      const h=clamp(5+Math.floor(rng()*bandH),4,Math.min(15,endRow-band));
+      if(w<4||h<4) continue;
+      const row=band+Math.floor(rng()*3);
+      const col=baseCol;
+      let occupied=false;
+      for(let rr=row-1;rr<row+h+1;rr++) for(let cc=col-1;cc<col+w+1;cc++){
+        if(TERRAIN.pixels[rr]?.[cc]?.solid) occupied=true;
+      }
+      if(occupied) continue;
+      const type=chooseBuildingType(rng,w,h,row);
+      placeCityBuilding(`building_${nextId++}`,row,col,w,h,type,rng);
+    }
+  }
+  for(let attempts=0;attempts<28;attempts++){
+    const w=4+Math.floor(rng()*7);
+    const h=4+Math.floor(rng()*8);
+    const row=startRow+Math.floor(rng()*Math.max(1,endRow-startRow-h));
+    const col=1+Math.floor(rng()*Math.max(1,TERRAIN.cols-w-2));
+    let occupied=false;
+    for(let rr=row-1;rr<row+h+1;rr++) for(let cc=col-1;cc<col+w+1;cc++){
+      if(TERRAIN.pixels[rr]?.[cc]?.solid) occupied=true;
+    }
+    if(occupied) continue;
+    const type=chooseBuildingType(rng,w,h,row);
+    placeCityBuilding(`building_${nextId++}`,row,col,w,h,type,rng);
+  }
 }
 function terrainCellBox(row,col){
   return {x:TERRAIN.left+col*TERRAIN.cell,y:TERRAIN.top+row*TERRAIN.cell,w:TERRAIN.cell,h:TERRAIN.cell};
@@ -3424,29 +3497,36 @@ function drawCityStreets(vw,vh,sx,sy){
   const cityY=TERRAIN.digStartY*sy;
   const cityW=TERRAIN.cols*TERRAIN.cell*sx;
   const cityH=(terrainMineBottomY()-TERRAIN.digStartY)*sy;
-  uiCtx.fillStyle='#6e7a80';
-  uiCtx.fillRect(cityX,cityY,cityW,cityH);
-  uiCtx.fillStyle='#536066';
-  for(let row=0;row<TERRAIN.rows;row+=9){
-    const y=(TERRAIN.top+row*TERRAIN.cell)*sy;
-    uiCtx.fillRect(cityX,y,cityW,TERRAIN.cell*sy*1.18);
-  }
-  for(let col=0;col<TERRAIN.cols;col+=10){
-    const x=(TERRAIN.left+col*TERRAIN.cell)*sx;
-    uiCtx.fillRect(x,cityY,TERRAIN.cell*sx*1.18,cityH);
-  }
-  uiCtx.strokeStyle='rgba(255,255,255,.24)';
-  uiCtx.lineWidth=Math.max(1,sx);
-  for(let row=0;row<TERRAIN.rows;row+=9){
-    const y=(TERRAIN.top+row*TERRAIN.cell+TERRAIN.cell*0.55)*sy;
-    uiCtx.setLineDash([8*sx,8*sx]);
-    uiCtx.beginPath(); uiCtx.moveTo(cityX+8*sx,y); uiCtx.lineTo(cityX+cityW-8*sx,y); uiCtx.stroke();
+  const bg=uiCtx.createLinearGradient(cityX,cityY,cityX,cityY+cityH);
+  bg.addColorStop(0,'#d9f8ec');
+  bg.addColorStop(1,'#c4efd8');
+  uiCtx.fillStyle=bg;
+  roundCanvasRect(uiCtx,cityX,cityY,cityW,cityH,14*sx);
+  uiCtx.fill();
+  const roads=[
+    {x:cityX+cityW*0.19,y:cityY,w:12*sx,h:cityH},
+    {x:cityX+cityW*0.43,y:cityY+cityH*0.03,w:13*sx,h:cityH*0.84},
+    {x:cityX+cityW*0.72,y:cityY,w:11*sx,h:cityH},
+    {x:cityX,y:cityY+cityH*0.18,w:cityW,h:12*sy},
+    {x:cityX+cityW*0.04,y:cityY+cityH*0.46,w:cityW*0.88,h:13*sy},
+    {x:cityX,y:cityY+cityH*0.74,w:cityW,h:12*sy},
+  ];
+  for(const road of roads){
+    uiCtx.fillStyle='#8ca4ad';
+    roundCanvasRect(uiCtx,road.x,road.y,road.w,road.h,6*sx);
+    uiCtx.fill();
+    uiCtx.fillStyle='rgba(255,255,255,.35)';
+    if(road.w>road.h){
+      uiCtx.fillRect(road.x+8*sx,road.y+road.h*0.45,Math.max(0,road.w-16*sx),Math.max(1,road.h*0.12));
+    }else{
+      uiCtx.fillRect(road.x+road.w*0.45,road.y+8*sy,Math.max(1,road.w*0.12),Math.max(0,road.h-16*sy));
+    }
   }
   uiCtx.setLineDash([]);
-  uiCtx.fillStyle='rgba(92,148,85,.55)';
-  uiCtx.beginPath(); uiCtx.arc(cityX+cityW-26*sx,cityY+26*sy,16*sx,0,Math.PI*2); uiCtx.fill();
-  uiCtx.fillStyle='rgba(126,190,106,.72)';
-  uiCtx.beginPath(); uiCtx.arc(cityX+cityW-31*sx,cityY+22*sy,6*sx,0,Math.PI*2); uiCtx.arc(cityX+cityW-20*sx,cityY+31*sy,5*sx,0,Math.PI*2); uiCtx.fill();
+  uiCtx.fillStyle='rgba(83,177,111,.55)';
+  uiCtx.beginPath(); uiCtx.arc(cityX+cityW-28*sx,cityY+28*sy,18*sx,0,Math.PI*2); uiCtx.fill();
+  uiCtx.fillStyle='rgba(255,211,90,.65)';
+  uiCtx.beginPath(); uiCtx.arc(cityX+28*sx,cityY+cityH-28*sy,14*sx,0,Math.PI*2); uiCtx.fill();
   void vw; void vh;
 }
 
