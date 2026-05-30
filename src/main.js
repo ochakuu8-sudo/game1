@@ -3467,15 +3467,15 @@ const floatingTexts=[]; const hitSparks=[]; const people=[]; const screenShake={
 let materialClusters=new Map();
 const TERRAIN_DEFS={
   dirt:{hp:1,value:0,color:'#8b5a32',light:'#bc7a43',dark:'#5d3924',bounce:0.06,solid:true},
-  copper:{hp:4,value:8,color:'#b96a38',light:'#ffb16a',dark:'#6d3a24',bounce:0.34,solid:true,ore:true},
-  silver:{hp:6,value:16,color:'#b8ccd6',light:'#effcff',dark:'#68818c',bounce:0.40,solid:true,ore:true},
-  gold:{hp:8,value:32,color:'#f0b931',light:'#fff079',dark:'#986925',bounce:0.46,solid:true,ore:true},
-  gem:{hp:10,value:60,color:'#5ee0d5',light:'#d8fff7',dark:'#1f7e82',bounce:0.52,solid:true,ore:true},
+  copper:{hp:2,value:1,color:'#b96a38',light:'#ffb16a',dark:'#6d3a24',bounce:0.34,solid:true,ore:true},
+  silver:{hp:3,value:3,color:'#b8ccd6',light:'#effcff',dark:'#68818c',bounce:0.40,solid:true,ore:true},
+  gold:{hp:4,value:5,color:'#f0b931',light:'#fff079',dark:'#986925',bounce:0.46,solid:true,ore:true},
+  gem:{hp:5,value:7,color:'#5ee0d5',light:'#d8fff7',dark:'#1f7e82',bounce:0.52,solid:true,ore:true},
   empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0,solid:false}
 };
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
-const flippers={left:{pivot:{x:160,y:704},length:84,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:680,fxCooldown:0},right:{pivot:{x:340,y:704},length:84,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:680,fxCooldown:0}};
+const flippers={left:{pivot:{x:160,y:704},length:76,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:680,fxCooldown:0},right:{pivot:{x:340,y:704},length:76,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:680,fxCooldown:0}};
 function resolveAABB(body, box, restitution = PHYSICS.wallBounce) {
   const px = clamp(body.x, box.x, box.x + box.w);
   const py = clamp(body.y, box.y, box.y + box.h);
@@ -3613,7 +3613,7 @@ function resolveFlipperHit(f, pressed, sdt) {
   return false;
 }
 
-const drain = { x0: 228, x1: 272, y: 760 };
+const drain = { x0: 214, x1: 286, y: 760 };
 function addScreenShake(a=2,d=0.08){screenShake.amount=Math.max(screenShake.amount,a);screenShake.duration=Math.max(screenShake.duration,d);screenShake.time=Math.max(screenShake.time,d)}
 function pickTerrainType(depth){
   void depth;
@@ -3642,9 +3642,9 @@ function applyOreClusters(){
   const endRow=Math.min(TERRAIN.rows-4,Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell)-1);
   const deposits=[
     {type:'gem',count:2,minR:startRow+2,maxR:startRow+17,w:3,h:3},
-    {type:'gold',count:4,minR:startRow+12,maxR:startRow+31,w:4,h:3},
-    {type:'silver',count:6,minR:startRow+26,maxR:startRow+52,w:4,h:3},
-    {type:'copper',count:8,minR:startRow+42,maxR:endRow-6,w:4,h:3},
+    {type:'gold',count:4,minR:startRow+12,maxR:startRow+31,w:3,h:3},
+    {type:'silver',count:6,minR:startRow+26,maxR:startRow+52,w:3,h:3},
+    {type:'copper',count:8,minR:startRow+42,maxR:endRow-6,w:3,h:3},
   ];
   let nextId=1;
   for(const dep of deposits){
@@ -3695,23 +3695,18 @@ function placeCityBuilding(clusterId,row,col,w,h,type,rng){
 }
 function makeOreShapeCells(row,col,w,h,rng){
   const cells=[];
-  const cx=(w-1)*0.5+(rng()-0.5)*0.35;
-  const cy=(h-1)*0.5+(rng()-0.5)*0.35;
-  const rx=Math.max(1.25,w*0.58);
-  const ry=Math.max(1.15,h*0.62);
-  for(let rr=0;rr<h;rr++) for(let cc=0;cc<w;cc++){
-    const dx=(cc-cx)/rx;
-    const dy=(rr-cy)/ry;
-    const edge=dx*dx+dy*dy;
-    if(edge<0.58 || (edge<1.08 && rng()>0.22)) cells.push([row+rr,col+cc]);
-  }
-  const center=[row+Math.floor(h*0.5),col+Math.floor(w*0.5)];
-  if(!cells.some(([r,c])=>r===center[0]&&c===center[1])) cells.push(center);
-  const target=Math.ceil(w*h*0.56);
-  for(let i=0;i<w*h&&cells.length<target;i++){
-    const rr=row+Math.floor(rng()*h);
-    const cc=col+Math.floor(rng()*w);
-    if(!cells.some(([r,c])=>r===rr&&c===cc)) cells.push([rr,cc]);
+  const target=3+Math.floor(rng()*3);
+  const start=[row+Math.floor(h*0.5),col+Math.floor(w*0.5)];
+  cells.push(start);
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  for(let guard=0;guard<40&&cells.length<target;guard++){
+    const base=cells[Math.floor(rng()*cells.length)];
+    const [dr,dc]=dirs[Math.floor(rng()*dirs.length)];
+    const rr=base[0]+dr;
+    const cc=base[1]+dc;
+    if(rr<row||rr>=row+h||cc<col||cc>=col+w) continue;
+    if(cells.some(([r,c])=>r===rr&&c===cc)) continue;
+    cells.push([rr,cc]);
   }
   return cells;
 }
