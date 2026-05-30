@@ -33,7 +33,7 @@ const TERRAIN = {
   top: 132,
   digStartY: 142,
   digEndBuffer: 150,
-  launcherCols: 8,
+  launcherCols: 0,
   pixels: [],
 };
 const GRID = {
@@ -2764,13 +2764,11 @@ drawPlayfieldSprite = function drawPlayfieldSpriteRef(ctx, x, y, w, h) {
   pxRect(ctx, x + 34, y + deckTop, w - 68, deckBottom - deckTop, '#5d4430');
   for (let yy = deckTop + 18; yy < deckBottom - 12; yy += 36) {
     const band = yy % 72 === 0 ? '#6d5138' : '#503927';
-    pxRect(ctx, x + 42, y + yy, w - 132, 10, band);
-    pxRect(ctx, x + 50, y + yy + 3, w - 148, 2, 'rgba(255,255,255,.12)');
+    pxRect(ctx, x + 42, y + yy, w - 84, 10, band);
+    pxRect(ctx, x + 50, y + yy + 3, w - 100, 2, 'rgba(255,255,255,.12)');
   }
-  pxFrame(ctx, x + 392, y + deckTop - 8, 46, deckBottom - deckTop + 16, '#826239', '#2b2520', '#d7ac67');
-  for (let yy = deckTop + 8; yy < deckBottom - 20; yy += 34) pxRect(ctx, x + 405, y + yy, 20, 4, '#cda05f');
-  pxRect(ctx, x + 56, y + deckTop + 8, 316, 3, '#d0a05c');
-  pxRect(ctx, x + 56, y + deckBottom - 12, 316, 3, '#3b2a20');
+  pxRect(ctx, x + 56, y + deckTop + 8, w - 112, 3, '#d0a05c');
+  pxRect(ctx, x + 56, y + deckBottom - 12, w - 112, 3, '#3b2a20');
 };
 
 function refCityFurniture(ctx, x, y) {
@@ -2885,8 +2883,8 @@ registerAtlasSprites = function registerAtlasSpritesRef(atlas) {
 };
 
 const economy = createMedalEconomy();
-const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, depthLevel: 0, upgradeCost: 80, ballLostTimer: 0, scrollTextTimer: 0 };
-const START_POS = { x: 430, y: 640 };
+const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, upgradeCost: 80, ballLostTimer: 0, scrollTextTimer: 0 };
+const START_POS = { x: 250, y: 640 };
 const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot: 0, spin: 0, active: false };
 const input = { left: false, right: false, pointerSide: 0 };
 const touchState = {
@@ -2896,9 +2894,17 @@ const touchState = {
 const uiButtons = {
   upgrade: { x: 338, y: 18, w: 134, h: 44 },
 };
-const floatingTexts=[]; const hitSparks=[]; const screenShake={time:0,duration:0,amount:0};
+const floatingTexts=[]; const hitSparks=[]; const people=[]; const screenShake={time:0,duration:0,amount:0};
 let materialClusters=new Map();
-const TERRAIN_DEFS={dirt:{hp:1,value:0,color:'#8b5f36',light:'#b9824d',dark:'#5c3d26',bounce:0.08},stone:{hp:2,value:0,color:'#7f8791',light:'#a7b0ba',dark:'#565f68',bounce:0.14},copper:{hp:2,value:3,color:'#c87f4b',light:'#f0b071',dark:'#8b4f31',bounce:0.13},iron:{hp:3,value:5,color:'#9eafbf',light:'#c5d3df',dark:'#647482',bounce:0.16},gold:{hp:4,value:7,color:'#f0c94d',light:'#ffe687',dark:'#b88928',bounce:0.18},diamond:{hp:5,value:9,color:'#78ecff',light:'#d8fbff',dark:'#2791ad',bounce:0.2},bedrock:{hp:9999,value:0,color:'#2e3440',light:'#566071',dark:'#151a22',bounce:0.24},empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0}};
+const TERRAIN_DEFS={
+  road:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0,solid:false},
+  house:{hp:2,value:0,color:'#ffe6a7',light:'#fff6c8',dark:'#b93f36',bounce:0.12,people:1},
+  shop:{hp:3,value:0,color:'#fff0b8',light:'#fff8d7',dark:'#1d8ec0',bounce:0.14,people:1},
+  office:{hp:4,value:0,color:'#4fb5dc',light:'#d7f7ff',dark:'#2d7ca0',bounce:0.16,people:2},
+  civic:{hp:5,value:0,color:'#d4e1cf',light:'#f4f8fb',dark:'#5a6870',bounce:0.18,people:2},
+  tower:{hp:6,value:0,color:'#9fd8ec',light:'#ffffff',dark:'#214b68',bounce:0.2,people:3},
+  empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0,people:0}
+};
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
 const flippers={left:{pivot:{x:160,y:704},length:84,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:680,fxCooldown:0},right:{pivot:{x:340,y:704},length:84,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:680,fxCooldown:0}};
@@ -3042,58 +3048,37 @@ function resolveFlipperHit(f, pressed, sdt) {
 const drain = { x0: 228, x1: 272, y: 760 };
 function addScreenShake(a=2,d=0.08){screenShake.amount=Math.max(screenShake.amount,a);screenShake.duration=Math.max(screenShake.duration,d);screenShake.time=Math.max(screenShake.time,d)}
 function pickTerrainType(depth){
-  const p=Math.random()*100;
-  if(depth<45){if(p<92)return'dirt';if(p<99.5)return'stone';return'copper';}
-  if(depth<110){if(p<89)return'dirt';if(p<98.9)return'stone';return'iron';}
-  if(p<86)return'dirt';if(p<98.2)return'stone';return'bedrock';
+  const p=(depth*37)%100;
+  if(p<34)return'house';
+  if(p<54)return'shop';
+  if(p<74)return'office';
+  if(p<90)return'civic';
+  return'tower';
 }
 function emptyTerrainCell(){
-  return {type:'empty',hp:0,maxHp:0,value:0,solid:false,ore:false,seed:0,clusterId:null};
+  return {type:'empty',hp:0,maxHp:0,value:0,solid:false,seed:0,clusterId:null};
 }
 function terrainMineBottomY(){
   return flippers.left.pivot.y-TERRAIN.digEndBuffer;
 }
 function isTerrainSafeCell(row,col){
   const worldY=TERRAIN.top+row*TERRAIN.cell;
-  return worldY<TERRAIN.digStartY || worldY>terrainMineBottomY() || col>=TERRAIN.cols-TERRAIN.launcherCols;
+  return worldY<TERRAIN.digStartY || worldY>terrainMineBottomY();
 }
 function makeTerrainCell(depth,row=0,col=0){
   if(isTerrainSafeCell(row,col)) return emptyTerrainCell();
-  const type=pickTerrainType(depth); const def=TERRAIN_DEFS[type];
-  const hp=type==='bedrock'?def.hp:def.hp+Math.floor(depth/20);
-  const value=type==='bedrock'?0:Math.floor(def.value*(1+depth*0.03));
-  return {type,hp,maxHp:hp,value,solid:true,ore:type!=='dirt'&&type!=='stone'&&type!=='bedrock',seed:Math.random(),clusterId:null};
+  const localRow=row%9, localCol=col%10;
+  if(localRow===0||localCol===0||localRow===8||localCol===9) return emptyTerrainCell();
+  const lotRow=Math.floor(row/9);
+  const lotCol=Math.floor(col/10);
+  const selector=(lotRow*7+lotCol*11+Math.floor(depth))%100;
+  const type=selector<32?'house':selector<52?'shop':selector<76?'office':selector<91?'civic':'tower';
+  const def=TERRAIN_DEFS[type];
+  const hp=def.hp+Math.floor((localRow+localCol)%3);
+  return {type,hp,maxHp:hp,value:0,solid:true,seed:(selector+localRow*13+localCol*17)%100/100,clusterId:null};
 }
 function applyOreClusters(){
-  const leftCols=TERRAIN.cols-TERRAIN.launcherCols;
-  const clusterCount=Math.max(8,Math.floor(TERRAIN.rows*0.18));
-  for(let i=0;i<clusterCount;i++){
-    const row=Math.floor(randRange(2,TERRAIN.rows-2));
-    const col=Math.floor(randRange(1,leftCols-1));
-    if(isTerrainSafeCell(row,col)) continue;
-    const source=TERRAIN.pixels[row]?.[col];
-    if(!source?.solid || source.type==='bedrock') continue;
-    const depth=state.depthLevel+(TERRAIN.rows-1-row);
-    const p=Math.random()*100;
-    const oreType=depth<30?(p<78?'copper':p<97?'iron':'gold'):depth<90?(p<62?'iron':p<90?'gold':'diamond'):(p<48?'gold':'diamond');
-    const radius=Math.floor(randRange(2,4));
-    const wobble=randRange(0.75,1.35);
-    for(let rr=row-radius;rr<=row+radius;rr++) for(let cc=col-radius;cc<=col+radius;cc++){
-      if(rr<0||rr>=TERRAIN.rows||cc<0||cc>=leftCols||isTerrainSafeCell(rr,cc)) continue;
-      const dx=(cc-col)*wobble;
-      const dy=(rr-row)/(wobble||1);
-      const dist=Math.hypot(dx,dy);
-      if(dist>radius+randRange(-0.7,0.25)) continue;
-      const cell=TERRAIN.pixels[rr]?.[cc];
-      if(!cell?.solid || cell.type==='bedrock') continue;
-      if(cell.type!=='dirt'&&Math.random()<0.45) continue;
-      const def=TERRAIN_DEFS[oreType];
-      const localDepth=state.depthLevel+(TERRAIN.rows-1-rr);
-      const hp=def.hp+Math.floor(localDepth/20);
-      const value=Math.floor(def.value*(1+localDepth*0.03));
-      TERRAIN.pixels[rr][cc]={type:oreType,hp,maxHp:hp,value,solid:true,ore:true,seed:Math.random(),clusterId:null};
-    }
-  }
+  // City lots are generated directly by makeTerrainCell; no ore pass is used.
 }
 function rebuildMaterialClusters(){
   materialClusters=new Map();
@@ -3101,7 +3086,7 @@ function rebuildMaterialClusters(){
   const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
   for(let row=0;row<TERRAIN.rows;row++) for(let col=0;col<TERRAIN.cols;col++){
     const start=TERRAIN.pixels[row]?.[col];
-    if(!start?.solid || start.type==='dirt' || start.type==='bedrock' || start.clusterId) continue;
+    if(!start?.solid || start.clusterId) continue;
     const id=`cluster_${nextId++}`;
     const stack=[[row,col]];
     let totalHp=0,totalValue=0,count=0;
@@ -3121,7 +3106,8 @@ function rebuildMaterialClusters(){
         stack.push([rr,cc]);
       }
     }
-    materialClusters.set(id,{id,type:start.type,hp:totalHp,maxHp:totalHp,value:totalValue,cells:count});
+    const clusterHp=Math.max(2,Math.ceil(Math.sqrt(count))*(TERRAIN_DEFS[start.type]?.hp||2));
+    materialClusters.set(id,{id,type:start.type,hp:clusterHp,maxHp:clusterHp,value:totalValue,cells:count});
   }
 }
 function initTerrain(){
@@ -3151,7 +3137,7 @@ function addTerrainSparks(x,y,color,count=4,force=1){
     hitSparks.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-randRange(10,48),life:randRange(0.18,0.34),maxLife:0.34,color,size:randRange(2,4)});
   }
 }
-function isOreType(type){ return type==='copper' || type==='iron' || type==='gold' || type==='diamond'; }
+function isOreType(type){ return false; }
 function formatOreGain(value){ return clamp(Math.floor(value),1,9); }
 function awardMedals(amount, source, x, y, color) {
   const payout = economy.payout(amount, source);
@@ -3160,11 +3146,36 @@ function awardMedals(amount, source, x, y, color) {
   floatingTexts.push({x,y,text:`+${payout} MEDALS`,color,life:0.72});
   return payout;
 }
+function spawnPeople(x,y,type='house',count=1){
+  const room=Math.max(0,60-people.length);
+  const total=Math.min(room,count);
+  for(let i=0;i<total;i++){
+    people.push({
+      x:x+randRange(-8,8),
+      y:y+randRange(-8,8),
+      vx:randRange(-34,34),
+      vy:randRange(-18,18),
+      r:6,
+      type,
+      life:999,
+      squashed:false,
+    });
+  }
+}
+function crushPerson(person){
+  if(person.squashed) return;
+  person.squashed=true;
+  state.peopleCrushed+=1;
+  awardMedals(1,'person-crush',person.x,person.y,'#fff36b');
+  floatingTexts.push({x:person.x,y:person.y-10,text:'+1 POINT',color:'#fff36b',life:0.7});
+  addScreenShake(1.3,0.06);
+  playSfx('collect',0.9,worldPan(person.x));
+}
 function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   const cell=TERRAIN.pixels[row]?.[col];
-  if(!cell?.solid || cell.type==='bedrock') return {hit:false,broken:false};
+  if(!cell?.solid) return {hit:false,broken:false};
   const def=TERRAIN_DEFS[cell.type];
-  if(cell.type!=='dirt' && cell.clusterId){
+  if(cell.clusterId){
     const cluster=materialClusters.get(cell.clusterId);
     if(!cluster || cluster.hp<=0) return {hit:false,broken:false};
     cluster.hp-=Math.max(1,damage);
@@ -3178,10 +3189,8 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
       destroyed+=1;
     }
     state.cellsMined+=destroyed;
-    if(isOreType(cluster.type) && cluster.value>0){
-      const gain=formatOreGain(cluster.value*state.oreMultiplier);
-      awardMedals(gain, `pin-${cluster.type}`, hitX, hitY, def.light);
-    }
+    spawnPeople(hitX,hitY,cluster.type,TERRAIN_DEFS[cluster.type]?.people||1);
+    floatingTexts.push({x:hitX,y:hitY,text:'PEOPLE OUT!',color:'#fff6c8',life:0.7});
     materialClusters.delete(cluster.id);
     if(impact>220) addScreenShake(clamp(impact/220,1.2,4.2),0.08);
     return {hit:true,broken:true};
@@ -3190,10 +3199,7 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   addTerrainSparks(hitX,hitY,def.light,cell.hp<=0?5:2,cell.hp<=0?1.15:0.75);
   if(cell.hp>0) return {hit:true,broken:false};
   cell.solid=false; cell.type='empty'; cell.hp=0; state.cellsMined+=1;
-  if(cell.ore && cell.value>0){
-    const gain=formatOreGain(cell.value*state.oreMultiplier);
-    awardMedals(gain, `pin-${cell.type}`, hitX, hitY, def.light);
-  }
+  spawnPeople(hitX,hitY,cell.type,TERRAIN_DEFS[cell.type]?.people||1);
   if(impact>220) addScreenShake(clamp(impact/220,1.2,4.2),0.08);
   return {hit:true,broken:true};
 }
@@ -3204,7 +3210,7 @@ function digTerrain(cx,cy,radius,power,impact=0){
   const maxRow=Math.min(TERRAIN.rows-1,Math.floor((cy+radius-TERRAIN.top)/TERRAIN.cell));
   let touched=0,broken=0;
   for(let row=minRow;row<=maxRow;row++) for(let col=minCol;col<=maxCol;col++){
-    const cell=TERRAIN.pixels[row]?.[col]; if(!cell?.solid || cell.type==='bedrock') continue;
+    const cell=TERRAIN.pixels[row]?.[col]; if(!cell?.solid) continue;
     if(!circleIntersectsCell(cx,cy,radius,row,col)) continue;
     const box=terrainCellBox(row,col);
     const ccx=box.x+box.w*0.5,ccy=box.y+box.h*0.5;
@@ -3217,6 +3223,24 @@ function digTerrain(cx,cy,radius,power,impact=0){
   if(touched>0) playSfx(broken>0?'crush':'hit',clamp(0.45+broken*0.12+impact/900,0.45,1.15),worldPan(cx));
   return {touched,broken};
 }
+function updatePeople(dt){
+  for(let i=people.length-1;i>=0;i--){
+    const person=people[i];
+    if(person.squashed){people.splice(i,1);continue;}
+    person.x+=person.vx*dt;
+    person.y+=person.vy*dt;
+    person.vx*=0.985;
+    person.vy*=0.985;
+    const minX=TERRAIN.left+12, maxX=TERRAIN.left+TERRAIN.cols*TERRAIN.cell-12;
+    const minY=TERRAIN.top+18, maxY=terrainMineBottomY()-10;
+    if(person.x<minX||person.x>maxX){person.x=clamp(person.x,minX,maxX);person.vx*=-0.75;}
+    if(person.y<minY||person.y>maxY){person.y=clamp(person.y,minY,maxY);person.vy*=-0.75;}
+    if(ball.active&&Math.hypot(ball.x-person.x,ball.y-person.y)<ball.r+person.r){
+      crushPerson(person);
+      people.splice(i,1);
+    }
+  }
+}
 function resolveTerrainCollision(body){
   const rad=body.r+2;
   const minCol=Math.max(0,Math.floor((body.x-rad-TERRAIN.left)/TERRAIN.cell));
@@ -3226,12 +3250,6 @@ function resolveTerrainCollision(body){
   let nx=0,ny=0,hits=0,b=0.1,maxPen=0,contactX=body.x,contactY=body.y;
   for(let row=minRow;row<=maxRow;row++) for(let col=minCol;col<=maxCol;col++){
     const cell=TERRAIN.pixels[row]?.[col]; if(!cell?.solid) continue;
-    if(cell.type==='dirt'){
-      const box=terrainCellBox(row,col);
-      const dirtImpact=Math.max(120,Math.hypot(body.vx,body.vy)*0.35);
-      damageTerrainCell(row,col,Math.max(1,state.miningPower),box.x+box.w*0.5,box.y+box.h*0.5,dirtImpact);
-      continue;
-    }
     const box=terrainCellBox(row,col);
     let px=clamp(body.x,box.x,box.x+box.w);
     let py=clamp(body.y,box.y,box.y+box.h);
@@ -3279,26 +3297,20 @@ function launchBall(){
   }
   state.currentBallCost=BALL_COST;
   state.currentBallPayout=0;
-  ball.active=true; ball.vx=0; ball.vy=-980; ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));
+  ball.x=START_POS.x; ball.y=START_POS.y; ball.active=true; ball.vx=randRange(-120,120); ball.vy=-980; ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));
 }
 function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready'}
-function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.miningPower=1;state.oreMultiplier=1;state.cellsMined=0;state.depthLevel=0;state.upgradeCost=80;state.scrollTextTimer=0;floatingTexts.length=0;hitSparks.length=0;initTerrain();resetBall();}
+function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.miningPower=1;state.oreMultiplier=1;state.cellsMined=0;state.peopleCrushed=0;state.depthLevel=0;state.upgradeCost=80;state.scrollTextTimer=0;floatingTexts.length=0;hitSparks.length=0;people.length=0;initTerrain();resetBall();}
 function shouldScrollTerrain(){
-  const bottomRow=clamp(Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell),0,TERRAIN.rows-1);
-  const topRow=Math.max(0,bottomRow-12);
-  let solid=0,empty=0;
-  for(let r=topRow;r<=bottomRow;r++){
-    for(let c=0;c<TERRAIN.cols-TERRAIN.launcherCols;c++){
-      const cell=TERRAIN.pixels[r]?.[c];
-      if(!cell) continue;
-      if(cell.solid) solid++; else empty++;
-    }
-  }
-  return (solid+empty)>0 && empty/(solid+empty)>0.76;
+  return false;
 }
-function scrollTerrainForward(rows=8){state.depthLevel+=rows; initTerrain(); state.scrollTextTimer=0.6; floatingTexts.push({x:WORLD.w*0.5,y:170,text:`DEPTH +${rows}m`,color:'#8fd8ff',life:0.6}); playSfx('level',0.9,0);}
+function scrollTerrainForward(rows=8){state.scrollTextTimer=0; void rows;}
 function tryUpgrade(){if(!economy.spend(state.upgradeCost, 'pin-upgrade')) return; state.miningPower+=1; state.upgradeCost=Math.floor(state.upgradeCost*1.6); floatingTexts.push({x:WORLD.w*0.5,y:140,text:`POWER ${state.miningPower}!`,color:'#fff36b',life:0.8}); playSfx('upgrade',1,0)}
-addEventListener('keydown',(e)=>{unlockAudio(); if((e.code==='ArrowLeft'||e.code==='KeyA')&&!input.left){input.left=true;playSfx('flipper',0.6,-0.45);} if((e.code==='ArrowRight'||e.code==='KeyD')&&!input.right){input.right=true;playSfx('flipper',0.6,0.45);} if(e.code==='Space'){e.preventDefault(); launchBall();} if(e.code==='KeyU') tryUpgrade(); if(e.code==='KeyR') restartRun();});
+function startFromFlipper(side){
+  if(state.mode==='ready') launchBall();
+  playSfx('flipper',0.6,side);
+}
+addEventListener('keydown',(e)=>{unlockAudio(); if((e.code==='ArrowLeft'||e.code==='KeyA')&&!input.left){input.left=true;startFromFlipper(-0.45);} if((e.code==='ArrowRight'||e.code==='KeyD')&&!input.right){input.right=true;startFromFlipper(0.45);} if(e.code==='Space'){e.preventDefault(); launchBall();} if(e.code==='KeyU') tryUpgrade(); if(e.code==='KeyR') restartRun();});
 addEventListener('keyup',(e)=>{if(e.code==='ArrowLeft'||e.code==='KeyA') input.left=false; if(e.code==='ArrowRight'||e.code==='KeyD') input.right=false;});
 function pointerToWorld(clientX, clientY) {
   const rect = uiCanvas.getBoundingClientRect();
@@ -3319,20 +3331,14 @@ function handlePointerDown(e) {
     return;
   }
   const isBottomHalf = pt.y > WORLD.h * 0.52;
-  if (state.mode === 'ready') {
-    launchBall();
-    uiCanvas.setPointerCapture?.(e.pointerId);
-    e.preventDefault();
-    return;
-  }
   if (isBottomHalf) {
     if (pt.x < WORLD.w * 0.5 && touchState.leftPointerId === null) {
       touchState.leftPointerId = e.pointerId;
-      if (!input.left) playSfx('flipper', 0.6, -0.45);
+      if (!input.left) startFromFlipper(-0.45);
       input.left = true;
     } else if (pt.x >= WORLD.w * 0.5 && touchState.rightPointerId === null) {
       touchState.rightPointerId = e.pointerId;
-      if (!input.right) playSfx('flipper', 0.6, 0.45);
+      if (!input.right) startFromFlipper(0.45);
       input.right = true;
     }
   }
@@ -3368,7 +3374,7 @@ function drainBall(){
   ball.active=false; state.mode='ball_lost'; state.ballLostTimer=0.7;
 }
 function update(dt){if(!isFiniteBallState()){recoverFromBrokenPhysics();return;} state.fpsS+=dt;state.fpsN+=1;if(state.fpsS>0.3){state.fps=Math.round(state.fpsN/state.fpsS);state.fpsS=0;state.fpsN=0;} if(screenShake.time>0){screenShake.time=Math.max(0,screenShake.time-dt); if(screenShake.time<=0)screenShake.amount=0;}
-for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){const s=hitSparks[i];s.life-=dt;s.x+=(s.vx||0)*dt;s.y+=(s.vy||0)*dt;s.vy=(s.vy||0)+180*dt;if(s.life<=0)hitSparks.splice(i,1);} updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
+for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){const s=hitSparks[i];s.life-=dt;s.x+=(s.vx||0)*dt;s.y+=(s.vy||0)*dt;s.vy=(s.vy||0)+180*dt;if(s.life<=0)hitSparks.splice(i,1);} updatePeople(dt); updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0) resetBall(); return;}
 const speed=len2(ball.vx,ball.vy); const substeps=clamp(Math.ceil((speed*dt)/(ball.r*0.32)),1,8); const sdt=dt/substeps;
 for(let s=0;s<substeps;s++){ball.vy+=PHYSICS.gravity*sdt; ball.vx*=PHYSICS.airDrag; ball.vy*=PHYSICS.airDrag; ball.x+=ball.vx*sdt; ball.y+=ball.vy*sdt; for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce); for (const seg of rails) segmentCapsuleHit(ball, seg); for(const key of ['left','right']) resolveFlipperHit(flippers[key],key==='left'?input.left:input.right,sdt);
@@ -3399,6 +3405,15 @@ uiCtx.fillStyle='rgba(10,22,34,0.8)'; uiCtx.fillRect(10,8,420,108); uiCtx.fillSt
 for(const t of floatingTexts){uiCtx.globalAlpha=clamp(t.life,0,1); uiCtx.fillStyle=t.color; uiCtx.font='700 20px monospace'; uiCtx.fillText(t.text,t.x*(vw/WORLD.w),t.y*(vh/WORLD.h));} uiCtx.globalAlpha=1; uiCtx.restore();}
 function drawTerrainLayer(vw,vh){
   const sx=vw/WORLD.w, sy=vh/WORLD.h;
+  uiCtx.fillStyle='rgba(88,95,98,.38)';
+  for(let row=0;row<TERRAIN.rows;row+=9){
+    const y=(TERRAIN.top+row*TERRAIN.cell)*sy;
+    uiCtx.fillRect(TERRAIN.left*sx,y,TERRAIN.cols*TERRAIN.cell*sx,TERRAIN.cell*sy);
+  }
+  for(let col=0;col<TERRAIN.cols;col+=10){
+    const x=(TERRAIN.left+col*TERRAIN.cell)*sx;
+    uiCtx.fillRect(x,TERRAIN.digStartY*sy,TERRAIN.cell*sx,(terrainMineBottomY()-TERRAIN.digStartY)*sy);
+  }
   for(let row=0;row<TERRAIN.rows;row++)for(let col=0;col<TERRAIN.cols;col++){
     const cell=TERRAIN.pixels[row][col]; if(!cell?.solid) continue;
     const def=TERRAIN_DEFS[cell.type];
@@ -3406,6 +3421,11 @@ function drawTerrainLayer(vw,vh){
     uiCtx.fillStyle=def.color; uiCtx.fillRect(x,y,cw+0.5,ch+0.5);
     uiCtx.fillStyle=def.light; uiCtx.globalAlpha=0.22+(cell.seed||0)*0.16; uiCtx.fillRect(x+1,y+1,Math.max(1,cw-2),1);
     uiCtx.fillStyle=def.dark; uiCtx.globalAlpha=0.22; uiCtx.fillRect(x+1,y+ch-2,Math.max(1,cw-2),1);
+    if((row+col)%3===0){
+      uiCtx.globalAlpha=0.55;
+      uiCtx.fillStyle='#dffaff';
+      uiCtx.fillRect(x+cw*0.28,y+ch*0.25,Math.max(1,cw*0.22),Math.max(1,ch*0.22));
+    }
     uiCtx.globalAlpha=1;
     const cluster=cell.clusterId?materialClusters.get(cell.clusterId):null;
     const hpBase=cluster?cluster.maxHp:cell.maxHp;
@@ -3420,6 +3440,20 @@ function drawTerrainLayer(vw,vh){
       if(hurt>0.55){uiCtx.moveTo(x+cw*0.78,y+ch*0.24);uiCtx.lineTo(x+cw*0.38,y+ch*0.58);}
       uiCtx.stroke();
     }
+  }
+}
+function drawPeople(vw,vh){
+  const sx=vw/WORLD.w, sy=vh/WORLD.h;
+  for(const person of people){
+    const x=person.x*sx, y=person.y*sy, r=person.r*sx;
+    uiCtx.fillStyle='rgba(0,0,0,.18)';
+    uiCtx.beginPath(); uiCtx.ellipse(x+2,y+4,r*0.75,r*0.38,0,0,Math.PI*2); uiCtx.fill();
+    uiCtx.fillStyle='#26343d';
+    uiCtx.fillRect(x-r*0.45,y-r*0.1,r*0.9,r*1.15);
+    uiCtx.fillStyle='#ffe0b6';
+    uiCtx.beginPath(); uiCtx.arc(x,y-r*0.52,r*0.58,0,Math.PI*2); uiCtx.fill();
+    uiCtx.fillStyle='#68e4ff';
+    uiCtx.fillRect(x-r*0.52,y+r*0.12,r*1.04,r*0.38);
   }
 }
 function drawUiBall(vw,vh){
@@ -3444,7 +3478,7 @@ function drawHud(vw,vh){
   uiCtx.fillStyle='#fff7cf'; uiCtx.font='900 19px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(`${econ.medals.toLocaleString()} MEDALS`,22,33);
   uiCtx.fillStyle='#bfeeff'; uiCtx.font='700 13px ui-monospace, SFMono-Regular, Consolas, monospace';
   uiCtx.fillText(`BALL ${BALL_COST}`,22,57); uiCtx.fillText(`LAST ${state.lastBallNet>=0?'+':''}${state.lastBallNet}`,100,57); uiCtx.fillText(`SESSION ${econ.sessionNet>=0?'+':''}${econ.sessionNet}`,202,57);
-  uiCtx.fillText(`PWR ${state.miningPower}`,22,80); uiCtx.fillText(`DEPTH ${state.depthLevel}m`,100,80); uiCtx.fillText(`MINED ${state.cellsMined}`,202,80);
+  uiCtx.fillText(`PWR ${state.miningPower}`,22,80); uiCtx.fillText(`BLD ${state.cellsMined}`,100,80); uiCtx.fillText(`PEOPLE ${state.peopleCrushed}`,202,80);
   const b=uiButtons.upgrade, bx=b.x*sx, by=b.y*sy, bw=b.w*sx, bh=b.h*sy;
   const can=economy.canSpend(state.upgradeCost);
   uiCtx.fillStyle=can?'#fff06a':'rgba(255,255,255,.22)'; uiCtx.fillRect(bx,by,bw,bh);
@@ -3455,7 +3489,7 @@ function drawHud(vw,vh){
   uiCtx.textAlign='left';
   if(state.mode==='ready'){
     uiCtx.fillStyle='rgba(255,255,255,.88)'; uiCtx.font='900 18px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.textAlign='center';
-    uiCtx.fillText('READY',vw*0.5,vh*0.18); uiCtx.textAlign='left';
+    uiCtx.fillText('FLIPPER START',vw*0.5,vh*0.18); uiCtx.textAlign='left';
   }
 }
 function drawTouchPads(vw,vh){
@@ -3483,6 +3517,7 @@ function render(){
   drawTerrainLayer(vw,vh);
   for(const s of hitSparks){uiCtx.globalAlpha=clamp(s.life/(s.maxLife||0.2),0,1); uiCtx.fillStyle=s.color; const size=s.size||4; uiCtx.fillRect(s.x*(vw/WORLD.w)-size*0.5,s.y*(vh/WORLD.h)-size*0.5,size,size);}
   uiCtx.globalAlpha=1;
+  drawPeople(vw,vh);
   drawUiBall(vw,vh);
   drawTouchPads(vw,vh);
   drawHud(vw,vh);
