@@ -2893,6 +2893,186 @@ registerAtlasSprites = function registerAtlasSpritesRef(atlas) {
   packHiDpi(atlas, 'playfield', WORLD.w, WORLD.h, (ctx, x, y, w, h) => drawPlayfieldSprite(ctx, x, y, w, h));
 };
 
+const WRECK_CITY = {
+  ink: '#111823',
+  edge: '#26313b',
+  asphalt: '#2f343a',
+  asphalt2: '#24292f',
+  lane: '#f4c84b',
+  grass: '#466b4d',
+  sidewalk: '#879099',
+  glass: '#bff3ff',
+  shadow: 'rgba(3,8,14,.34)',
+  buildings: {
+    house: { body: '#e7ad56', side: '#a86835', roof: '#d94e3f', dark: '#653127', glass: '#8fe9ff', sign: '' },
+    shop: { body: '#f2d16f', side: '#b07b3f', roof: '#2586bd', dark: '#183b55', glass: '#9ff0ff', sign: 'SHOP' },
+    office: { body: '#4ba7d0', side: '#2b7192', roof: '#18495f', dark: '#142d3b', glass: '#d8fbff', sign: '' },
+    civic: { body: '#d6d0ba', side: '#8a8a78', roof: '#5a646d', dark: '#333c44', glass: '#eefcff', sign: 'HALL' },
+    tower: { body: '#6db7df', side: '#2e6d96', roof: '#f0bf34', dark: '#183952', glass: '#dcfbff', sign: '' },
+  },
+};
+
+function wreckRect(ctx, x, y, w, h, fill, stroke = WRECK_CITY.ink, line = 2, radius = 0) {
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = line;
+  if (radius > 0) {
+    roundCanvasRect(ctx, x, y, w, h, radius);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x + line * 0.5, y + line * 0.5, Math.max(0, w - line), Math.max(0, h - line));
+  }
+}
+
+function wreckWindow(ctx, x, y, w, h, color = WRECK_CITY.glass) {
+  ctx.fillStyle = '#152b39';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = color;
+  ctx.fillRect(x + 1, y + 1, Math.max(1, w - 2), Math.max(1, h - 2));
+  ctx.fillStyle = 'rgba(255,255,255,.82)';
+  ctx.fillRect(x + 2, y + 2, Math.max(1, w * 0.45), 1);
+}
+
+function wreckWindowGrid(ctx, x, y, cols, rows, gapX, gapY, glass) {
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) wreckWindow(ctx, x + c * gapX, y + r * gapY, 7, 6, glass);
+  }
+}
+
+function drawWreckBuildingSprite(ctx, x, y, w, h, type) {
+  const p = WRECK_CITY.buildings[type] || WRECK_CITY.buildings.office;
+  ctx.save();
+  ctx.shadowColor = WRECK_CITY.shadow;
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 5;
+  ctx.shadowOffsetY = 6;
+
+  if (type === 'house') {
+    wreckRect(ctx, x + 6, y + h * 0.33, w - 12, h * 0.58, p.body, WRECK_CITY.ink, 2, 3);
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = WRECK_CITY.ink;
+    ctx.beginPath(); ctx.moveTo(x + 4, y + h * 0.37); ctx.lineTo(x + w * 0.5, y + 5); ctx.lineTo(x + w - 4, y + h * 0.37); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = p.roof;
+    ctx.beginPath(); ctx.moveTo(x + 8, y + h * 0.35); ctx.lineTo(x + w * 0.5, y + 10); ctx.lineTo(x + w - 8, y + h * 0.35); ctx.closePath(); ctx.fill();
+    wreckWindow(ctx, x + 13, y + h * 0.48, 9, 8, p.glass);
+    wreckWindow(ctx, x + w - 23, y + h * 0.48, 9, 8, p.glass);
+    wreckRect(ctx, x + w * 0.42, y + h * 0.68, w * 0.17, h * 0.22, p.dark, WRECK_CITY.ink, 1);
+  } else {
+    wreckRect(ctx, x + 5, y + 9, w - 10, h - 14, p.body, WRECK_CITY.ink, 2, type === 'shop' ? 2 : 1);
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = p.side;
+    ctx.fillRect(x + w - 16, y + 15, 9, h - 25);
+    ctx.fillStyle = 'rgba(255,255,255,.42)';
+    ctx.fillRect(x + 10, y + 14, Math.max(8, w * 0.32), h - 25);
+    if (type === 'shop') {
+      wreckRect(ctx, x + 8, y + 8, w - 16, 10, p.roof, WRECK_CITY.ink, 2);
+      ctx.fillStyle = '#fff1c2';
+      for (let i = 0; i < 6; i += 1) ctx.fillRect(x + 10 + i * ((w - 20) / 6), y + 20, Math.max(3, (w - 24) / 8), 6);
+      wreckWindow(ctx, x + 12, y + h * 0.48, w * 0.22, h * 0.18, p.glass);
+      wreckRect(ctx, x + w * 0.45, y + h * 0.56, w * 0.16, h * 0.25, p.dark, WRECK_CITY.ink, 1);
+    } else if (type === 'civic') {
+      wreckRect(ctx, x + 8, y + 5, w - 16, 10, p.roof, WRECK_CITY.ink, 2);
+      for (let i = 0; i < 4; i += 1) wreckRect(ctx, x + 12 + i * ((w - 24) / 4), y + 26, 5, h - 38, '#f5f0dc', p.dark, 1);
+      wreckRect(ctx, x + w * 0.40, y + h - 19, w * 0.20, 12, p.dark, WRECK_CITY.ink, 1);
+    } else {
+      const cols = type === 'tower' ? 4 : 3;
+      const rows = Math.max(2, Math.floor((h - 30) / 13));
+      wreckWindowGrid(ctx, x + 13, y + 24, cols, rows, (w - 28) / cols, 12, p.glass);
+      if (type === 'tower') {
+        wreckRect(ctx, x + w * 0.35, y + 3, w * 0.30, 10, p.roof, WRECK_CITY.ink, 2);
+        ctx.fillStyle = '#fff4a8';
+        ctx.fillRect(x + w * 0.48, y, 3, 5);
+      }
+    }
+  }
+
+  if (p.sign) {
+    wreckRect(ctx, x + w * 0.25, y + h * 0.27, w * 0.50, 12, p.dark, WRECK_CITY.ink, 1);
+    ctx.fillStyle = '#fff2b8';
+    ctx.font = '900 8px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.sign, x + w * 0.5, y + h * 0.27 + 9);
+    ctx.textAlign = 'left';
+  }
+  ctx.restore();
+}
+
+drawPlayfieldSprite = function drawPlayfieldSpriteWreck(ctx, x, y, w, h) {
+  const cityX = x + TERRAIN.left - 10;
+  const cityY = y + TERRAIN.digStartY - 14;
+  const cityW = TERRAIN.cols * TERRAIN.cell + 20;
+  const cityH = terrainMineBottomY() - TERRAIN.digStartY + 26;
+  const grad = ctx.createLinearGradient(x, y, x, y + h);
+  grad.addColorStop(0, '#1a2532');
+  grad.addColorStop(0.52, '#22313e');
+  grad.addColorStop(1, '#111821');
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, w, h);
+  wreckRect(ctx, x + 10, y + 8, w - 20, h - 16, '#2b3945', '#0d131b', 4, 10);
+  wreckRect(ctx, x + 27, y + PLAYFIELD_TOP_Y, w - 54, h - PLAYFIELD_TOP_Y - 34, '#1d2832', '#0c1118', 4, 8);
+  wreckRect(ctx, cityX, cityY, cityW, cityH, '#465f50', '#111823', 3, 8);
+
+  const roads = [
+    { x: cityX + cityW * 0.19, y: cityY, w: 14, h: cityH },
+    { x: cityX + cityW * 0.43, y: cityY, w: 15, h: cityH * 0.84 },
+    { x: cityX + cityW * 0.72, y: cityY, w: 13, h: cityH },
+    { x: cityX, y: cityY + cityH * 0.18, w: cityW, h: 14 },
+    { x: cityX + cityW * 0.04, y: cityY + cityH * 0.46, w: cityW * 0.88, h: 15 },
+    { x: cityX, y: cityY + cityH * 0.74, w: cityW, h: 14 },
+  ];
+  for (const road of roads) {
+    wreckRect(ctx, road.x, road.y, road.w, road.h, WRECK_CITY.asphalt, '#20262c', 1, 3);
+    ctx.fillStyle = WRECK_CITY.lane;
+    if (road.w > road.h) {
+      for (let xx = road.x + 10; xx < road.x + road.w - 10; xx += 28) ctx.fillRect(xx, road.y + road.h * 0.46, 12, 2);
+    } else {
+      for (let yy = road.y + 10; yy < road.y + road.h - 10; yy += 28) ctx.fillRect(road.x + road.w * 0.46, yy, 2, 12);
+    }
+  }
+
+  ctx.fillStyle = '#f4c84b';
+  ctx.fillRect(x + 64, y + PLAYFIELD_TOP_Y + 8, w - 128, 5);
+  ctx.fillStyle = '#76dcff';
+  ctx.fillRect(x + 64, y + h - 88, w - 128, 5);
+  ctx.fillStyle = 'rgba(255,255,255,.08)';
+  for (let yy = cityY + 34; yy < cityY + cityH - 20; yy += 62) ctx.fillRect(cityX + 14, yy, cityW - 28, 4);
+};
+
+registerAtlasSprites = function registerAtlasSpritesWreck(atlas) {
+  packHiDpi(atlas, 'ball', BALL_SPRITE_SIZE, BALL_SPRITE_SIZE, (ctx, x, y, w) => {
+    const r = w * 0.5;
+    pxDisk(ctx, x + r, y + r, r * 0.47, '#bcc7d0', '#2a323a', '#ffffff');
+    pxRect(ctx, x + 11, y + 10, 9, 3, '#ffffff');
+    pxRect(ctx, x + 28, y + 29, 4, 2, '#77838c');
+  });
+  packHiDpi(atlas, 'flipper', 84, 20, (ctx, x, y) => {
+    wreckRect(ctx, x + 3, y + 14, 78, 5, 'rgba(0,0,0,.18)', 'rgba(0,0,0,0)', 0);
+    wreckRect(ctx, x, y, 84, 20, '#e7eef3', '#26313b', 2, 3);
+    ctx.fillStyle = '#f4c84b';
+    ctx.fillRect(x + 9, y + 6, 62, 4);
+    ctx.fillStyle = '#4896ba';
+    ctx.fillRect(x + 12, y + 12, 54, 3);
+  });
+  packHiDpi(atlas, 'wall', 20, 20, (ctx, x, y) => {
+    ctx.fillStyle = '#1b232b';
+    ctx.fillRect(x, y, 20, 20);
+    ctx.fillStyle = '#56636d';
+    ctx.fillRect(x + 3, y, 14, 20);
+    ctx.fillStyle = '#d8e0e5';
+    ctx.fillRect(x + 7, y, 4, 20);
+    ctx.fillStyle = '#8f9aa2';
+    ctx.fillRect(x + 14, y, 3, 20);
+  });
+  for (const type of ['house', 'shop', 'office', 'civic', 'tower']) {
+    const wide = type === 'tower' || type === 'office' ? 70 : 58;
+    const tall = type === 'tower' ? 96 : type === 'office' || type === 'civic' ? 82 : 64;
+    packHiDpi(atlas, `wreck_${type}`, wide, tall, (ctx, x, y, w, h) => drawWreckBuildingSprite(ctx, x, y, w, h, type));
+  }
+  packHiDpi(atlas, 'playfield', WORLD.w, WORLD.h, (ctx, x, y, w, h) => drawPlayfieldSprite(ctx, x, y, w, h));
+};
+
 const economy = createMedalEconomy();
 const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, upgradeCost: 80, ballLostTimer: 0, scrollTextTimer: 0 };
 const START_POS = { x: 250, y: 640 };
@@ -3680,18 +3860,59 @@ function drawTouchPads(vw,vh){
   uiCtx.fillText('<',w*0.5,y+h*0.56); uiCtx.fillText('>',w+w*0.5,y+h*0.56);
   uiCtx.textAlign='left'; uiCtx.globalAlpha=1;
 }
+function drawAtlasCityBuildings(sx,sy){
+  for(const cluster of materialClusters.values()){
+    if(cluster.hp<=0) continue;
+    const sprite=atlas.entries.get(`wreck_${cluster.type}`)||atlas.entries.get('wreck_office');
+    if(!sprite) continue;
+    const x=(TERRAIN.left+cluster.minCol*TERRAIN.cell)*sx;
+    const y=(TERRAIN.top+cluster.minRow*TERRAIN.cell)*sy;
+    const w=(cluster.maxCol-cluster.minCol+1)*TERRAIN.cell*sx;
+    const h=(cluster.maxRow-cluster.minRow+1)*TERRAIN.cell*sy;
+    renderer.pushSprite(sprite,x,y,w,h);
+  }
+}
+function drawCityDamageLayer(vw,vh){
+  const sx=vw/WORLD.w, sy=vh/WORLD.h;
+  uiCtx.save();
+  for(const cluster of materialClusters.values()){
+    if(cluster.hp<=0) continue;
+    const damage=1-cluster.hp/Math.max(1,cluster.maxHp);
+    if(damage<0.03) continue;
+    const x=(TERRAIN.left+cluster.minCol*TERRAIN.cell)*sx;
+    const y=(TERRAIN.top+cluster.minRow*TERRAIN.cell)*sy;
+    const w=(cluster.maxCol-cluster.minCol+1)*TERRAIN.cell*sx;
+    const h=(cluster.maxRow-cluster.minRow+1)*TERRAIN.cell*sy;
+    uiCtx.globalAlpha=0.36+damage*0.42;
+    uiCtx.strokeStyle='#2a1e17';
+    uiCtx.lineWidth=Math.max(1,2*damage);
+    uiCtx.beginPath();
+    uiCtx.moveTo(x+w*0.20,y+h*0.24);
+    uiCtx.lineTo(x+w*0.52,y+h*0.52);
+    uiCtx.lineTo(x+w*0.45,y+h*0.78);
+    if(damage>0.42){uiCtx.moveTo(x+w*0.78,y+h*0.18);uiCtx.lineTo(x+w*0.50,y+h*0.43);}
+    if(damage>0.68){uiCtx.moveTo(x+w*0.28,y+h*0.62);uiCtx.lineTo(x+w*0.12,y+h*0.88);}
+    uiCtx.stroke();
+    uiCtx.globalAlpha=0.18+damage*0.18;
+    uiCtx.fillStyle='#201813';
+    uiCtx.fillRect(x+Math.max(2,w*0.08),y+h*(0.80-damage*0.12),Math.max(3,w*0.84),Math.max(2,h*0.10));
+  }
+  uiCtx.restore();
+  uiCtx.globalAlpha=1;
+}
 function render(){
   const sx=glCanvas.width/WORLD.w, sy=glCanvas.height/WORLD.h, shake=getShakeOffset();
   glCanvas.style.transform=shake.x||shake.y?`translate(${shake.x}px, ${shake.y}px)`:'';
   renderer.begin();
   const fieldSpr=atlas.entries.get('playfield'); const wallSpr=atlas.entries.get('wall'); const flipSpr=atlas.entries.get('flipper');
   renderer.pushSprite(fieldSpr,0,0,glCanvas.width,glCanvas.height);
+  drawAtlasCityBuildings(sx,sy);
   for(const w of walls) renderer.pushSprite(wallSpr,w.x*sx,w.y*sy,w.w*sx,w.h*sy);
   for(const seg of rails){const dx=seg.x2-seg.x1,dy=seg.y2-seg.y1,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx); renderer.pushSprite(wallSpr,seg.x1*sx,(seg.y1-seg.r)*sy,len*sx,seg.r*2*sy,ang,0,0.5);}
   for(const key of ['left','right']){const f=flippers[key]; const seg=flipperSegment(f); const ang=Math.atan2(seg.y2-seg.y1,seg.x2-seg.x1); renderer.pushSprite(flipSpr,seg.x1*sx,(seg.y1-f.radius)*sy,f.length*sx,f.radius*2*sy,ang,0,0.5);}
   renderer.flush(glCanvas.width,glCanvas.height);
   uiCtx.clearRect(0,0,uiCanvas.width,uiCanvas.height); uiCtx.save(); uiCtx.scale(dpr,dpr); const vw=uiCanvas.width/dpr,vh=uiCanvas.height/dpr;
-  drawTerrainLayer(vw,vh);
+  drawCityDamageLayer(vw,vh);
   for(const s of hitSparks){uiCtx.globalAlpha=clamp(s.life/(s.maxLife||0.2),0,1); uiCtx.fillStyle=s.color; const size=s.size||4; uiCtx.fillRect(s.x*(vw/WORLD.w)-size*0.5,s.y*(vh/WORLD.h)-size*0.5,size,size);}
   uiCtx.globalAlpha=1;
   drawPeople(vw,vh);
