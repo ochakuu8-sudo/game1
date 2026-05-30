@@ -3380,6 +3380,77 @@ registerAtlasSprites = function registerAtlasSpritesDeluxe(atlas) {
   packHiDpi(atlas, 'playfield', WORLD.w, WORLD.h, (ctx, x, y, w, h) => drawPlayfieldSprite(ctx, x, y, w, h));
 };
 
+drawPlayfieldSprite = function drawPlayfieldSpriteMine(ctx, x, y, w, h) {
+  const mineX = x + TERRAIN.left - 18;
+  const mineY = y + TERRAIN.digStartY - 20;
+  const mineW = TERRAIN.cols * TERRAIN.cell + 36;
+  const mineH = terrainMineBottomY() - TERRAIN.digStartY + 40;
+  const bg = ctx.createLinearGradient(x, y, x, y + h);
+  bg.addColorStop(0, '#20192c');
+  bg.addColorStop(0.24, '#28324c');
+  bg.addColorStop(0.62, '#2a211c');
+  bg.addColorStop(1, '#11131f');
+  ctx.fillStyle = bg;
+  ctx.fillRect(x, y, w, h);
+  toyRect(ctx, x + 11, y + 10, w - 22, h - 20, '#26263a', '#10131f', 5, 18);
+  toyRect(ctx, x + 24, y + PLAYFIELD_TOP_Y - 6, w - 48, h - PLAYFIELD_TOP_Y - 26, '#101621', '#070b12', 4, 13);
+
+  const shaft = ctx.createLinearGradient(mineX, mineY, mineX, mineY + mineH);
+  shaft.addColorStop(0, '#5c3d28');
+  shaft.addColorStop(0.45, '#3b2a22');
+  shaft.addColorStop(1, '#22212a');
+  ctx.fillStyle = shaft;
+  roundCanvasRect(ctx, mineX, mineY, mineW, mineH, 12);
+  ctx.fill();
+  ctx.strokeStyle = '#130e12';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(255,216,105,.22)';
+  for (let yy = mineY + 42; yy < mineY + mineH - 28; yy += 56) {
+    ctx.fillRect(mineX + 14, yy, mineW - 28, 3);
+  }
+  ctx.fillStyle = '#ffd95a';
+  roundCanvasRect(ctx, x + 64, y + PLAYFIELD_TOP_Y + 10, w - 128, 5, 3);
+  ctx.fill();
+  ctx.fillStyle = '#5de4ff';
+  roundCanvasRect(ctx, x + 64, y + h - 88, w - 128, 5, 3);
+  ctx.fill();
+};
+
+registerAtlasSprites = function registerAtlasSpritesMine(atlas) {
+  packHiDpi(atlas, 'ball', BALL_SPRITE_SIZE, BALL_SPRITE_SIZE, (ctx, x, y, w) => {
+    const r = w * 0.5;
+    const g = ctx.createRadialGradient(x + r * 0.62, y + r * 0.50, 2, x + r, y + r, r);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.35, '#e8eef2');
+    g.addColorStop(1, '#66717c');
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath(); ctx.ellipse(x + r + 2, y + r + 3, r * 0.85, r * 0.72, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x + r, y + r, r - 1, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2a3038'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillRect(x + 10, y + 9, 11, 3);
+  });
+  packHiDpi(atlas, 'flipper', 84, 20, (ctx, x, y) => {
+    toyRect(ctx, x + 3, y + 14, 78, 5, 'rgba(0,0,0,.25)', 'rgba(0,0,0,0)', 0, 3);
+    toyRect(ctx, x, y, 84, 20, '#f1f5ea', '#2b241e', 2, 5);
+    ctx.fillStyle = '#ffd95a'; ctx.fillRect(x + 10, y + 6, 60, 4);
+    ctx.fillStyle = '#9b5a2f'; ctx.fillRect(x + 14, y + 12, 48, 3);
+    ctx.fillStyle = '#5de4ff'; ctx.fillRect(x + 66, y + 5, 9, 9);
+  });
+  packHiDpi(atlas, 'wall', 20, 20, (ctx, x, y) => {
+    ctx.fillStyle = '#0f1118'; ctx.fillRect(x, y, 20, 20);
+    const g = ctx.createLinearGradient(x, y, x + 20, y);
+    g.addColorStop(0, '#2b2f3d');
+    g.addColorStop(0.35, '#f1f7ff');
+    g.addColorStop(0.55, '#7b8792');
+    g.addColorStop(1, '#1b1f2b');
+    ctx.fillStyle = g; ctx.fillRect(x + 3, y, 14, 20);
+  });
+  packHiDpi(atlas, 'playfield', WORLD.w, WORLD.h, (ctx, x, y, w, h) => drawPlayfieldSprite(ctx, x, y, w, h));
+};
+
 const economy = createMedalEconomy();
 const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, upgradeCost: 80, ballLostTimer: 0, scrollTextTimer: 0 };
 const START_POS = { x: 250, y: 640 };
@@ -3395,13 +3466,15 @@ const uiButtons = {
 const floatingTexts=[]; const hitSparks=[]; const people=[]; const screenShake={time:0,duration:0,amount:0};
 let materialClusters=new Map();
 const TERRAIN_DEFS={
-  road:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0,solid:false},
-  house:{hp:2,value:0,color:'#ffe6a7',light:'#fff6c8',dark:'#b93f36',bounce:0.12,people:1},
-  shop:{hp:3,value:0,color:'#fff0b8',light:'#fff8d7',dark:'#1d8ec0',bounce:0.14,people:1},
-  office:{hp:4,value:0,color:'#4fb5dc',light:'#d7f7ff',dark:'#2d7ca0',bounce:0.16,people:2},
-  civic:{hp:5,value:0,color:'#d4e1cf',light:'#f4f8fb',dark:'#5a6870',bounce:0.18,people:2},
-  tower:{hp:6,value:0,color:'#9fd8ec',light:'#ffffff',dark:'#214b68',bounce:0.2,people:3},
-  empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0,people:0}
+  dirt:{hp:1,value:0,color:'#8b5a32',light:'#bc7a43',dark:'#5d3924',bounce:0.06,solid:true},
+  clay:{hp:2,value:0,color:'#a95f45',light:'#d08460',dark:'#6b382d',bounce:0.08,solid:true},
+  stone:{hp:3,value:0,color:'#6b6f76',light:'#9aa0a8',dark:'#3f454d',bounce:0.15,solid:true},
+  hardstone:{hp:5,value:0,color:'#4d5360',light:'#7b8492',dark:'#2d3240',bounce:0.22,solid:true},
+  copper:{hp:2,value:1,color:'#b96a38',light:'#ffb16a',dark:'#6d3a24',bounce:0.12,solid:true,ore:true},
+  silver:{hp:3,value:2,color:'#b8ccd6',light:'#effcff',dark:'#68818c',bounce:0.14,solid:true,ore:true},
+  gold:{hp:4,value:4,color:'#f0b931',light:'#fff079',dark:'#986925',bounce:0.16,solid:true,ore:true},
+  gem:{hp:5,value:8,color:'#5ee0d5',light:'#d8fff7',dark:'#1f7e82',bounce:0.18,solid:true,ore:true},
+  empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0,solid:false}
 };
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
@@ -3547,11 +3620,13 @@ const drain = { x0: 228, x1: 272, y: 760 };
 function addScreenShake(a=2,d=0.08){screenShake.amount=Math.max(screenShake.amount,a);screenShake.duration=Math.max(screenShake.duration,d);screenShake.time=Math.max(screenShake.time,d)}
 function pickTerrainType(depth){
   const p=(depth*37)%100;
-  if(p<34)return'house';
-  if(p<54)return'shop';
-  if(p<74)return'office';
-  if(p<90)return'civic';
-  return'tower';
+  if(p<54)return'dirt';
+  if(p<70)return'clay';
+  if(p<86)return'stone';
+  if(p<93)return'copper';
+  if(p<97)return'silver';
+  if(p<99)return'gold';
+  return'gem';
 }
 function emptyTerrainCell(){
   return {type:'empty',hp:0,maxHp:0,value:0,solid:false,seed:0,clusterId:null};
@@ -3565,18 +3640,43 @@ function isTerrainSafeCell(row,col){
 }
 function makeTerrainCell(depth,row=0,col=0){
   if(isTerrainSafeCell(row,col)) return emptyTerrainCell();
-  const localRow=row%9, localCol=col%10;
-  if(localRow===0||localCol===0||localRow===8||localCol===9) return emptyTerrainCell();
-  const lotRow=Math.floor(row/9);
-  const lotCol=Math.floor(col/10);
-  const selector=(lotRow*7+lotCol*11+Math.floor(depth))%100;
-  const type=selector<32?'house':selector<52?'shop':selector<76?'office':selector<91?'civic':'tower';
+  const n=Math.abs(Math.sin((row+depth)*12.9898+col*78.233))*43758.5453;
+  const noise=n-Math.floor(n);
+  const strata=row/TERRAIN.rows;
+  let type='dirt';
+  if(strata>0.70 && noise>0.36) type='hardstone';
+  else if(strata>0.48 && noise>0.34) type='stone';
+  else if(noise>0.72) type='clay';
+  const oreRoll=(Math.abs(Math.sin((row+depth)*91.7+col*33.3))*9973.21)%1;
+  if(oreRoll>0.965) type=strata>0.64?'gold':strata>0.42?'silver':'copper';
+  if(oreRoll>0.992) type='gem';
   const def=TERRAIN_DEFS[type];
-  const hp=def.hp+Math.floor((localRow+localCol)%3);
-  return {type,hp,maxHp:hp,value:0,solid:true,seed:(selector+localRow*13+localCol*17)%100/100,clusterId:null};
+  const hp=def.hp+Math.floor(strata*1.6);
+  return {type,hp,maxHp:hp,value:def.value||0,solid:true,seed:noise,clusterId:null};
 }
 function applyOreClusters(){
-  // City lots are generated directly by makeTerrainCell; no ore pass is used.
+  const rng=createCityRng(0xD16D00+state.depthLevel*101);
+  const startRow=Math.max(2,Math.ceil((TERRAIN.digStartY-TERRAIN.top)/TERRAIN.cell)+1);
+  const endRow=Math.min(TERRAIN.rows-4,Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell)-1);
+  const deposits=[
+    {type:'copper',count:10,minR:startRow+3,maxR:endRow-4,rx:3,ry:2},
+    {type:'silver',count:7,minR:startRow+18,maxR:endRow-4,rx:3,ry:2},
+    {type:'gold',count:4,minR:startRow+34,maxR:endRow-3,rx:2,ry:2},
+    {type:'gem',count:2,minR:startRow+42,maxR:endRow-2,rx:1,ry:1},
+  ];
+  for(const dep of deposits){
+    for(let i=0;i<dep.count;i++){
+      const row=clamp(Math.floor(dep.minR+rng()*Math.max(1,dep.maxR-dep.minR)),startRow,endRow);
+      const col=3+Math.floor(rng()*(TERRAIN.cols-6));
+      for(let rr=row-dep.ry;rr<=row+dep.ry;rr++) for(let cc=col-dep.rx;cc<=col+dep.rx;cc++){
+        if(rr<startRow||rr>endRow||cc<1||cc>=TERRAIN.cols-1) continue;
+        const d=Math.hypot((rr-row)/(dep.ry+0.1),(cc-col)/(dep.rx+0.1));
+        if(d>1 || rng()<0.22) continue;
+        const def=TERRAIN_DEFS[dep.type];
+        TERRAIN.pixels[rr][cc]={type:dep.type,hp:def.hp,maxHp:def.hp,value:def.value,solid:true,seed:rng(),clusterId:null};
+      }
+    }
+  }
 }
 function createCityRng(seed=12345){
   let value=seed>>>0;
@@ -3645,40 +3745,25 @@ function initTerrain(){
   TERRAIN.pixels=Array.from({length:TERRAIN.rows},()=>Array.from({length:TERRAIN.cols},()=>emptyTerrainCell()));
   const startRow=Math.max(2,Math.ceil((TERRAIN.digStartY-TERRAIN.top)/TERRAIN.cell)+1);
   const endRow=Math.min(TERRAIN.rows-4,Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell)-1);
-  const columns=[1,10,20,31,43,54];
-  let nextId=1;
-  for(let band=startRow;band<endRow;band+=10+Math.floor(rng()*5)){
-    const bandH=8+Math.floor(rng()*8);
-    for(let i=0;i<columns.length;i++){
-      const baseCol=columns[i]+Math.floor(rng()*3);
-      const maxW=Math.min(11,TERRAIN.cols-baseCol-2);
-      const w=clamp(5+Math.floor(rng()*maxW),4,maxW);
-      const h=clamp(5+Math.floor(rng()*bandH),4,Math.min(15,endRow-band));
-      if(w<4||h<4) continue;
-      const row=band+Math.floor(rng()*3);
-      const col=baseCol;
-      let occupied=false;
-      for(let rr=row-1;rr<row+h+1;rr++) for(let cc=col-1;cc<col+w+1;cc++){
-        if(TERRAIN.pixels[rr]?.[cc]?.solid) occupied=true;
-      }
-      if(occupied) continue;
-      const type=chooseBuildingType(rng,w,h,row);
-      placeCityBuilding(`building_${nextId++}`,row,col,w,h,type,rng);
+  for(let row=startRow;row<=endRow;row++) for(let col=1;col<TERRAIN.cols-1;col++){
+    const cell=makeTerrainCell(state.depthLevel,row,col);
+    TERRAIN.pixels[row][col]=cell;
+  }
+  for(let row=startRow;row<Math.min(endRow,startRow+7);row++) for(let col=24;col<=41;col++){
+    TERRAIN.pixels[row][col]=emptyTerrainCell();
+  }
+  for(let vein=0;vein<9;vein++){
+    const cx=5+Math.floor(rng()*(TERRAIN.cols-10));
+    const cy=startRow+8+Math.floor(rng()*Math.max(1,endRow-startRow-12));
+    const rx=3+Math.floor(rng()*7);
+    const ry=2+Math.floor(rng()*5);
+    for(let row=cy-ry;row<=cy+ry;row++) for(let col=cx-rx;col<=cx+rx;col++){
+      if(row<startRow||row>endRow||col<1||col>=TERRAIN.cols-1) continue;
+      const d=(Math.pow((row-cy)/(ry+0.1),2)+Math.pow((col-cx)/(rx+0.1),2));
+      if(d<1 && rng()>0.38) TERRAIN.pixels[row][col]=emptyTerrainCell();
     }
   }
-  for(let attempts=0;attempts<28;attempts++){
-    const w=4+Math.floor(rng()*7);
-    const h=4+Math.floor(rng()*8);
-    const row=startRow+Math.floor(rng()*Math.max(1,endRow-startRow-h));
-    const col=1+Math.floor(rng()*Math.max(1,TERRAIN.cols-w-2));
-    let occupied=false;
-    for(let rr=row-1;rr<row+h+1;rr++) for(let cc=col-1;cc<col+w+1;cc++){
-      if(TERRAIN.pixels[rr]?.[cc]?.solid) occupied=true;
-    }
-    if(occupied) continue;
-    const type=chooseBuildingType(rng,w,h,row);
-    placeCityBuilding(`building_${nextId++}`,row,col,w,h,type,rng);
-  }
+  applyOreClusters();
 }
 function terrainCellBox(row,col){
   return {x:TERRAIN.left+col*TERRAIN.cell,y:TERRAIN.top+row*TERRAIN.cell,w:TERRAIN.cell,h:TERRAIN.cell};
@@ -3699,8 +3784,8 @@ function addTerrainSparks(x,y,color,count=4,force=1){
     hitSparks.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-randRange(10,48),life:randRange(0.18,0.34),maxLife:0.34,color,size:randRange(2,4)});
   }
 }
-function isOreType(type){ return false; }
-function formatOreGain(value){ return clamp(Math.floor(value),1,9); }
+function isOreType(type){ return !!TERRAIN_DEFS[type]?.ore; }
+function formatOreGain(value){ return Math.max(1,Math.floor(value*state.oreMultiplier)); }
 function awardMedals(amount, source, x, y, color) {
   const payout = economy.payout(amount, source);
   if (payout <= 0) return 0;
@@ -3737,31 +3822,19 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   const cell=TERRAIN.pixels[row]?.[col];
   if(!cell?.solid) return {hit:false,broken:false};
   const def=TERRAIN_DEFS[cell.type];
-  if(cell.clusterId){
-    const cluster=materialClusters.get(cell.clusterId);
-    if(!cluster || cluster.hp<=0) return {hit:false,broken:false};
-    cluster.hp-=Math.max(1,damage);
-    addTerrainSparks(hitX,hitY,def.light,cluster.hp<=0?6:2,cluster.hp<=0?1.2:0.75);
-    if(cluster.hp>0) return {hit:true,broken:false};
-    let destroyed=0;
-    for(let r=0;r<TERRAIN.rows;r++) for(let c=0;c<TERRAIN.cols;c++){
-      const target=TERRAIN.pixels[r]?.[c];
-      if(!target?.solid || target.clusterId!==cluster.id) continue;
-      target.solid=false; target.type='empty'; target.hp=0; target.clusterId=null;
-      destroyed+=1;
-    }
-    state.cellsMined+=destroyed;
-    spawnPeople(hitX,hitY,cluster.type,TERRAIN_DEFS[cluster.type]?.people||1);
-    floatingTexts.push({x:hitX,y:hitY,text:'PEOPLE OUT!',color:'#fff6c8',life:0.7});
-    materialClusters.delete(cluster.id);
-    if(impact>220) addScreenShake(clamp(impact/220,1.2,4.2),0.08);
-    return {hit:true,broken:true};
-  }
   cell.hp-=Math.max(1,damage);
   addTerrainSparks(hitX,hitY,def.light,cell.hp<=0?5:2,cell.hp<=0?1.15:0.75);
   if(cell.hp>0) return {hit:true,broken:false};
-  cell.solid=false; cell.type='empty'; cell.hp=0; state.cellsMined+=1;
-  spawnPeople(hitX,hitY,cell.type,TERRAIN_DEFS[cell.type]?.people||1);
+  const minedType=cell.type;
+  const payout=isOreType(minedType)?formatOreGain(def.value||1):0;
+  cell.solid=false; cell.type='empty'; cell.hp=0; cell.value=0; state.cellsMined+=1;
+  if(payout>0){
+    state.peopleCrushed+=1;
+    awardMedals(payout,`ore-${minedType}`,hitX,hitY,def.light);
+    floatingTexts.push({x:hitX,y:hitY-12,text:`${minedType.toUpperCase()}!`,color:def.light,life:0.8});
+    playSfx('collect',0.8,worldPan(hitX));
+    addScreenShake(clamp(impact/200,1.4,4.8),0.10);
+  }
   if(impact>220) addScreenShake(clamp(impact/220,1.2,4.2),0.08);
   return {hit:true,broken:true};
 }
@@ -4162,8 +4235,8 @@ function drawHud(vw,vh){
     [`LAST`, `${state.lastBallNet>=0?'+':''}${state.lastBallNet}`],
     [`NET`, `${econ.sessionNet>=0?'+':''}${econ.sessionNet}`],
     [`PWR`, state.miningPower],
-    [`BLD`, state.cellsMined],
-    [`HIT`, state.peopleCrushed],
+    [`DUG`, state.cellsMined],
+    [`ORE`, state.peopleCrushed],
   ];
   uiCtx.font='900 10px ui-monospace, SFMono-Regular, Consolas, monospace';
   for(let i=0;i<stats.length;i++){
@@ -4324,7 +4397,39 @@ function drawPrimitiveCityBuildings(sx,sy){
     drawPrimitiveBuilding(cluster,sx,sy);
   }
 }
+function drawMineTerrain(sx,sy){
+  const cellW=TERRAIN.cell*sx;
+  const cellH=TERRAIN.cell*sy;
+  const left=TERRAIN.left*sx;
+  const top=TERRAIN.top*sy;
+  const mineTop=TERRAIN.digStartY*sy;
+  const mineBottom=terrainMineBottomY()*sy;
+  rectRenderer.pushRect((TERRAIN.left-10)*sx,(TERRAIN.digStartY-14)*sy,(TERRAIN.cols*TERRAIN.cell+20)*sx,(terrainMineBottomY()-TERRAIN.digStartY+28)*sy,'#2d1e18',0.95);
+  for(let row=0;row<TERRAIN.rows;row++) for(let col=0;col<TERRAIN.cols;col++){
+    const cell=TERRAIN.pixels[row]?.[col];
+    if(!cell?.solid) continue;
+    const def=TERRAIN_DEFS[cell.type];
+    const x=left+col*cellW;
+    const y=top+row*cellH;
+    const shade=(cell.seed||0);
+    rectRenderer.pushRect(x,y,cellW+0.5,cellH+0.5,def.dark,0.95);
+    rectRenderer.pushRect(x+0.8,y+0.8,Math.max(1,cellW-1.4),Math.max(1,cellH-1.4),def.color,1);
+    if(shade>0.58) rectRenderer.pushRect(x+1,y+1,Math.max(1,cellW*0.45),Math.max(1,cellH*0.35),def.light,0.38);
+    if(shade<0.22) rectRenderer.pushRect(x+cellW*0.50,y+cellH*0.55,Math.max(1,cellW*0.34),Math.max(1,cellH*0.24),def.dark,0.36);
+    if(def.ore){
+      rectRenderer.pushRect(x+cellW*0.22,y+cellH*0.18,Math.max(2,cellW*0.56),Math.max(2,cellH*0.52),def.light,0.72);
+      rectRenderer.pushRect(x+cellW*0.42,y+cellH*0.30,Math.max(1,cellW*0.22),Math.max(1,cellH*0.18),'#ffffff',0.70);
+    }
+    if(cell.hp<cell.maxHp){
+      rectRenderer.pushRect(x+cellW*0.10,y+cellH*0.18,cellW*0.72,Math.max(1,cellH*0.16),'#1b1514',0.35);
+    }
+  }
+  rectRenderer.pushRect((TERRAIN.left-5)*sx,mineTop,(TERRAIN.cols*TERRAIN.cell+10)*sx,2*sy,'#ffd95a',0.90);
+  rectRenderer.pushRect((TERRAIN.left-5)*sx,mineBottom,(TERRAIN.cols*TERRAIN.cell+10)*sx,2*sy,'#5de4ff',0.60);
+}
 function drawCityDamageLayer(vw,vh){
+  void vw; void vh;
+  return;
   const sx=vw/WORLD.w, sy=vh/WORLD.h;
   uiCtx.save();
   for(const cluster of materialClusters.values()){
@@ -4360,7 +4465,7 @@ function render(){
   renderer.pushSprite(fieldSpr,0,0,glCanvas.width,glCanvas.height);
   renderer.flush(glCanvas.width,glCanvas.height,true);
   rectRenderer.begin();
-  drawPrimitiveCityBuildings(sx,sy);
+  drawMineTerrain(sx,sy);
   rectRenderer.flush(glCanvas.width,glCanvas.height);
   renderer.begin();
   for(const w of walls) renderer.pushSprite(wallSpr,w.x*sx,w.y*sy,w.w*sx,w.h*sy);
@@ -4371,7 +4476,6 @@ function render(){
   drawCityDamageLayer(vw,vh);
   for(const s of hitSparks){uiCtx.globalAlpha=clamp(s.life/(s.maxLife||0.2),0,1); uiCtx.fillStyle=s.color; const size=s.size||4; uiCtx.fillRect(s.x*(vw/WORLD.w)-size*0.5,s.y*(vh/WORLD.h)-size*0.5,size,size);}
   uiCtx.globalAlpha=1;
-  drawPeople(vw,vh);
   drawUiBall(vw,vh);
   drawTouchPads(vw,vh);
   drawHud(vw,vh);
