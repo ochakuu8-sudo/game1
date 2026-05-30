@@ -3544,14 +3544,29 @@ function segmentCapsuleHit(body, seg, rollingBias = 0) {
 }
 
 function flipperSegment(f, angle = f.angle) {
+  const length = currentFlipperLength();
   return {
     x1: f.pivot.x, y1: f.pivot.y,
-    x2: f.pivot.x + Math.cos(angle) * f.length,
-    y2: f.pivot.y + Math.sin(angle) * f.length,
+    x2: f.pivot.x + Math.cos(angle) * length,
+    y2: f.pivot.y + Math.sin(angle) * length,
     r: f.radius, restitution: PHYSICS.flipperBounce, friction: PHYSICS.flipperFriction,
   };
 }
 
+function flipperOpenProgress() {
+  return clamp((state.miningPower - 1) / Math.max(1, MAX_MINING_POWER - 1), 0, 1);
+}
+function currentFlipperLength() {
+  return 92 - flipperOpenProgress() * 24;
+}
+function currentDrain() {
+  const p = flipperOpenProgress();
+  return {
+    x0: 226 - p * 31,
+    x1: 274 + p * 31,
+    y: drain.y,
+  };
+}
 function flipperPowerScale() {
   return clamp(0.58 + (state.miningPower - 1) * 0.18, 0.58, 1.30);
 }
@@ -3577,7 +3592,7 @@ function applyFlipperImpulse(f, hit, sdt, beforeVx = ball.vx, beforeVy = ball.vy
   if (relN >= 0) return null;
   const powerScale = flipperPowerScale();
   const tipPower = 0.54 + hit.t * 0.22;
-  const boost = clamp(((-relN) * 0.78 + Math.abs(omega) * f.length * 0.14) * tipPower * powerScale, 0, f.upImpulse * powerScale);
+  const boost = clamp(((-relN) * 0.78 + Math.abs(omega) * 76 * 0.14) * tipPower * powerScale, 0, f.upImpulse * powerScale);
   const side = f.pivot.x < WORLD.w * 0.5 ? 1 : -1;
   const sweet = hit.t >= 0.42 && hit.t <= 0.88;
   const tangentX = -ry;
@@ -3628,7 +3643,7 @@ function resolveFlipperHit(f, pressed, sdt) {
   return false;
 }
 
-const drain = { x0: 195, x1: 305, y: 760 };
+const drain = { y: 760 };
 function addScreenShake(a=2,d=0.08){screenShake.amount=Math.max(screenShake.amount,a);screenShake.duration=Math.max(screenShake.duration,d);screenShake.time=Math.max(screenShake.time,d)}
 function pickTerrainType(depth){
   void depth;
@@ -4057,7 +4072,8 @@ if (speedNow > maxSpeedNow) {
   ball.vy *= scale;
 }
 if (ball.vy < -currentMaxUpwardBallSpeed()) ball.vy = -currentMaxUpwardBallSpeed();
-if(ball.y>WORLD.h+30||(ball.y>drain.y&&ball.x>drain.x0&&ball.x<drain.x1)){playSfx('drain',0.9,worldPan(ball.x)); drainBall(); break;}}
+const currentDrainGap = currentDrain();
+if(ball.y>WORLD.h+30||(ball.y>currentDrainGap.y&&ball.x>currentDrainGap.x0&&ball.x<currentDrainGap.x1)){playSfx('drain',0.9,worldPan(ball.x)); drainBall(); break;}}
 if(shouldScrollTerrain()) scrollTerrainForward(8);
 }
 let dpr=1; function resize(){dpr=Math.min(window.devicePixelRatio||1,DPR_MAX); const rect=wrap.getBoundingClientRect(); const w=Math.floor(rect.width*dpr); const h=Math.floor(rect.height*dpr); glCanvas.width=w; glCanvas.height=h; uiCanvas.width=w; uiCanvas.height=h; gl.viewport(0,0,w,h);} addEventListener('resize',resize);
@@ -4581,7 +4597,7 @@ function render(){
   renderer.begin();
   for(const w of walls) renderer.pushSprite(wallSpr,w.x*sx,w.y*sy,w.w*sx,w.h*sy);
   for(const seg of rails){const dx=seg.x2-seg.x1,dy=seg.y2-seg.y1,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx); renderer.pushSprite(wallSpr,seg.x1*sx,(seg.y1-seg.r)*sy,len*sx,seg.r*2*sy,ang,0,0.5);}
-  for(const key of ['left','right']){const f=flippers[key]; const seg=flipperSegment(f); const ang=Math.atan2(seg.y2-seg.y1,seg.x2-seg.x1); renderer.pushSprite(flipSpr,seg.x1*sx,(seg.y1-f.radius)*sy,f.length*sx,f.radius*2*sy,ang,0,0.5);}
+  for(const key of ['left','right']){const f=flippers[key]; const seg=flipperSegment(f); const len=Math.hypot(seg.x2-seg.x1,seg.y2-seg.y1); const ang=Math.atan2(seg.y2-seg.y1,seg.x2-seg.x1); renderer.pushSprite(flipSpr,seg.x1*sx,(seg.y1-f.radius)*sy,len*sx,f.radius*2*sy,ang,0,0.5);}
   renderer.flush(glCanvas.width,glCanvas.height,false);
   uiCtx.clearRect(0,0,uiCanvas.width,uiCanvas.height); uiCtx.save(); uiCtx.scale(dpr,dpr); const vw=uiCanvas.width/dpr,vh=uiCanvas.height/dpr;
   drawCityDamageLayer(vw,vh);
