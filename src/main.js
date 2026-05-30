@@ -4051,8 +4051,9 @@ ball.vy *= PHYSICS.rollingFriction;
 ball.spin *= PHYSICS.spinDamping;
 ball.rot += ball.spin * sdt;
 const speedNow = Math.hypot(ball.vx, ball.vy);
-if (speedNow > PHYSICS.maxBallSpeed) {
-  const scale = PHYSICS.maxBallSpeed / speedNow;
+const maxSpeedNow = ball.vy < -20 ? PHYSICS.maxUpwardBallSpeed : PHYSICS.maxBallSpeed;
+if (speedNow > maxSpeedNow) {
+  const scale = maxSpeedNow / speedNow;
   ball.vx *= scale;
   ball.vy *= scale;
 }
