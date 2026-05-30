@@ -4,8 +4,8 @@ const DPR_MAX = 2;
 const WORLD = { w: 500, h: 800 };
 const PLAYFIELD_TOP_Y = 104;
 const GRID_TOP_Y = 132;
-const BALL_RADIUS = 18;
-const BALL_SPRITE_SIZE = 42;
+const BALL_RADIUS = 12;
+const BALL_SPRITE_SIZE = 34;
 const BALL_COST = 10;
 
 const PHYSICS = {
@@ -3693,17 +3693,40 @@ function placeCityBuilding(clusterId,row,col,w,h,type,rng){
   const maxHp=Math.max(2,Math.ceil(Math.sqrt(count))*(def.hp||2));
   materialClusters.set(clusterId,{id:clusterId,type,hp:maxHp,maxHp,value:0,cells:count,minRow:row,maxRow:row+h-1,minCol:col,maxCol:col+w-1});
 }
+function makeOreShapeCells(row,col,w,h,rng){
+  const cells=[];
+  const cx=(w-1)*0.5+(rng()-0.5)*0.35;
+  const cy=(h-1)*0.5+(rng()-0.5)*0.35;
+  const rx=Math.max(1.25,w*0.58);
+  const ry=Math.max(1.15,h*0.62);
+  for(let rr=0;rr<h;rr++) for(let cc=0;cc<w;cc++){
+    const dx=(cc-cx)/rx;
+    const dy=(rr-cy)/ry;
+    const edge=dx*dx+dy*dy;
+    if(edge<0.58 || (edge<1.08 && rng()>0.22)) cells.push([row+rr,col+cc]);
+  }
+  const center=[row+Math.floor(h*0.5),col+Math.floor(w*0.5)];
+  if(!cells.some(([r,c])=>r===center[0]&&c===center[1])) cells.push(center);
+  const target=Math.ceil(w*h*0.56);
+  for(let i=0;i<w*h&&cells.length<target;i++){
+    const rr=row+Math.floor(rng()*h);
+    const cc=col+Math.floor(rng()*w);
+    if(!cells.some(([r,c])=>r===rr&&c===cc)) cells.push([rr,cc]);
+  }
+  return cells;
+}
 function placeOreCluster(clusterId,row,col,w,h,type,rng){
   const def=TERRAIN_DEFS[type];
-  const cells=[];
-  for(let rr=row;rr<row+h;rr++) for(let cc=col;cc<col+w;cc++){
+  const cells=makeOreShapeCells(row,col,w,h,rng);
+  let minRow=Infinity,maxRow=-Infinity,minCol=Infinity,maxCol=-Infinity;
+  for(const [rr,cc] of cells){
     if(rr<0||rr>=TERRAIN.rows||cc<0||cc>=TERRAIN.cols) continue;
     TERRAIN.pixels[rr][cc]={type,hp:def.hp,maxHp:def.hp,value:def.value,solid:true,seed:rng(),clusterId};
-    cells.push([rr,cc]);
+    minRow=Math.min(minRow,rr); maxRow=Math.max(maxRow,rr); minCol=Math.min(minCol,cc); maxCol=Math.max(maxCol,cc);
   }
   const hp=def.hp;
   const value=def.value;
-  materialClusters.set(clusterId,{id:clusterId,type,hp,maxHp:hp,value,cells,minRow:row,maxRow:row+h-1,minCol:col,maxCol:col+w-1,exposed:false});
+  materialClusters.set(clusterId,{id:clusterId,type,hp,maxHp:hp,value,cells,minRow,maxRow,minCol,maxCol,exposed:false});
 }
 function rebuildMaterialClusters(){
   materialClusters=new Map();
@@ -4417,6 +4440,7 @@ function drawMineTerrain(sx,sy){
     if(!cell?.solid) continue;
     const cluster=cell.clusterId?materialClusters.get(cell.clusterId):null;
     const hiddenOre=isOreType(cell.type)&&!cluster?.exposed;
+    if(isOreType(cell.type)&&cluster?.exposed) continue;
     const def=hiddenOre?TERRAIN_DEFS.dirt:TERRAIN_DEFS[cell.type];
     const x=left+col*cellW;
     const y=top+row*cellH;
@@ -4433,8 +4457,64 @@ function drawMineTerrain(sx,sy){
       rectRenderer.pushRect(x+cellW*0.10,y+cellH*0.18,cellW*0.72,Math.max(1,cellH*0.16),'#1b1514',0.35);
     }
   }
+  drawExposedOreClusters(sx,sy);
   rectRenderer.pushRect((TERRAIN.left-5)*sx,mineTop,(TERRAIN.cols*TERRAIN.cell+10)*sx,2*sy,'#ffd95a',0.90);
   rectRenderer.pushRect((TERRAIN.left-5)*sx,mineBottom,(TERRAIN.cols*TERRAIN.cell+10)*sx,2*sy,'#5de4ff',0.60);
+}
+function oreRowSpans(cells){
+  const rows=new Map();
+  for(const [r,c] of cells){
+    if(!rows.has(r)) rows.set(r,[]);
+    rows.get(r).push(c);
+  }
+  const spans=[];
+  for(const [row,cols] of rows){
+    cols.sort((a,b)=>a-b);
+    let start=cols[0],prev=cols[0];
+    for(let i=1;i<cols.length;i++){
+      if(cols[i]===prev+1){prev=cols[i];continue;}
+      spans.push({row,start,end:prev});
+      start=prev=cols[i];
+    }
+    spans.push({row,start,end:prev});
+  }
+  return spans;
+}
+function drawExposedOreClusters(sx,sy){
+  const cellW=TERRAIN.cell*sx;
+  const cellH=TERRAIN.cell*sy;
+  for(const cluster of materialClusters.values()){
+    if(!cluster.exposed||cluster.hp<=0) continue;
+    const def=TERRAIN_DEFS[cluster.type];
+    const damage=1-cluster.hp/Math.max(1,cluster.maxHp);
+    const spans=oreRowSpans(cluster.cells);
+    for(const span of spans){
+      const x=(TERRAIN.left+span.start*TERRAIN.cell)*sx;
+      const y=(TERRAIN.top+span.row*TERRAIN.cell)*sy;
+      const w=(span.end-span.start+1)*cellW;
+      rectRenderer.pushRect(x-2*sx,y-1.8*sy,w+4*sx,cellH+3.6*sy,'#120d10',0.58);
+    }
+    for(const span of spans){
+      const x=(TERRAIN.left+span.start*TERRAIN.cell)*sx;
+      const y=(TERRAIN.top+span.row*TERRAIN.cell)*sy;
+      const w=(span.end-span.start+1)*cellW;
+      rectRenderer.pushRect(x-1*sx,y-1*sy,w+2*sx,cellH+2*sy,def.dark,0.98);
+    }
+    for(const span of spans){
+      const x=(TERRAIN.left+span.start*TERRAIN.cell)*sx;
+      const y=(TERRAIN.top+span.row*TERRAIN.cell)*sy;
+      const w=(span.end-span.start+1)*cellW;
+      rectRenderer.pushRect(x,y,w+0.9*sx,cellH+0.9*sy,def.color,1);
+      rectRenderer.pushRect(x+w*0.12,y+cellH*0.12,Math.max(2,w*0.42),Math.max(1,cellH*0.24),def.light,0.38);
+      rectRenderer.pushRect(x+w*0.56,y+cellH*0.62,Math.max(1,w*0.25),Math.max(1,cellH*0.18),def.dark,0.26+damage*0.28);
+    }
+    const bx=(TERRAIN.left+cluster.minCol*TERRAIN.cell)*sx;
+    const by=(TERRAIN.top+cluster.minRow*TERRAIN.cell)*sy;
+    const bw=(cluster.maxCol-cluster.minCol+1)*cellW;
+    const bh=(cluster.maxRow-cluster.minRow+1)*cellH;
+    rectRenderer.pushRect(bx+bw*0.26,by+bh*0.24,Math.max(2,bw*0.22),Math.max(2,bh*0.12),'#ffffff',0.66);
+    rectRenderer.pushRect(bx+bw*0.55,by+bh*0.42,Math.max(2,bw*0.14),Math.max(2,bh*0.10),def.light,0.72);
+  }
 }
 function drawCityDamageLayer(vw,vh){
   void vw; void vh;
