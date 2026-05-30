@@ -3452,8 +3452,9 @@ registerAtlasSprites = function registerAtlasSpritesMine(atlas) {
 };
 
 const economy = createMedalEconomy();
-const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0 };
+const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0, flipperOpenTimer: 0 };
 const MAX_MINING_POWER = 5;
+const FLIPPER_OPEN_SECONDS = 28;
 const START_POS = { x: 250, y: 640 };
 const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot: 0, spin: 0, active: false };
 const input = { left: false, right: false, pointerSide: 0 };
@@ -3554,7 +3555,7 @@ function flipperSegment(f, angle = f.angle) {
 }
 
 function flipperOpenProgress() {
-  return clamp((state.miningPower - 1) / Math.max(1, MAX_MINING_POWER - 1), 0, 1);
+  return clamp(state.flipperOpenTimer / FLIPPER_OPEN_SECONDS, 0, 1);
 }
 function currentFlipperLength() {
   return 92 - flipperOpenProgress() * 24;
@@ -3988,10 +3989,11 @@ function launchBall(){
   }
   state.currentBallCost=BALL_COST;
   state.currentBallPayout=0;
+  state.flipperOpenTimer=0;
   ball.x=START_POS.x; ball.y=START_POS.y; ball.active=true; ball.vx=randRange(-90,90); ball.vy=-launchSpeedForPower(); ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));
 }
-function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready'}
-function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.miningPower=1;state.oreMultiplier=1;state.cellsMined=0;state.peopleCrushed=0;state.depthLevel=0;state.scrollTextTimer=0;floatingTexts.length=0;hitSparks.length=0;people.length=0;initTerrain();resetBall();}
+function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready';state.flipperOpenTimer=0}
+function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.miningPower=1;state.oreMultiplier=1;state.cellsMined=0;state.peopleCrushed=0;state.depthLevel=0;state.scrollTextTimer=0;state.flipperOpenTimer=0;floatingTexts.length=0;hitSparks.length=0;people.length=0;initTerrain();resetBall();}
 function shouldScrollTerrain(){
   return false;
 }
@@ -4057,6 +4059,7 @@ function update(dt){if(!isFiniteBallState()){recoverFromBrokenPhysics();return;}
 for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){const s=hitSparks[i];s.life-=dt;s.x+=(s.vx||0)*dt;s.y+=(s.vy||0)*dt;s.vy=(s.vy||0)+180*dt;if(s.life<=0)hitSparks.splice(i,1);} updatePeople(dt); updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
 for(const cluster of materialClusters.values()) if(cluster.cooldown>0) cluster.cooldown=Math.max(0,cluster.cooldown-dt);
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0){initTerrain(); resetBall();} return;}
+state.flipperOpenTimer=Math.min(FLIPPER_OPEN_SECONDS,state.flipperOpenTimer+dt);
 const speed=len2(ball.vx,ball.vy); const substeps=clamp(Math.ceil((speed*dt)/(ball.r*0.32)),1,8); const sdt=dt/substeps;
 for(let s=0;s<substeps;s++){ball.vy+=PHYSICS.gravity*sdt; ball.vx*=PHYSICS.airDrag; ball.vy*=PHYSICS.airDrag; ball.x+=ball.vx*sdt; ball.y+=ball.vy*sdt; for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce); for (const seg of rails) segmentCapsuleHit(ball, seg); for(const key of ['left','right']) resolveFlipperHit(flippers[key],key==='left'?input.left:input.right,sdt);
 resolveTerrainCollision(ball);
