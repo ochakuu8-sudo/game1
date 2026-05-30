@@ -3473,8 +3473,8 @@ const TERRAIN_DEFS={
   empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0,solid:false}
 };
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
-const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
-const flippers={left:{pivot:{x:160,y:704},length:68,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:620,fxCooldown:0},right:{pivot:{x:340,y:704},length:68,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:620,fxCooldown:0}};
+const rails=[{ side:'left', x1: 25, y1: 620, x2: 150, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { side:'right', x1: 475, y1: 620, x2: 350, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
+const flippers={left:{side:'left',pivot:{x:150,y:704},length:76,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:620,fxCooldown:0},right:{side:'right',pivot:{x:350,y:704},length:76,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:620,fxCooldown:0}};
 function resolveAABB(body, box, restitution = PHYSICS.wallBounce) {
   const px = clamp(body.x, box.x, box.x + box.w);
   const py = clamp(body.y, box.y, box.y + box.h);
@@ -3545,11 +3545,11 @@ function segmentCapsuleHit(body, seg, rollingBias = 0) {
 }
 
 function flipperSegment(f, angle = f.angle) {
-  const length = currentFlipperLength();
+  const pivot = currentFlipperPivot(f);
   return {
-    x1: f.pivot.x, y1: f.pivot.y,
-    x2: f.pivot.x + Math.cos(angle) * length,
-    y2: f.pivot.y + Math.sin(angle) * length,
+    x1: pivot.x, y1: pivot.y,
+    x2: pivot.x + Math.cos(angle) * f.length,
+    y2: pivot.y + Math.sin(angle) * f.length,
     r: f.radius, restitution: PHYSICS.flipperBounce, friction: PHYSICS.flipperFriction,
   };
 }
@@ -3557,14 +3557,23 @@ function flipperSegment(f, angle = f.angle) {
 function flipperOpenProgress() {
   return clamp(state.flipperOpenTimer / FLIPPER_OPEN_SECONDS, 0, 1);
 }
-function currentFlipperLength() {
-  return 92 - flipperOpenProgress() * 24;
+function flipperSlideOffset(side) {
+  const shift = (1 - flipperOpenProgress()) * 28;
+  return side === 'left' ? shift : -shift;
+}
+function currentFlipperPivot(f) {
+  const dx = flipperSlideOffset(f.side || (f.pivot.x < WORLD.w * 0.5 ? 'left' : 'right'));
+  return { x: f.pivot.x + dx, y: f.pivot.y };
+}
+function currentRailSegment(seg) {
+  const dx = flipperSlideOffset(seg.side || (seg.x2 < WORLD.w * 0.5 ? 'left' : 'right'));
+  return { ...seg, x1: seg.x1 + dx, x2: seg.x2 + dx };
 }
 function currentDrain() {
   const p = flipperOpenProgress();
   return {
-    x0: 226 - p * 31,
-    x1: 274 + p * 31,
+    x0: 240 - p * 34,
+    x1: 260 + p * 34,
     y: drain.y,
   };
 }
@@ -4061,7 +4070,7 @@ for(const cluster of materialClusters.values()) if(cluster.cooldown>0) cluster.c
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0){initTerrain(); resetBall();} return;}
 state.flipperOpenTimer=Math.min(FLIPPER_OPEN_SECONDS,state.flipperOpenTimer+dt);
 const speed=len2(ball.vx,ball.vy); const substeps=clamp(Math.ceil((speed*dt)/(ball.r*0.32)),1,8); const sdt=dt/substeps;
-for(let s=0;s<substeps;s++){ball.vy+=PHYSICS.gravity*sdt; ball.vx*=PHYSICS.airDrag; ball.vy*=PHYSICS.airDrag; ball.x+=ball.vx*sdt; ball.y+=ball.vy*sdt; for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce); for (const seg of rails) segmentCapsuleHit(ball, seg); for(const key of ['left','right']) resolveFlipperHit(flippers[key],key==='left'?input.left:input.right,sdt);
+for(let s=0;s<substeps;s++){ball.vy+=PHYSICS.gravity*sdt; ball.vx*=PHYSICS.airDrag; ball.vy*=PHYSICS.airDrag; ball.x+=ball.vx*sdt; ball.y+=ball.vy*sdt; for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce); for (const seg of rails) segmentCapsuleHit(ball, currentRailSegment(seg)); for(const key of ['left','right']) resolveFlipperHit(flippers[key],key==='left'?input.left:input.right,sdt);
 resolveTerrainCollision(ball);
 ball.vx *= PHYSICS.rollingFriction;
 ball.vy *= PHYSICS.rollingFriction;
@@ -4599,7 +4608,7 @@ function render(){
   rectRenderer.flush(glCanvas.width,glCanvas.height);
   renderer.begin();
   for(const w of walls) renderer.pushSprite(wallSpr,w.x*sx,w.y*sy,w.w*sx,w.h*sy);
-  for(const seg of rails){const dx=seg.x2-seg.x1,dy=seg.y2-seg.y1,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx); renderer.pushSprite(wallSpr,seg.x1*sx,(seg.y1-seg.r)*sy,len*sx,seg.r*2*sy,ang,0,0.5);}
+  for(const baseSeg of rails){const seg=currentRailSegment(baseSeg); const dx=seg.x2-seg.x1,dy=seg.y2-seg.y1,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx); renderer.pushSprite(wallSpr,seg.x1*sx,(seg.y1-seg.r)*sy,len*sx,seg.r*2*sy,ang,0,0.5);}
   for(const key of ['left','right']){const f=flippers[key]; const seg=flipperSegment(f); const len=Math.hypot(seg.x2-seg.x1,seg.y2-seg.y1); const ang=Math.atan2(seg.y2-seg.y1,seg.x2-seg.x1); renderer.pushSprite(flipSpr,seg.x1*sx,(seg.y1-f.radius)*sy,len*sx,f.radius*2*sy,ang,0,0.5);}
   renderer.flush(glCanvas.width,glCanvas.height,false);
   uiCtx.clearRect(0,0,uiCanvas.width,uiCanvas.height); uiCtx.save(); uiCtx.scale(dpr,dpr); const vw=uiCanvas.width/dpr,vh=uiCanvas.height/dpr;
