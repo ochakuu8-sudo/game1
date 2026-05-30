@@ -18,9 +18,9 @@ const PHYSICS = {
   flipperBounce: 0.12,
   flipperFriction: 0.985,
   railFriction: 0.996,
-  maxBallSpeed: 980,
-  maxUpwardBallSpeed: 1120,
-  minFlipperBallSpeed: 380,
+  maxBallSpeed: 820,
+  maxUpwardBallSpeed: 820,
+  minFlipperBallSpeed: 300,
   spinDamping: 0.988,
   rollingSpinGain: 0.42,
 };
@@ -3453,7 +3453,7 @@ registerAtlasSprites = function registerAtlasSpritesMine(atlas) {
 
 const economy = createMedalEconomy();
 const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0 };
-const MAX_MINING_POWER = 8;
+const MAX_MINING_POWER = 5;
 const START_POS = { x: 250, y: 640 };
 const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot: 0, spin: 0, active: false };
 const input = { left: false, right: false, pointerSide: 0 };
@@ -3467,13 +3467,13 @@ const TERRAIN_DEFS={
   dirt:{hp:1,value:0,color:'#8b5a32',light:'#bc7a43',dark:'#5d3924',bounce:0.06,solid:true},
   copper:{hp:2,value:1,color:'#b96a38',light:'#ffb16a',dark:'#6d3a24',bounce:0.34,solid:true,ore:true},
   silver:{hp:3,value:3,color:'#b8ccd6',light:'#effcff',dark:'#68818c',bounce:0.40,solid:true,ore:true},
-  gold:{hp:4,value:5,color:'#f0b931',light:'#fff079',dark:'#986925',bounce:0.46,solid:true,ore:true},
-  gem:{hp:5,value:7,color:'#5ee0d5',light:'#d8fff7',dark:'#1f7e82',bounce:0.52,solid:true,ore:true},
+  gold:{hp:4,value:8,color:'#f0b931',light:'#fff079',dark:'#986925',bounce:0.46,solid:true,ore:true},
+  gem:{hp:5,value:15,color:'#5ee0d5',light:'#d8fff7',dark:'#1f7e82',bounce:0.52,solid:true,ore:true},
   empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0,solid:false}
 };
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
-const flippers={left:{pivot:{x:160,y:704},length:76,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:760,fxCooldown:0},right:{pivot:{x:340,y:704},length:76,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:760,fxCooldown:0}};
+const flippers={left:{pivot:{x:160,y:704},length:68,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:620,fxCooldown:0},right:{pivot:{x:340,y:704},length:68,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:620,fxCooldown:0}};
 function resolveAABB(body, box, restitution = PHYSICS.wallBounce) {
   const px = clamp(body.x, box.x, box.x + box.w);
   const py = clamp(body.y, box.y, box.y + box.h);
@@ -3553,16 +3553,16 @@ function flipperSegment(f, angle = f.angle) {
 }
 
 function flipperPowerScale() {
-  return clamp(0.84 + (state.miningPower - 1) * 0.14, 0.84, 1.68);
+  return clamp(0.58 + (state.miningPower - 1) * 0.18, 0.58, 1.30);
 }
 function currentMaxBallSpeed() {
-  return Math.min(1220, PHYSICS.maxBallSpeed + (state.miningPower - 1) * 36);
+  return Math.min(1150, PHYSICS.maxBallSpeed + (state.miningPower - 1) * 82);
 }
 function currentMaxUpwardBallSpeed() {
-  return Math.min(1240, PHYSICS.maxUpwardBallSpeed + (state.miningPower - 1) * 32);
+  return Math.min(1180, PHYSICS.maxUpwardBallSpeed + (state.miningPower - 1) * 90);
 }
 function launchSpeedForPower() {
-  return Math.min(850, 560 + (state.miningPower - 1) * 42);
+  return Math.min(780, 460 + (state.miningPower - 1) * 80);
 }
 
 function applyFlipperImpulse(f, hit, sdt, beforeVx = ball.vx, beforeVy = ball.vy) {
@@ -3628,7 +3628,7 @@ function resolveFlipperHit(f, pressed, sdt) {
   return false;
 }
 
-const drain = { x0: 214, x1: 286, y: 760 };
+const drain = { x0: 195, x1: 305, y: 760 };
 function addScreenShake(a=2,d=0.08){screenShake.amount=Math.max(screenShake.amount,a);screenShake.duration=Math.max(screenShake.duration,d);screenShake.time=Math.max(screenShake.time,d)}
 function pickTerrainType(depth){
   void depth;
@@ -3656,10 +3656,10 @@ function applyOreClusters(){
   const startRow=Math.max(2,Math.ceil((TERRAIN.digStartY-TERRAIN.top)/TERRAIN.cell)+1);
   const endRow=Math.min(TERRAIN.rows-4,Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell)-1);
   const deposits=[
-    {type:'gem',count:2,minR:startRow+2,maxR:startRow+17,w:3,h:3},
-    {type:'gold',count:4,minR:startRow+12,maxR:startRow+31,w:3,h:3},
-    {type:'silver',count:6,minR:startRow+26,maxR:startRow+52,w:3,h:3},
-    {type:'copper',count:8,minR:startRow+42,maxR:endRow-6,w:3,h:3},
+    {type:'gem',count:1,minR:startRow+2,maxR:startRow+17,w:3,h:3},
+    {type:'gold',count:2,minR:startRow+12,maxR:startRow+31,w:3,h:3},
+    {type:'silver',count:3,minR:startRow+26,maxR:startRow+52,w:3,h:3},
+    {type:'copper',count:5,minR:startRow+42,maxR:endRow-6,w:3,h:3},
   ];
   let nextId=1;
   for(const dep of deposits){
