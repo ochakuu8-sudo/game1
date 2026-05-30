@@ -1,9 +1,12 @@
+import { createMedalEconomy } from './medalEconomy.js';
+
 const DPR_MAX = 2;
 const WORLD = { w: 500, h: 800 };
 const PLAYFIELD_TOP_Y = 104;
 const GRID_TOP_Y = 132;
 const BALL_RADIUS = 18;
 const BALL_SPRITE_SIZE = 42;
+const BALL_COST = 10;
 
 const PHYSICS = {
   gravity: 930,
@@ -2881,7 +2884,8 @@ registerAtlasSprites = function registerAtlasSpritesRef(atlas) {
   packHiDpi(atlas, 'playfield', WORLD.w, WORLD.h, (ctx, x, y, w, h) => drawPlayfieldSprite(ctx, x, y, w, h));
 };
 
-const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, money: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, depthLevel: 0, upgradeCost: 100, ballLostTimer: 0, scrollTextTimer: 0 };
+const economy = createMedalEconomy();
+const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, depthLevel: 0, upgradeCost: 80, ballLostTimer: 0, scrollTextTimer: 0 };
 const START_POS = { x: 430, y: 640 };
 const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot: 0, spin: 0, active: false };
 const input = { left: false, right: false, pointerSide: 0 };
@@ -3149,6 +3153,13 @@ function addTerrainSparks(x,y,color,count=4,force=1){
 }
 function isOreType(type){ return type==='copper' || type==='iron' || type==='gold' || type==='diamond'; }
 function formatOreGain(value){ return clamp(Math.floor(value),1,9); }
+function awardMedals(amount, source, x, y, color) {
+  const payout = economy.payout(amount, source);
+  if (payout <= 0) return 0;
+  state.currentBallPayout += payout;
+  floatingTexts.push({x,y,text:`+${payout} MEDALS`,color,life:0.72});
+  return payout;
+}
 function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   const cell=TERRAIN.pixels[row]?.[col];
   if(!cell?.solid || cell.type==='bedrock') return {hit:false,broken:false};
@@ -3169,8 +3180,7 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
     state.cellsMined+=destroyed;
     if(isOreType(cluster.type) && cluster.value>0){
       const gain=formatOreGain(cluster.value*state.oreMultiplier);
-      state.money+=gain;
-      floatingTexts.push({x:hitX,y:hitY,text:`+$${gain}`,color:def.light,life:0.72});
+      awardMedals(gain, `pin-${cluster.type}`, hitX, hitY, def.light);
     }
     materialClusters.delete(cluster.id);
     if(impact>220) addScreenShake(clamp(impact/220,1.2,4.2),0.08);
@@ -3182,8 +3192,7 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   cell.solid=false; cell.type='empty'; cell.hp=0; state.cellsMined+=1;
   if(cell.ore && cell.value>0){
     const gain=formatOreGain(cell.value*state.oreMultiplier);
-    state.money+=gain;
-    floatingTexts.push({x:hitX,y:hitY,text:`+$${gain}`,color:def.light,life:0.72});
+    awardMedals(gain, `pin-${cell.type}`, hitX, hitY, def.light);
   }
   if(impact>220) addScreenShake(clamp(impact/220,1.2,4.2),0.08);
   return {hit:true,broken:true};
@@ -3261,9 +3270,19 @@ function resolveTerrainCollision(body){
   body.vx*=drag; body.vy*=drag;
   return true;
 }
-function launchBall(){if(state.mode!=='ready') return; ball.active=true; ball.vx=0; ball.vy=-980; ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));}
+function launchBall(){
+  if(state.mode!=='ready') return;
+  if(!economy.spend(BALL_COST, 'medal-pin-ball')){
+    floatingTexts.push({x:WORLD.w*0.5,y:150,text:'NEED 10 MEDALS',color:'#ffb36b',life:0.9});
+    playSfx('drain',0.5,0);
+    return;
+  }
+  state.currentBallCost=BALL_COST;
+  state.currentBallPayout=0;
+  ball.active=true; ball.vx=0; ball.vy=-980; ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));
+}
 function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready'}
-function restartRun(){state.money=0;state.miningPower=1;state.oreMultiplier=1;state.cellsMined=0;state.depthLevel=0;state.upgradeCost=100;state.scrollTextTimer=0;floatingTexts.length=0;hitSparks.length=0;initTerrain();resetBall();}
+function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.miningPower=1;state.oreMultiplier=1;state.cellsMined=0;state.depthLevel=0;state.upgradeCost=80;state.scrollTextTimer=0;floatingTexts.length=0;hitSparks.length=0;initTerrain();resetBall();}
 function shouldScrollTerrain(){
   const bottomRow=clamp(Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell),0,TERRAIN.rows-1);
   const topRow=Math.max(0,bottomRow-12);
@@ -3278,8 +3297,8 @@ function shouldScrollTerrain(){
   return (solid+empty)>0 && empty/(solid+empty)>0.76;
 }
 function scrollTerrainForward(rows=8){state.depthLevel+=rows; initTerrain(); state.scrollTextTimer=0.6; floatingTexts.push({x:WORLD.w*0.5,y:170,text:`DEPTH +${rows}m`,color:'#8fd8ff',life:0.6}); playSfx('level',0.9,0);}
-function tryUpgrade(){if(state.money<state.upgradeCost) return; state.money-=state.upgradeCost; state.miningPower+=1; state.upgradeCost=Math.floor(state.upgradeCost*1.6); floatingTexts.push({x:WORLD.w*0.5,y:140,text:`POWER ${state.miningPower}!`,color:'#fff36b',life:0.8}); playSfx('upgrade',1,0)}
-addEventListener('keydown',(e)=>{unlockAudio(); if((e.code==='ArrowLeft'||e.code==='KeyA')&&!input.left){input.left=true;playSfx('flipper',0.6,-0.45);} if((e.code==='ArrowRight'||e.code==='KeyD')&&!input.right){input.right=true;playSfx('flipper',0.6,0.45);} if(e.code==='Space') launchBall(); if(e.code==='KeyU') tryUpgrade(); if(e.code==='KeyR') restartRun();});
+function tryUpgrade(){if(!economy.spend(state.upgradeCost, 'pin-upgrade')) return; state.miningPower+=1; state.upgradeCost=Math.floor(state.upgradeCost*1.6); floatingTexts.push({x:WORLD.w*0.5,y:140,text:`POWER ${state.miningPower}!`,color:'#fff36b',life:0.8}); playSfx('upgrade',1,0)}
+addEventListener('keydown',(e)=>{unlockAudio(); if((e.code==='ArrowLeft'||e.code==='KeyA')&&!input.left){input.left=true;playSfx('flipper',0.6,-0.45);} if((e.code==='ArrowRight'||e.code==='KeyD')&&!input.right){input.right=true;playSfx('flipper',0.6,0.45);} if(e.code==='Space'){e.preventDefault(); launchBall();} if(e.code==='KeyU') tryUpgrade(); if(e.code==='KeyR') restartRun();});
 addEventListener('keyup',(e)=>{if(e.code==='ArrowLeft'||e.code==='KeyA') input.left=false; if(e.code==='ArrowRight'||e.code==='KeyD') input.right=false;});
 function pointerToWorld(clientX, clientY) {
   const rect = uiCanvas.getBoundingClientRect();
@@ -3342,6 +3361,12 @@ addEventListener('blur',()=>{input.left=false;input.right=false;touchState.leftP
 function updateFlipper(f, pressed, dt){const target=pressed?f.active:f.base; const maxStep=(pressed?13:8)*dt; f.prev=f.angle; f.angle+=clamp(target-f.angle,-maxStep,maxStep); f.fxCooldown=Math.max(0,f.fxCooldown-dt);}
 function isFiniteBallState(){return Number.isFinite(ball.x)&&Number.isFinite(ball.y)&&Number.isFinite(ball.vx)&&Number.isFinite(ball.vy)&&Number.isFinite(ball.spin)&&Number.isFinite(ball.rot);}
 function recoverFromBrokenPhysics(){floatingTexts.push({x:WORLD.w*0.5,y:150,text:'PHYSICS RESET',color:'#ffd38f',life:0.8}); playSfx('levelReady',0.8,0); resetBall();}
+function drainBall(){
+  const net=economy.completePlay({cost:state.currentBallCost,payout:state.currentBallPayout,source:'medal-pin'});
+  state.lastBallNet=net;
+  floatingTexts.push({x:WORLD.w*0.5,y:650,text:`BALL NET ${net>=0?'+':''}${net}`,color:net>=0?'#fff36b':'#ffb36b',life:1});
+  ball.active=false; state.mode='ball_lost'; state.ballLostTimer=0.7;
+}
 function update(dt){if(!isFiniteBallState()){recoverFromBrokenPhysics();return;} state.fpsS+=dt;state.fpsN+=1;if(state.fpsS>0.3){state.fps=Math.round(state.fpsN/state.fpsS);state.fpsS=0;state.fpsN=0;} if(screenShake.time>0){screenShake.time=Math.max(0,screenShake.time-dt); if(screenShake.time<=0)screenShake.amount=0;}
 for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){const s=hitSparks[i];s.life-=dt;s.x+=(s.vx||0)*dt;s.y+=(s.vy||0)*dt;s.vy=(s.vy||0)+180*dt;if(s.life<=0)hitSparks.splice(i,1);} updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0) resetBall(); return;}
@@ -3359,7 +3384,7 @@ if (speedNow > PHYSICS.maxBallSpeed) {
   ball.vy *= scale;
 }
 if (ball.vy < -PHYSICS.maxUpwardBallSpeed) ball.vy = -PHYSICS.maxUpwardBallSpeed;
-if(ball.y>WORLD.h+30||(ball.y>drain.y&&ball.x>drain.x0&&ball.x<drain.x1)){playSfx('drain',0.9,worldPan(ball.x)); ball.active=false; state.mode='ball_lost'; state.ballLostTimer=0.7; break;}}
+if(ball.y>WORLD.h+30||(ball.y>drain.y&&ball.x>drain.x0&&ball.x<drain.x1)){playSfx('drain',0.9,worldPan(ball.x)); drainBall(); break;}}
 if(shouldScrollTerrain()) scrollTerrainForward(8);
 }
 let dpr=1; function resize(){dpr=Math.min(window.devicePixelRatio||1,DPR_MAX); const rect=wrap.getBoundingClientRect(); const w=Math.floor(rect.width*dpr); const h=Math.floor(rect.height*dpr); glCanvas.width=w; glCanvas.height=h; uiCanvas.width=w; uiCanvas.height=h; gl.viewport(0,0,w,h);} addEventListener('resize',resize);
@@ -3369,7 +3394,8 @@ function renderLegacy(){const sx=glCanvas.width/WORLD.w, sy=glCanvas.height/WORL
 uiCtx.clearRect(0,0,uiCanvas.width,uiCanvas.height); uiCtx.save(); uiCtx.scale(dpr,dpr); const vw=uiCanvas.width/dpr,vh=uiCanvas.height/dpr;
 for(let row=0;row<TERRAIN.rows;row++)for(let col=0;col<TERRAIN.cols;col++){const cell=TERRAIN.pixels[row][col]; if(!cell?.solid) continue; const x=(TERRAIN.left+col*TERRAIN.cell)*(vw/WORLD.w), y=(TERRAIN.top+row*TERRAIN.cell)*(vh/WORLD.h), cs=TERRAIN.cell*(vw/WORLD.w); uiCtx.fillStyle=TERRAIN_DEFS[cell.type].color; uiCtx.fillRect(x,y,cs,cs); if(cell.hp<cell.maxHp && cell.type!=='bedrock'){uiCtx.strokeStyle='rgba(0,0,0,0.25)'; uiCtx.beginPath(); uiCtx.moveTo(x+1,y+1); uiCtx.lineTo(x+cs-1,y+cs-1); uiCtx.stroke();}}
 for(const s of hitSparks){uiCtx.globalAlpha=s.life/0.2; uiCtx.fillStyle=s.color; uiCtx.fillRect(s.x*(vw/WORLD.w)-2,s.y*(vh/WORLD.h)-2,4,4);} uiCtx.globalAlpha=1;
-uiCtx.fillStyle='rgba(10,22,34,0.8)'; uiCtx.fillRect(10,8,380,96); uiCtx.fillStyle='#fff'; uiCtx.font='700 18px monospace'; uiCtx.fillText(`MONEY $${state.money.toLocaleString()}`,20,30); uiCtx.fillText(`POWER ${state.miningPower}`,20,50); uiCtx.fillText(`DEPTH ${state.depthLevel}m`,20,70); uiCtx.fillText(`MINED ${state.cellsMined}`,180,50); uiCtx.fillText(`UPGRADE U: $${state.upgradeCost}`,180,70); uiCtx.font='600 14px monospace'; uiCtx.fillText('KEY: ←/A →/D SPACE U R  |  TOUCH: 下半分左右タップで操作',20,92);
+const econ=economy.state;
+uiCtx.fillStyle='rgba(10,22,34,0.8)'; uiCtx.fillRect(10,8,420,108); uiCtx.fillStyle='#fff'; uiCtx.font='700 18px monospace'; uiCtx.fillText(`MEDALS ${econ.medals.toLocaleString()}`,20,30); uiCtx.fillText(`BALL ${BALL_COST}`,20,50); uiCtx.fillText(`NET ${econ.sessionNet>=0?'+':''}${econ.sessionNet}`,20,70); uiCtx.fillText(`MINED ${state.cellsMined}`,180,50); uiCtx.fillText(`UPGRADE U: ${state.upgradeCost}`,180,70); uiCtx.fillText(`LAST ${state.lastBallNet>=0?'+':''}${state.lastBallNet}`,180,90); uiCtx.font='600 14px monospace'; uiCtx.fillText('KEY: ←/A →/D SPACE U R  |  TOUCH: 下半分左右タップで操作',20,106);
 for(const t of floatingTexts){uiCtx.globalAlpha=clamp(t.life,0,1); uiCtx.fillStyle=t.color; uiCtx.font='700 20px monospace'; uiCtx.fillText(t.text,t.x*(vw/WORLD.w),t.y*(vh/WORLD.h));} uiCtx.globalAlpha=1; uiCtx.restore();}
 function drawTerrainLayer(vw,vh){
   const sx=vw/WORLD.w, sy=vh/WORLD.h;
@@ -3412,18 +3438,20 @@ function drawUiBall(vw,vh){
 }
 function drawHud(vw,vh){
   const sx=vw/WORLD.w, sy=vh/WORLD.h;
-  uiCtx.fillStyle='rgba(18,34,42,0.82)'; uiCtx.fillRect(10,8,314,76);
-  uiCtx.strokeStyle='#9fd8ec'; uiCtx.lineWidth=2; uiCtx.strokeRect(10.5,8.5,313,75);
-  uiCtx.fillStyle='#fff7cf'; uiCtx.font='900 19px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(`$${state.money.toLocaleString()}`,22,33);
+  const econ=economy.state;
+  uiCtx.fillStyle='rgba(18,34,42,0.82)'; uiCtx.fillRect(10,8,318,94);
+  uiCtx.strokeStyle='#9fd8ec'; uiCtx.lineWidth=2; uiCtx.strokeRect(10.5,8.5,317,93);
+  uiCtx.fillStyle='#fff7cf'; uiCtx.font='900 19px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(`${econ.medals.toLocaleString()} MEDALS`,22,33);
   uiCtx.fillStyle='#bfeeff'; uiCtx.font='700 13px ui-monospace, SFMono-Regular, Consolas, monospace';
-  uiCtx.fillText(`PWR ${state.miningPower}`,22,57); uiCtx.fillText(`DEPTH ${state.depthLevel}m`,100,57); uiCtx.fillText(`MINED ${state.cellsMined}`,202,57);
+  uiCtx.fillText(`BALL ${BALL_COST}`,22,57); uiCtx.fillText(`LAST ${state.lastBallNet>=0?'+':''}${state.lastBallNet}`,100,57); uiCtx.fillText(`SESSION ${econ.sessionNet>=0?'+':''}${econ.sessionNet}`,202,57);
+  uiCtx.fillText(`PWR ${state.miningPower}`,22,80); uiCtx.fillText(`DEPTH ${state.depthLevel}m`,100,80); uiCtx.fillText(`MINED ${state.cellsMined}`,202,80);
   const b=uiButtons.upgrade, bx=b.x*sx, by=b.y*sy, bw=b.w*sx, bh=b.h*sy;
-  const can=state.money>=state.upgradeCost;
+  const can=economy.canSpend(state.upgradeCost);
   uiCtx.fillStyle=can?'#fff06a':'rgba(255,255,255,.22)'; uiCtx.fillRect(bx,by,bw,bh);
   uiCtx.strokeStyle=can?'#26343d':'rgba(255,255,255,.35)'; uiCtx.lineWidth=2; uiCtx.strokeRect(bx+0.5,by+0.5,bw-1,bh-1);
   uiCtx.fillStyle=can?'#20313c':'rgba(255,255,255,.7)'; uiCtx.font='900 13px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.textAlign='center';
   uiCtx.fillText('UPGRADE',bx+bw*0.5,by+bh*0.42);
-  uiCtx.font='700 11px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(`$${state.upgradeCost}`,bx+bw*0.5,by+bh*0.72);
+  uiCtx.font='700 11px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(`${state.upgradeCost} MED`,bx+bw*0.5,by+bh*0.72);
   uiCtx.textAlign='left';
   if(state.mode==='ready'){
     uiCtx.fillStyle='rgba(255,255,255,.88)'; uiCtx.font='900 18px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.textAlign='center';

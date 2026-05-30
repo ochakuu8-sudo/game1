@@ -1,35 +1,36 @@
-# Mining Pinball
+# Medal Pin Game
 
-ピンボールのボールを地面ブロックに当てて掘り進め、鉱石を掘り当ててお金を増やすゲームです。
+ブラウザで動くメダルピンゲームのプロトタイプです。1ボール10メダルを投入し、盤面の鉱石ブロックを壊してメダル払い出しを得ます。
 
-- 自動収益（放置で毎秒増える収益）はありません。
-- お金は**ブロック破壊時のみ**増えます。
-- 一定深度まで掘ると盤面がスクロールし、より深い地層へ進みます。
+## Current Rules
 
-## Gameplay
+- 1ボールの投入コストは10メダル
+- ボール発射時に10メダルを消費
+- 鉱石ブロック破壊時にメダルを払い出し
+- ボール落下時に `払い出し - 10` で1ボール収支を確定
+- HUDに所持メダル、直近収支、セッション収支を表示
+- `U` でメダルを消費して採掘パワーを強化
+- `R` でプロトタイプ状態をリセット
 
-1. Space 長押しでチャージしてボールを打ち出す
-2. フリッパー（←/A, →/D）でボールを操作する
-3. ボールを地面/岩/鉱石ブロックに当てて HP を削る
-4. HP 0 でブロック破壊（鉱石は高額）
-5. 壊れたブロックは通過可能になり、深部へ進みやすくなる
-6. 下層を一定割合掘ると盤面スクロール
+## Medal Economy
+
+共通のメダル経済は `src/medalEconomy.js` に分離しています。今後スロット、レース、コインプッシャーなど別ゲームを追加する場合も、同じAPIで投入・払い出し・収支計算を扱えます。
+
+主なAPI:
+
+- `economy.spend(amount, source)`
+- `economy.payout(amount, source)`
+- `economy.completePlay({ cost, payout, source })`
+- `economy.state`
+- `economy.reset()`
 
 ## Controls
 
-- 左フリッパー: `←` / `A`
-- 右フリッパー: `→` / `D`
-- 打ち出しチャージ: `Space`（長押し→離す）
-- 採掘力アップグレード: `U`
-- リスタート: `R`
-
-## HUD
-
-- MONEY
-- POWER
-- DEPTH
-- MINED
-- UPGRADE COST
+- 左フリッパー: `ArrowLeft` / `A`
+- 右フリッパー: `ArrowRight` / `D`
+- ボール発射: `Space`
+- 強化: `U`
+- リセット: `R`
 
 ## Development
 
@@ -38,9 +39,10 @@ npm install
 npm run dev
 ```
 
-## Build
+## Checks
 
 ```bash
 npm run check
+npm test
 npm run build
 ```
