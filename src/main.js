@@ -4273,14 +4273,15 @@ function drawUiBall(vw,vh){
 }
 function drawHud(vw,vh){
   void vw; void vh;
+  const econ=economy.state;
   uiCtx.save();
   uiCtx.shadowColor='rgba(20,10,0,.32)';
   uiCtx.shadowBlur=10;
   uiCtx.shadowOffsetY=3;
-  roundCanvasRect(uiCtx,14,14,174,48,10);
+  roundCanvasRect(uiCtx,14,14,226,72,10);
   uiCtx.fillStyle='rgba(30,25,29,.84)';
   uiCtx.fill();
-  const g=uiCtx.createLinearGradient(14,14,188,62);
+  const g=uiCtx.createLinearGradient(14,14,240,86);
   g.addColorStop(0,'#fff7a8');
   g.addColorStop(0.46,'#ffd244');
   g.addColorStop(1,'#ff9b2f');
@@ -4295,6 +4296,15 @@ function drawHud(vw,vh){
   uiCtx.strokeText(`+${state.currentBallPayout}`,28,48);
   uiCtx.fillStyle=g;
   uiCtx.fillText(`+${state.currentBallPayout}`,28,48);
+  uiCtx.font='900 10px ui-monospace, SFMono-Regular, Consolas, monospace';
+  uiCtx.lineWidth=0;
+  uiCtx.fillStyle='rgba(255,255,255,.72)';
+  uiCtx.fillText('TOTAL',28,68);
+  uiCtx.fillText('POWER',132,68);
+  uiCtx.font='900 13px ui-monospace, SFMono-Regular, Consolas, monospace';
+  uiCtx.fillStyle='#fff4bf';
+  uiCtx.fillText(String(econ.medals.toLocaleString()),68,68);
+  uiCtx.fillText(`${state.miningPower}/${MAX_MINING_POWER}`,180,68);
   uiCtx.restore();
 }
 function drawTouchPads(vw,vh){
@@ -4553,45 +4563,52 @@ function drawCityDamageLayer(vw,vh){
     if(!cluster.exposed||cluster.hp<=0) continue;
     const damage=1-cluster.hp/Math.max(1,cluster.maxHp);
     if(damage<0.08) continue;
-    const x=(TERRAIN.left+cluster.minCol*TERRAIN.cell)*sx;
-    const y=(TERRAIN.top+cluster.minRow*TERRAIN.cell)*sy;
-    const w=(cluster.maxCol-cluster.minCol+1)*TERRAIN.cell*sx;
-    const h=(cluster.maxRow-cluster.minRow+1)*TERRAIN.cell*sy;
-    const seed=hashString(cluster.id);
-    const cracks=Math.ceil(damage*6);
     uiCtx.lineCap='round';
     uiCtx.lineJoin='round';
-    uiCtx.lineWidth=Math.max(1.1,1.2+damage*1.6);
+    uiCtx.lineWidth=Math.max(0.9,0.8+damage*1.35);
     uiCtx.strokeStyle='rgba(33,18,13,.92)';
-    uiCtx.globalAlpha=0.42+damage*0.45;
-    for(let i=0;i<cracks;i++){
-      const a=((seed+i*97)%100)/100;
-      const b=((seed+i*53)%100)/100;
-      const startX=x+w*(0.18+a*0.64);
-      const startY=y+h*(0.15+b*0.62);
-      const len=w*(0.18+damage*0.28);
-      const dir=(i%2?1:-1)*(0.45+((seed>>((i%4)*4))&7)*0.08);
+    uiCtx.globalAlpha=0.34+damage*0.50;
+    const cellW=TERRAIN.cell*sx;
+    const cellH=TERRAIN.cell*sy;
+    for(const [row,col] of cluster.cells){
+      const cSeed=hashString(`${cluster.id}:${row}:${col}`);
+      const cx=(TERRAIN.left+col*TERRAIN.cell)*sx;
+      const cy=(TERRAIN.top+row*TERRAIN.cell)*sy;
+      const ax=((cSeed>>>3)%100)/100;
+      const ay=((cSeed>>>11)%100)/100;
+      const startX=cx+cellW*(0.20+ax*0.60);
+      const startY=cy+cellH*(0.18+ay*0.60);
+      const dir=((cSeed&1)?1:-1)*(0.42+((cSeed>>>18)&7)*0.06);
+      const len=cellW*(0.42+damage*0.54);
       uiCtx.beginPath();
       uiCtx.moveTo(startX,startY);
-      uiCtx.lineTo(startX+len*0.45*dir,startY+h*(0.16+damage*0.12));
-      uiCtx.lineTo(startX+len*dir,startY+h*(0.26+damage*0.18));
+      uiCtx.lineTo(startX+len*0.48*dir,startY+cellH*(0.18+damage*0.10));
+      uiCtx.lineTo(startX+len*dir,startY+cellH*(0.34+damage*0.14));
       if(damage>0.45){
-        uiCtx.moveTo(startX+len*0.38*dir,startY+h*0.14);
-        uiCtx.lineTo(startX+len*(0.18+damage*0.18)*-dir,startY+h*(0.26+damage*0.10));
+        uiCtx.moveTo(startX+len*0.36*dir,startY+cellH*0.12);
+        uiCtx.lineTo(startX+len*(0.18+damage*0.16)*-dir,startY+cellH*(0.28+damage*0.10));
       }
       if(damage>0.72){
-        uiCtx.moveTo(startX+len*0.60*dir,startY+h*0.26);
-        uiCtx.lineTo(startX+len*(0.82*dir),startY-h*(0.05+damage*0.08));
+        uiCtx.moveTo(startX+len*0.60*dir,startY+cellH*0.26);
+        uiCtx.lineTo(startX+len*(0.82*dir),startY-cellH*(0.05+damage*0.08));
       }
       uiCtx.stroke();
     }
-    uiCtx.globalAlpha=0.12+damage*0.18;
-    uiCtx.strokeStyle='rgba(255,245,210,.72)';
-    uiCtx.lineWidth=Math.max(0.75,1*damage);
-    uiCtx.beginPath();
-    uiCtx.moveTo(x+w*0.22,y+h*(0.18+damage*0.18));
-    uiCtx.lineTo(x+w*(0.48+damage*0.12),y+h*(0.38+damage*0.16));
-    uiCtx.stroke();
+    if(damage>0.35){
+      uiCtx.globalAlpha=0.16+damage*0.18;
+      uiCtx.strokeStyle='rgba(255,245,210,.72)';
+      uiCtx.lineWidth=Math.max(0.65,0.9*damage);
+      const spans=oreRowSpans(cluster.cells);
+      for(const span of spans){
+        const sx0=(TERRAIN.left+span.start*TERRAIN.cell)*sx;
+        const sy0=(TERRAIN.top+span.row*TERRAIN.cell)*sy;
+        const sw=(span.end-span.start+1)*cellW;
+        uiCtx.beginPath();
+        uiCtx.moveTo(sx0+sw*0.18,sy0+cellH*(0.25+damage*0.16));
+        uiCtx.lineTo(sx0+sw*(0.66+damage*0.10),sy0+cellH*(0.46+damage*0.12));
+        uiCtx.stroke();
+      }
+    }
   }
   uiCtx.restore();
   uiCtx.globalAlpha=1;
