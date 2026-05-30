@@ -19,7 +19,7 @@ const PHYSICS = {
   flipperFriction: 0.985,
   railFriction: 0.996,
   maxBallSpeed: 900,
-  maxUpwardBallSpeed: 1600,
+  maxUpwardBallSpeed: 1850,
   minFlipperBallSpeed: 620,
   spinDamping: 0.988,
   rollingSpinGain: 0.42,
@@ -3475,7 +3475,7 @@ const TERRAIN_DEFS={
 };
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
-const flippers={left:{pivot:{x:160,y:704},length:76,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:1080,fxCooldown:0},right:{pivot:{x:340,y:704},length:76,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:1080,fxCooldown:0}};
+const flippers={left:{pivot:{x:160,y:704},length:76,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:1320,fxCooldown:0},right:{pivot:{x:340,y:704},length:76,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:1320,fxCooldown:0}};
 function resolveAABB(body, box, restitution = PHYSICS.wallBounce) {
   const px = clamp(body.x, box.x, box.x + box.w);
   const py = clamp(body.y, box.y, box.y + box.h);
@@ -3554,18 +3554,21 @@ function flipperSegment(f, angle = f.angle) {
   };
 }
 
-function applyFlipperImpulse(f, hit, sdt) {
+function applyFlipperImpulse(f, hit, sdt, beforeVx = ball.vx, beforeVy = ball.vy) {
   const omega = (f.angle - f.prev) / Math.max(sdt, 0.0001);
   const rx = hit.cx - f.pivot.x;
   const ry = hit.cy - f.pivot.y;
   const surfaceVx = -omega * ry;
   const surfaceVy = omega * rx;
-  const relVx = ball.vx - surfaceVx;
-  const relVy = ball.vy - surfaceVy;
+  const relVx = beforeVx - surfaceVx;
+  const relVy = beforeVy - surfaceVy;
   const relN = relVx * hit.nx + relVy * hit.ny;
   if (relN >= 0) return null;
+  const incomingSpeed = Math.hypot(relVx, relVy);
+  const incomingNormal = -relN;
+  const momentum = clamp((incomingSpeed - 320) / 680, 0, 1.25);
   const tipPower = 0.54 + hit.t * 0.22;
-  const boost = clamp(((-relN) * 0.96 + Math.abs(omega) * f.length * 0.21) * tipPower, 0, f.upImpulse);
+  const boost = clamp((incomingNormal * 1.14 + Math.abs(omega) * f.length * 0.24) * tipPower * (1 + momentum * 0.36), 0, f.upImpulse);
   const side = f.pivot.x < WORLD.w * 0.5 ? 1 : -1;
   const sweet = hit.t >= 0.42 && hit.t <= 0.88;
   const tangentX = -ry;
@@ -3577,11 +3580,11 @@ function applyFlipperImpulse(f, hit, sdt) {
   ball.vy += hit.ny * boost * 0.68 + ty * boost * 0.19;
   ball.vy -= boost * 0.10;
   const targetVx = side * (220 + hit.t * 230);
-  const targetVy = -(780 + hit.t * 520 + (sweet ? 180 : 0));
+  const targetVy = -(850 + hit.t * 580 + incomingNormal * 0.28 + (sweet ? 220 : 0));
   const blend = sweet ? 0.44 : 0.32;
   ball.vx += (targetVx - ball.vx) * blend;
   ball.vy += (targetVy - ball.vy) * blend;
-  const climbVy = -(1120 + hit.t * 180 + (sweet ? 120 : 0));
+  const climbVy = -(1320 + hit.t * 260 + momentum * 300 + (sweet ? 180 : 0));
   if (ball.vy > climbVy) ball.vy = climbVy;
   ball.spin = clamp(ball.spin + (boost / Math.max(ball.r, 1)) * (hit.t > 0.5 ? 0.10 : 0.07), -7, 7);
   return { sweet, side, power: boost };
@@ -3597,11 +3600,13 @@ function resolveFlipperHit(f, pressed, sdt) {
   const sweepSteps = clamp(Math.ceil(Math.abs(delta) / 0.08), 1, 8);
   for (let i = 0; i <= sweepSteps; i += 1) {
     const angle = f.prev + delta * (i / sweepSteps);
+    const beforeVx = ball.vx;
+    const beforeVy = ball.vy;
     const hit = segmentCapsuleHit(ball, flipperSegment(f, angle), 0.75);
     if (!hit) continue;
     let shot = null;
     if (pressed && Math.abs(delta) > 0.0005) {
-      shot = applyFlipperImpulse(f, hit, sdt);
+      shot = applyFlipperImpulse(f, hit, sdt, beforeVx, beforeVy);
       clampBallSpeed();
       ensureMinBallSpeed(shot?.sweet ? PHYSICS.minFlipperBallSpeed + 80 : PHYSICS.minFlipperBallSpeed);
     }
