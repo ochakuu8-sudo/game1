@@ -358,10 +358,12 @@ class SpriteRenderer {
     const tri = [out[0], out[1], out[2], out[0], out[2], out[3]];
     for (const v of tri) this.verts.push(...v, 1);
   }
-  flush(width, height) {
+  flush(width, height, clear = true) {
     const glRef = this.gl;
-    glRef.clearColor(...THEME.clear);
-    glRef.clear(glRef.COLOR_BUFFER_BIT);
+    if (clear) {
+      glRef.clearColor(...THEME.clear);
+      glRef.clear(glRef.COLOR_BUFFER_BIT);
+    }
     if (!this.verts.length) return;
     glRef.enable(glRef.BLEND);
     glRef.blendFunc(glRef.SRC_ALPHA, glRef.ONE_MINUS_SRC_ALPHA);
@@ -377,6 +379,60 @@ class SpriteRenderer {
     glRef.activeTexture(glRef.TEXTURE0);
     glRef.bindTexture(glRef.TEXTURE_2D, this.atlas.texture);
     glRef.drawArrays(glRef.TRIANGLES, 0, this.verts.length / 5);
+  }
+}
+
+const COLOR_CACHE = new Map();
+function colorToRgba(color, alpha = 1) {
+  if (Array.isArray(color)) return [color[0], color[1], color[2], color.length > 3 ? color[3] * alpha : alpha];
+  const cached = COLOR_CACHE.get(color);
+  if (cached) return [cached[0], cached[1], cached[2], alpha];
+  const hex = color.replace('#', '');
+  const full = hex.length === 3 ? hex.split('').map((ch) => ch + ch).join('') : hex;
+  const value = Number.parseInt(full, 16);
+  const rgba = [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
+  COLOR_CACHE.set(color, rgba);
+  return [rgba[0], rgba[1], rgba[2], alpha];
+}
+
+class ColorRectRenderer {
+  constructor(glRef) {
+    this.gl = glRef;
+    this.verts = [];
+    this.buffer = glRef.createBuffer();
+    this.program = createProgram(
+      glRef,
+      'attribute vec2 a_pos;attribute vec4 a_color;uniform vec2 u_res;varying vec4 v_color;void main(){vec2 p=(a_pos/u_res)*2.0-1.0;gl_Position=vec4(p.x,-p.y,0.0,1.0);v_color=a_color;}',
+      'precision mediump float;varying vec4 v_color;void main(){gl_FragColor=v_color;}'
+    );
+    this.aPos = glRef.getAttribLocation(this.program, 'a_pos');
+    this.aColor = glRef.getAttribLocation(this.program, 'a_color');
+    this.uRes = glRef.getUniformLocation(this.program, 'u_res');
+  }
+  begin() { this.verts.length = 0; }
+  pushRect(x, y, w, h, color, alpha = 1) {
+    if (w <= 0 || h <= 0 || alpha <= 0) return;
+    const [r, g, b, a] = colorToRgba(color, alpha);
+    const x2 = x + w;
+    const y2 = y + h;
+    const pts = [[x, y], [x2, y], [x2, y2], [x, y], [x2, y2], [x, y2]];
+    for (const [px, py] of pts) this.verts.push(px, py, r, g, b, a);
+  }
+  flush(width, height) {
+    if (!this.verts.length) return;
+    const glRef = this.gl;
+    glRef.enable(glRef.BLEND);
+    glRef.blendFunc(glRef.SRC_ALPHA, glRef.ONE_MINUS_SRC_ALPHA);
+    const data = new Float32Array(this.verts);
+    glRef.useProgram(this.program);
+    glRef.bindBuffer(glRef.ARRAY_BUFFER, this.buffer);
+    glRef.bufferData(glRef.ARRAY_BUFFER, data, glRef.DYNAMIC_DRAW);
+    glRef.enableVertexAttribArray(this.aPos);
+    glRef.vertexAttribPointer(this.aPos, 2, glRef.FLOAT, false, 24, 0);
+    glRef.enableVertexAttribArray(this.aColor);
+    glRef.vertexAttribPointer(this.aColor, 4, glRef.FLOAT, false, 24, 8);
+    glRef.uniform2f(this.uRes, width, height);
+    glRef.drawArrays(glRef.TRIANGLES, 0, this.verts.length / 6);
   }
 }
 
@@ -3900,7 +3956,11 @@ if(ball.y>WORLD.h+30||(ball.y>drain.y&&ball.x>drain.x0&&ball.x<drain.x1)){playSf
 if(shouldScrollTerrain()) scrollTerrainForward(8);
 }
 let dpr=1; function resize(){dpr=Math.min(window.devicePixelRatio||1,DPR_MAX); const rect=wrap.getBoundingClientRect(); const w=Math.floor(rect.width*dpr); const h=Math.floor(rect.height*dpr); glCanvas.width=w; glCanvas.height=h; uiCanvas.width=w; uiCanvas.height=h; gl.viewport(0,0,w,h);} addEventListener('resize',resize);
-const atlas = new RuntimeAtlas(gl, 2048); registerAtlasSprites(atlas); atlas.upload(); const renderer = new SpriteRenderer(gl, atlas);
+const atlas = new RuntimeAtlas(gl, 2048);
+registerAtlasSprites(atlas);
+atlas.upload();
+const renderer = new SpriteRenderer(gl, atlas);
+const rectRenderer = new ColorRectRenderer(gl);
 function getShakeOffset(){if(screenShake.time<=0||screenShake.duration<=0) return {x:0,y:0}; const r=screenShake.time/screenShake.duration; const p=screenShake.amount*r*r; return {x:Math.sin(screenShake.time*117)*p,y:Math.cos(screenShake.time*151)*p};}
 function renderLegacy(){const sx=glCanvas.width/WORLD.w, sy=glCanvas.height/WORLD.h, shake=getShakeOffset(); glCanvas.style.transform=shake.x||shake.y?`translate(${shake.x}px, ${shake.y}px)`:''; renderer.begin(); const fieldSpr=atlas.entries.get('playfield'); const wallSpr=atlas.entries.get('wall'); const flipSpr=atlas.entries.get('flipper'); const ballSpr=atlas.entries.get('ball'); renderer.pushSprite(fieldSpr,0,0,glCanvas.width,glCanvas.height); for(const w of walls) renderer.pushSprite(wallSpr,w.x*sx,w.y*sy,w.w*sx,w.h*sy); for(const seg of rails){const dx=seg.x2-seg.x1,dy=seg.y2-seg.y1,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx); renderer.pushSprite(wallSpr,seg.x1*sx,(seg.y1-seg.r)*sy,len*sx,seg.r*2*sy,ang,0,0.5);} for(const key of ['left','right']){const f=flippers[key]; const seg=flipperSegment(f); const ang=Math.atan2(seg.y2-seg.y1,seg.x2-seg.x1); renderer.pushSprite(flipSpr,seg.x1*sx,(seg.y1-f.radius)*sy,f.length*sx,f.radius*2*sy,ang,0,0.5);} if(ball.active||state.mode==='ready') renderer.pushSprite(ballSpr,(ball.x-ball.r)*sx,(ball.y-ball.r)*sy,ball.r*2*sx,ball.r*2*sy,ball.rot); renderer.flush(glCanvas.width,glCanvas.height);
 uiCtx.clearRect(0,0,uiCanvas.width,uiCanvas.height); uiCtx.save(); uiCtx.scale(dpr,dpr); const vw=uiCanvas.width/dpr,vh=uiCanvas.height/dpr;
@@ -4146,16 +4206,122 @@ function drawTouchPads(vw,vh){
   uiCtx.fillText('<',w*0.5,y+h*0.56); uiCtx.fillText('>',w+w*0.5,y+h*0.56);
   uiCtx.textAlign='left'; uiCtx.globalAlpha=1;
 }
-function drawAtlasCityBuildings(sx,sy){
+const PRIM_BUILDING = {
+  ink: '#171b2c',
+  shadow: '#0c1020',
+  darkGlass: '#20384e',
+  palettes: {
+    house: { body: '#ffba5f', side: '#d47546', roof: '#f25162', trim: '#71343d', glass: '#9df1ff', light: '#fff2a0', accent: '#58d383' },
+    shop: { body: '#ffe173', side: '#e58e4f', roof: '#2ea5d5', trim: '#22476f', glass: '#baf8ff', light: '#fff3b5', accent: '#ff5b6d' },
+    office: { body: '#49bddf', side: '#2f7fb0', roof: '#264c78', trim: '#1d3552', glass: '#e3fbff', light: '#fff2a0', accent: '#ffd24f' },
+    civic: { body: '#f0e6cf', side: '#b5a98f', roof: '#717889', trim: '#434b5d', glass: '#effcff', light: '#fff6c8', accent: '#6fd78a' },
+    tower: { body: '#788cff', side: '#4d5dbc', roof: '#ffd247', trim: '#293157', glass: '#e9fbff', light: '#fff2a0', accent: '#ff7c6a' },
+  },
+};
+function hashString(value){
+  let h=2166136261;
+  const text=String(value);
+  for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619);}
+  return h>>>0;
+}
+function primPanel(x,y,w,h,fill,edge=PRIM_BUILDING.ink,line=2){
+  rectRenderer.pushRect(x,y,w,h,edge);
+  rectRenderer.pushRect(x+line,y+line,Math.max(0,w-line*2),Math.max(0,h-line*2),fill);
+}
+function primWindow(x,y,w,h,glass,lit=false){
+  rectRenderer.pushRect(x,y,w,h,PRIM_BUILDING.darkGlass);
+  rectRenderer.pushRect(x+1,y+1,Math.max(1,w-2),Math.max(1,h-2),lit?PRIM_BUILDING.palettes.shop.light:glass);
+  rectRenderer.pushRect(x+2,y+2,Math.max(1,w*0.45),1,'#ffffff',0.68);
+}
+function primWindowGrid(x,y,w,h,cols,rows,glass,seed){
+  const ww=clamp(w/(cols*2.2),3,8);
+  const wh=clamp(h/(rows*2.1),3,8);
+  const stepX=cols<=1?0:(w-ww)/(cols-1);
+  const stepY=rows<=1?0:(h-wh)/(rows-1);
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    primWindow(x+c*stepX,y+r*stepY,ww,wh,glass,((seed+r*13+c*7)%11)===0);
+  }
+}
+function primSteppedRoof(x,y,w,h,color,edge=PRIM_BUILDING.ink){
+  const steps=4;
+  for(let i=0;i<steps;i++){
+    const inset=(steps-i-1)*w*0.105;
+    const yy=y+i*h/steps;
+    primPanel(x+inset,yy,w-inset*2,Math.max(2,h/steps+1),color,edge,1);
+  }
+}
+function drawPrimitiveBuilding(cluster,sx,sy){
+  const p=PRIM_BUILDING.palettes[cluster.type]||PRIM_BUILDING.palettes.office;
+  const x=(TERRAIN.left+cluster.minCol*TERRAIN.cell)*sx;
+  const y=(TERRAIN.top+cluster.minRow*TERRAIN.cell)*sy;
+  const w=(cluster.maxCol-cluster.minCol+1)*TERRAIN.cell*sx;
+  const h=(cluster.maxRow-cluster.minRow+1)*TERRAIN.cell*sy;
+  const seed=hashString(cluster.id);
+  const line=clamp(Math.min(w,h)*0.045,1,3);
+  const padX=clamp(w*0.07,2,8);
+  const roofH=cluster.type==='house'?h*0.30:cluster.type==='shop'?h*0.24:h*0.16;
+  const bx=x+padX;
+  const by=y+roofH;
+  const bw=w-padX*2;
+  const bh=Math.max(6,h-roofH-line*2);
+  rectRenderer.pushRect(x+w*0.12+line*2,y+h*0.14+line*3,w*0.78,h*0.78,PRIM_BUILDING.shadow,0.30);
+  if(cluster.type==='house'){
+    primPanel(bx,by+line*2,bw,bh-line*2,p.body,PRIM_BUILDING.ink,line);
+    rectRenderer.pushRect(bx+bw*0.64,by+line*3,bw*0.22,bh-line*5,p.side,0.82);
+    primSteppedRoof(x+w*0.06,y+h*0.05,w*0.88,roofH*0.86,p.roof,PRIM_BUILDING.ink);
+    rectRenderer.pushRect(bx+bw*0.10,by+bh*0.10,bw*0.28,bh*0.62,'#ffffff',0.16);
+    primWindow(bx+bw*0.16,by+bh*0.32,clamp(bw*0.18,5,10),clamp(bh*0.17,5,9),p.glass,seed%5===0);
+    primWindow(bx+bw*0.64,by+bh*0.32,clamp(bw*0.18,5,10),clamp(bh*0.17,5,9),p.glass,seed%7===0);
+    primPanel(bx+bw*0.43,by+bh*0.62,bw*0.17,bh*0.27,p.trim,PRIM_BUILDING.ink,1);
+    rectRenderer.pushRect(bx+bw*0.55,by+bh*0.75,Math.max(1,bw*0.025),Math.max(1,bh*0.035),p.light);
+  }else if(cluster.type==='shop'){
+    primPanel(bx,by+line*2,bw,bh-line*2,p.body,PRIM_BUILDING.ink,line);
+    rectRenderer.pushRect(bx+bw*0.70,by+line*3,bw*0.18,bh-line*5,p.side,0.78);
+    primPanel(bx-line,by+line*2,bw+line*2,clamp(h*0.15,8,15),p.roof,PRIM_BUILDING.ink,line);
+    const awnY=by+clamp(h*0.17,11,18);
+    for(let i=0;i<7;i++){
+      rectRenderer.pushRect(bx+line+i*(bw-line*2)/7,awnY,(bw-line*2)/7+0.6,clamp(h*0.10,5,9),i%2?p.light:p.accent);
+    }
+    primPanel(bx+bw*0.24,by+line*3,bw*0.52,clamp(h*0.12,8,13),p.trim,PRIM_BUILDING.ink,1);
+    rectRenderer.pushRect(bx+bw*0.35,by+line*5,bw*0.30,Math.max(2,h*0.028),p.light);
+    primWindow(bx+bw*0.13,by+bh*0.55,bw*0.23,bh*0.18,p.glass,seed%3===0);
+    primPanel(bx+bw*0.48,by+bh*0.58,bw*0.15,bh*0.27,p.trim,PRIM_BUILDING.ink,1);
+    primWindow(bx+bw*0.73,by+bh*0.55,bw*0.14,bh*0.16,p.glass,seed%4===0);
+  }else if(cluster.type==='civic'){
+    primPanel(bx,by+line*2,bw,bh-line*2,p.body,PRIM_BUILDING.ink,line);
+    primSteppedRoof(bx-line*2,y+h*0.06,bw+line*4,roofH*0.88,p.roof,PRIM_BUILDING.ink);
+    rectRenderer.pushRect(bx+bw*0.10,by+bh*0.12,bw*0.80,Math.max(2,bh*0.04),'#ffffff',0.22);
+    for(let i=0;i<4;i++) primPanel(bx+bw*(0.16+i*0.22),by+bh*0.38,bw*0.08,bh*0.40,p.light,p.trim,1);
+    primPanel(bx+bw*0.38,by+bh*0.75,bw*0.24,bh*0.17,p.trim,PRIM_BUILDING.ink,1);
+    primPanel(bx+bw*0.24,by+bh*0.20,bw*0.52,clamp(h*0.11,8,13),p.accent,PRIM_BUILDING.ink,1);
+  }else{
+    const lean=cluster.type==='tower'?clamp(w*0.10,2,8):clamp(w*0.06,1,5);
+    primPanel(bx,by,bw,bh,p.body,PRIM_BUILDING.ink,line);
+    rectRenderer.pushRect(bx+bw-lean,by+line,bw*0.17,bh-line*2,p.side,0.88);
+    rectRenderer.pushRect(bx+bw*0.10,by+bh*0.08,bw*0.26,bh*0.76,'#ffffff',0.14);
+    const cols=cluster.type==='tower'?4:clamp(Math.floor(bw/14),2,4);
+    const rows=cluster.type==='tower'?clamp(Math.floor(bh/13),4,7):clamp(Math.floor(bh/15),3,6);
+    primWindowGrid(bx+bw*0.15,by+bh*0.18,bw*0.66,bh*0.58,cols,rows,p.glass,seed);
+    if(cluster.type==='tower'){
+      primPanel(bx+bw*0.30,y+h*0.05,bw*0.40,clamp(h*0.12,8,15),p.roof,PRIM_BUILDING.ink,line);
+      rectRenderer.pushRect(bx+bw*0.49,y+h*0.01,Math.max(2,bw*0.04),Math.max(4,h*0.05),p.light);
+      primPanel(bx+bw*0.38,by+bh*0.80,bw*0.24,bh*0.12,p.trim,PRIM_BUILDING.ink,1);
+    }else{
+      primPanel(bx+bw*0.18,by+line,bw*0.64,clamp(h*0.08,5,9),p.roof,PRIM_BUILDING.ink,1);
+      primPanel(bx+bw*0.42,by+bh*0.80,bw*0.16,bh*0.13,p.trim,PRIM_BUILDING.ink,1);
+    }
+  }
+  if(cluster.hp<cluster.maxHp){
+    const damage=1-cluster.hp/Math.max(1,cluster.maxHp);
+    rectRenderer.pushRect(bx+bw*0.20,by+bh*0.26,bw*0.10,bh*0.05,PRIM_BUILDING.ink,0.28+damage*0.28);
+    rectRenderer.pushRect(bx+bw*0.30,by+bh*0.32,bw*0.18,bh*0.05,PRIM_BUILDING.ink,0.24+damage*0.32);
+    if(damage>0.45) rectRenderer.pushRect(bx+bw*0.58,by+bh*0.20,bw*0.20,bh*0.05,PRIM_BUILDING.ink,0.26+damage*0.30);
+  }
+}
+function drawPrimitiveCityBuildings(sx,sy){
   for(const cluster of materialClusters.values()){
     if(cluster.hp<=0) continue;
-    const sprite=atlas.entries.get(`wreck_${cluster.type}`)||atlas.entries.get('wreck_office');
-    if(!sprite) continue;
-    const x=(TERRAIN.left+cluster.minCol*TERRAIN.cell)*sx;
-    const y=(TERRAIN.top+cluster.minRow*TERRAIN.cell)*sy;
-    const w=(cluster.maxCol-cluster.minCol+1)*TERRAIN.cell*sx;
-    const h=(cluster.maxRow-cluster.minRow+1)*TERRAIN.cell*sy;
-    renderer.pushSprite(sprite,x,y,w,h);
+    drawPrimitiveBuilding(cluster,sx,sy);
   }
 }
 function drawCityDamageLayer(vw,vh){
@@ -4192,11 +4358,15 @@ function render(){
   renderer.begin();
   const fieldSpr=atlas.entries.get('playfield'); const wallSpr=atlas.entries.get('wall'); const flipSpr=atlas.entries.get('flipper');
   renderer.pushSprite(fieldSpr,0,0,glCanvas.width,glCanvas.height);
-  drawAtlasCityBuildings(sx,sy);
+  renderer.flush(glCanvas.width,glCanvas.height,true);
+  rectRenderer.begin();
+  drawPrimitiveCityBuildings(sx,sy);
+  rectRenderer.flush(glCanvas.width,glCanvas.height);
+  renderer.begin();
   for(const w of walls) renderer.pushSprite(wallSpr,w.x*sx,w.y*sy,w.w*sx,w.h*sy);
   for(const seg of rails){const dx=seg.x2-seg.x1,dy=seg.y2-seg.y1,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx); renderer.pushSprite(wallSpr,seg.x1*sx,(seg.y1-seg.r)*sy,len*sx,seg.r*2*sy,ang,0,0.5);}
   for(const key of ['left','right']){const f=flippers[key]; const seg=flipperSegment(f); const ang=Math.atan2(seg.y2-seg.y1,seg.x2-seg.x1); renderer.pushSprite(flipSpr,seg.x1*sx,(seg.y1-f.radius)*sy,f.length*sx,f.radius*2*sy,ang,0,0.5);}
-  renderer.flush(glCanvas.width,glCanvas.height);
+  renderer.flush(glCanvas.width,glCanvas.height,false);
   uiCtx.clearRect(0,0,uiCanvas.width,uiCanvas.height); uiCtx.save(); uiCtx.scale(dpr,dpr); const vw=uiCanvas.width/dpr,vh=uiCanvas.height/dpr;
   drawCityDamageLayer(vw,vh);
   for(const s of hitSparks){uiCtx.globalAlpha=clamp(s.life/(s.maxLife||0.2),0,1); uiCtx.fillStyle=s.color; const size=s.size||4; uiCtx.fillRect(s.x*(vw/WORLD.w)-size*0.5,s.y*(vh/WORLD.h)-size*0.5,size,size);}
