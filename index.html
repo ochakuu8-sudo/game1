@@ -22,13 +22,14 @@
           max(8px, env(safe-area-inset-right))
           max(8px, env(safe-area-inset-bottom))
           max(8px, env(safe-area-inset-left));
-        background-color: #0876b9;
+        background-color: #f17455;
         background-image:
-          linear-gradient(rgba(255, 255, 255, .08) 2px, transparent 2px),
-          linear-gradient(90deg, rgba(255, 255, 255, .08) 2px, transparent 2px),
-          radial-gradient(circle at 50% 20%, rgba(104, 228, 255, .42), transparent 36vw),
-          linear-gradient(180deg, #16a8df, #0767a8 68%, #034b82);
-        background-size: 32px 32px, 32px 32px, auto, auto;
+          radial-gradient(circle at 28% 18%, rgba(255, 247, 174, .90), transparent 18vw),
+          radial-gradient(circle at 74% 12%, rgba(113, 222, 255, .58), transparent 22vw),
+          radial-gradient(circle at 50% 92%, rgba(91, 73, 202, .42), transparent 34vw),
+          linear-gradient(135deg, rgba(255,255,255,.16) 0 10px, transparent 10px 28px),
+          linear-gradient(180deg, #ffcf68 0%, #fb7958 48%, #6246b9 100%);
+        background-size: auto, auto, auto, 38px 38px, auto;
         display: grid;
         place-items: center;
         min-height: 100svh;
@@ -42,15 +43,15 @@
         width: min(94vw, calc((100svh - 24px) * 0.625), 520px);
         aspect-ratio: 10 / 16;
         overflow: hidden;
-        background: #123452;
-        border: 8px solid #f8deb0;
-        border-radius: 0;
+        background: #1a2130;
+        border: 8px solid #fff0ba;
+        border-radius: 22px;
         box-shadow:
-          0 0 0 4px #123452,
-          0 0 0 8px #176aa3,
-          0 24px 0 rgba(4, 25, 42, .30),
-          0 34px 72px rgba(2, 25, 45, .44),
-          inset 0 0 0 4px #fff5cf;
+          0 0 0 4px #202336,
+          0 0 0 9px #ff5d66,
+          0 22px 0 rgba(70, 43, 74, .34),
+          0 36px 76px rgba(48, 29, 75, .48),
+          inset 0 0 0 4px rgba(255,255,255,.42);
       }
       canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: auto; }
       #gl { z-index: 1; }
@@ -61,11 +62,11 @@
           width: min(100vw, calc((100svh - 8px) * 0.625));
           border-width: 4px;
           box-shadow:
-            0 0 0 2px #123452,
-            0 0 0 4px #176aa3,
-            0 12px 0 rgba(4, 25, 42, .30),
-            0 22px 44px rgba(2, 25, 45, .40),
-            inset 0 0 0 3px #fff5cf;
+            0 0 0 2px #202336,
+            0 0 0 5px #ff5d66,
+            0 12px 0 rgba(70, 43, 74, .34),
+            0 22px 44px rgba(48, 29, 75, .42),
+            inset 0 0 0 3px rgba(255,255,255,.42);
         }
       }
     </style>

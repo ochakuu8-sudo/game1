@@ -3073,6 +3073,257 @@ registerAtlasSprites = function registerAtlasSpritesWreck(atlas) {
   packHiDpi(atlas, 'playfield', WORLD.w, WORLD.h, (ctx, x, y, w, h) => drawPlayfieldSprite(ctx, x, y, w, h));
 };
 
+const TOY_CITY = {
+  ink: '#202338',
+  deep: '#151a2a',
+  road: '#565d69',
+  roadDark: '#3f4652',
+  lane: '#ffd95a',
+  curb: '#e7dfc8',
+  grass: '#61bb70',
+  grassDark: '#3f8f57',
+  water: '#55c7e9',
+  light: '#fff7dc',
+  shadow: 'rgba(24,23,47,.30)',
+  palette: {
+    house: { body: '#ffb95e', side: '#d77a48', roof: '#ef4f5f', trim: '#773742', glass: '#9ff2ff', accent: '#ffe35c', sign: '' },
+    shop: { body: '#ffe06f', side: '#e5904d', roof: '#35a3d6', trim: '#224f75', glass: '#bdf8ff', accent: '#ff5d66', sign: 'SHOP' },
+    office: { body: '#4fc0df', side: '#2f81b5', roof: '#284f7a', trim: '#1f3756', glass: '#e2fbff', accent: '#ffc94a', sign: '' },
+    civic: { body: '#f4ead1', side: '#b9ad91', roof: '#707889', trim: '#42495a', glass: '#effcff', accent: '#6ad487', sign: 'HALL' },
+    tower: { body: '#7c8dff', side: '#4c5bbd', roof: '#ffd044', trim: '#293157', glass: '#e9fbff', accent: '#ff7c6a', sign: '' },
+  },
+};
+
+function toyPath(ctx, points, fill, stroke = TOY_CITY.ink, line = 2) {
+  ctx.beginPath();
+  points.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (line > 0) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = line;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+  }
+}
+
+function toyRect(ctx, x, y, w, h, fill, stroke = TOY_CITY.ink, line = 2, radius = 3) {
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = line;
+  roundCanvasRect(ctx, x, y, w, h, Math.min(radius, w * 0.25, h * 0.25));
+  ctx.fill();
+  if (line > 0) ctx.stroke();
+}
+
+function toyHighlight(ctx, x, y, w, h) {
+  const g = ctx.createLinearGradient(x, y, x + w, y + h);
+  g.addColorStop(0, 'rgba(255,255,255,.42)');
+  g.addColorStop(0.42, 'rgba(255,255,255,.12)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  roundCanvasRect(ctx, x, y, w, h, Math.min(5, w * 0.2));
+  ctx.fill();
+}
+
+function toyWindow(ctx, x, y, w, h, glass, lit = false) {
+  toyRect(ctx, x, y, w, h, lit ? '#fff0a2' : glass, '#21425a', 1, 2);
+  ctx.fillStyle = 'rgba(255,255,255,.75)';
+  ctx.fillRect(x + 1.5, y + 1.5, Math.max(1, w * 0.46), 1.4);
+}
+
+function toyWindowRows(ctx, x, y, w, h, cols, rows, glass, seed = 0) {
+  const padX = Math.max(5, w * 0.12);
+  const padY = Math.max(6, h * 0.16);
+  const gapX = cols <= 1 ? 0 : (w - padX * 2) / (cols - 1);
+  const gapY = rows <= 1 ? 0 : (h - padY * 2) / (rows - 1);
+  const ww = Math.max(5, Math.min(9, w * 0.14));
+  const wh = Math.max(5, Math.min(9, h * 0.09));
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      const lit = ((r * 5 + c * 3 + seed) % 7) === 0;
+      toyWindow(ctx, x + padX + c * gapX - ww * 0.5, y + padY + r * gapY - wh * 0.5, ww, wh, glass, lit);
+    }
+  }
+}
+
+function drawDeluxeBuildingSprite(ctx, x, y, w, h, type) {
+  const p = TOY_CITY.palette[type] || TOY_CITY.palette.office;
+  const cx = x + w * 0.5;
+  const roofH = Math.max(10, h * (type === 'house' ? 0.26 : 0.16));
+  const bodyX = x + w * 0.12;
+  const bodyY = y + roofH;
+  const bodyW = w * 0.76;
+  const bodyH = h - roofH - 6;
+  const lean = Math.min(10, w * 0.14);
+
+  ctx.save();
+  ctx.shadowColor = TOY_CITY.shadow;
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 5;
+  ctx.shadowOffsetY = 7;
+
+  if (type === 'house') {
+    toyRect(ctx, bodyX, bodyY + 4, bodyW, bodyH - 3, p.body, TOY_CITY.ink, 2, 4);
+    ctx.shadowColor = 'transparent';
+    toyPath(ctx, [[x + 6, bodyY + 8], [cx, y + 5], [x + w - 6, bodyY + 8], [x + w - 13, bodyY + 16], [cx, y + 14], [x + 13, bodyY + 16]], p.roof, TOY_CITY.ink, 2);
+    toyHighlight(ctx, bodyX + 5, bodyY + 10, bodyW * 0.38, bodyH * 0.70);
+    toyWindow(ctx, bodyX + bodyW * 0.18, bodyY + bodyH * 0.34, 10, 9, p.glass);
+    toyWindow(ctx, bodyX + bodyW * 0.66, bodyY + bodyH * 0.34, 10, 9, p.glass);
+    toyRect(ctx, bodyX + bodyW * 0.42, bodyY + bodyH * 0.62, bodyW * 0.18, bodyH * 0.28, p.trim, TOY_CITY.ink, 1, 2);
+    ctx.fillStyle = p.accent;
+    ctx.beginPath(); ctx.arc(bodyX + bodyW * 0.56, bodyY + bodyH * 0.74, 1.8, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'shop') {
+    toyRect(ctx, bodyX, bodyY + 4, bodyW, bodyH - 4, p.body, TOY_CITY.ink, 2, 5);
+    ctx.shadowColor = 'transparent';
+    toyPath(ctx, [[bodyX - 3, bodyY + 13], [bodyX + bodyW + 3, bodyY + 13], [bodyX + bodyW - 3, bodyY + 25], [bodyX + 3, bodyY + 25]], p.roof, TOY_CITY.ink, 2);
+    for (let i = 0; i < 6; i += 1) {
+      ctx.fillStyle = i % 2 ? '#fff3cf' : p.accent;
+      ctx.fillRect(bodyX + 5 + i * (bodyW - 10) / 6, bodyY + 25, Math.max(3, (bodyW - 12) / 8), 8);
+    }
+    toyRect(ctx, bodyX + bodyW * 0.26, bodyY + 4, bodyW * 0.48, 12, p.trim, TOY_CITY.ink, 1, 2);
+    ctx.fillStyle = TOY_CITY.light;
+    ctx.font = '900 9px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('SHOP', cx, bodyY + 13);
+    ctx.textAlign = 'left';
+    toyWindow(ctx, bodyX + bodyW * 0.13, bodyY + bodyH * 0.55, bodyW * 0.23, bodyH * 0.18, p.glass);
+    toyRect(ctx, bodyX + bodyW * 0.47, bodyY + bodyH * 0.58, bodyW * 0.16, bodyH * 0.28, p.trim, TOY_CITY.ink, 1, 2);
+    toyWindow(ctx, bodyX + bodyW * 0.72, bodyY + bodyH * 0.55, bodyW * 0.15, bodyH * 0.16, p.glass);
+  } else if (type === 'civic') {
+    toyRect(ctx, bodyX, bodyY + 6, bodyW, bodyH - 5, p.body, TOY_CITY.ink, 2, 4);
+    ctx.shadowColor = 'transparent';
+    toyPath(ctx, [[bodyX - 4, bodyY + 10], [cx, y + 4], [bodyX + bodyW + 4, bodyY + 10], [bodyX + bodyW, bodyY + 18], [bodyX, bodyY + 18]], p.roof, TOY_CITY.ink, 2);
+    for (let i = 0; i < 4; i += 1) toyRect(ctx, bodyX + bodyW * (0.18 + i * 0.21), bodyY + bodyH * 0.38, bodyW * 0.08, bodyH * 0.40, '#fff8e3', p.trim, 1, 1);
+    toyRect(ctx, bodyX + bodyW * 0.40, bodyY + bodyH * 0.76, bodyW * 0.20, bodyH * 0.16, p.trim, TOY_CITY.ink, 1, 1);
+    toyRect(ctx, bodyX + bodyW * 0.25, bodyY + bodyH * 0.22, bodyW * 0.50, 12, p.accent, TOY_CITY.ink, 1, 2);
+    ctx.fillStyle = '#164a35';
+    ctx.font = '900 8px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('HALL', cx, bodyY + bodyH * 0.22 + 9);
+    ctx.textAlign = 'left';
+  } else {
+    toyPath(ctx, [[bodyX, bodyY + 5], [bodyX + bodyW - lean, bodyY], [bodyX + bodyW, bodyY + bodyH - 5], [bodyX + lean, bodyY + bodyH]], p.body, TOY_CITY.ink, 2);
+    ctx.shadowColor = 'transparent';
+    toyPath(ctx, [[bodyX + bodyW - lean, bodyY], [bodyX + bodyW + 5, bodyY + 9], [bodyX + bodyW + 5, bodyY + bodyH - 1], [bodyX + bodyW, bodyY + bodyH - 5]], p.side, TOY_CITY.ink, 2);
+    toyHighlight(ctx, bodyX + 7, bodyY + 10, bodyW * 0.36, bodyH * 0.74);
+    const rows = type === 'tower' ? 5 : Math.max(3, Math.floor(bodyH / 17));
+    toyWindowRows(ctx, bodyX + 6, bodyY + 12, bodyW - 18, bodyH - 22, type === 'tower' ? 4 : 3, rows, p.glass, type.length);
+    if (type === 'tower') {
+      toyRect(ctx, cx - bodyW * 0.18, y + 5, bodyW * 0.36, 12, p.roof, TOY_CITY.ink, 2, 2);
+      ctx.fillStyle = TOY_CITY.light;
+      ctx.fillRect(cx - 1.5, y + 1, 3, 5);
+    } else {
+      toyRect(ctx, bodyX + bodyW * 0.20, bodyY + 5, bodyW * 0.60, 6, p.roof, TOY_CITY.ink, 1, 2);
+    }
+  }
+
+  ctx.restore();
+}
+
+drawPlayfieldSprite = function drawPlayfieldSpriteDeluxe(ctx, x, y, w, h) {
+  const cityX = x + TERRAIN.left - 14;
+  const cityY = y + TERRAIN.digStartY - 18;
+  const cityW = TERRAIN.cols * TERRAIN.cell + 28;
+  const cityH = terrainMineBottomY() - TERRAIN.digStartY + 34;
+  const bg = ctx.createLinearGradient(x, y, x, y + h);
+  bg.addColorStop(0, '#2c2445');
+  bg.addColorStop(0.25, '#233553');
+  bg.addColorStop(0.72, '#1b2538');
+  bg.addColorStop(1, '#151a2a');
+  ctx.fillStyle = bg;
+  ctx.fillRect(x, y, w, h);
+
+  toyRect(ctx, x + 11, y + 10, w - 22, h - 20, '#272d43', '#111527', 5, 18);
+  toyRect(ctx, x + 24, y + PLAYFIELD_TOP_Y - 6, w - 48, h - PLAYFIELD_TOP_Y - 26, '#141d2d', '#0b101b', 4, 13);
+
+  ctx.fillStyle = '#ff5d66';
+  roundCanvasRect(ctx, x + 55, y + 82, w - 110, 8, 4);
+  ctx.fill();
+  ctx.fillStyle = '#5de4ff';
+  roundCanvasRect(ctx, x + 69, y + 94, w - 138, 4, 2);
+  ctx.fill();
+
+  toyRect(ctx, cityX, cityY, cityW, cityH, TOY_CITY.grass, '#172033', 3, 12);
+  ctx.fillStyle = TOY_CITY.grassDark;
+  for (let yy = cityY + 28; yy < cityY + cityH - 20; yy += 42) {
+    ctx.globalAlpha = 0.22;
+    ctx.fillRect(cityX + 12, yy, cityW - 24, 4);
+  }
+  ctx.globalAlpha = 1;
+
+  const roads = [
+    { x: cityX + cityW * 0.18, y: cityY + 4, w: 17, h: cityH - 8 },
+    { x: cityX + cityW * 0.43, y: cityY + 10, w: 16, h: cityH * 0.84 },
+    { x: cityX + cityW * 0.72, y: cityY + 4, w: 17, h: cityH - 8 },
+    { x: cityX + 4, y: cityY + cityH * 0.19, w: cityW - 8, h: 17 },
+    { x: cityX + cityW * 0.04, y: cityY + cityH * 0.47, w: cityW * 0.88, h: 18 },
+    { x: cityX + 4, y: cityY + cityH * 0.75, w: cityW - 8, h: 17 },
+  ];
+  for (const road of roads) {
+    toyRect(ctx, road.x, road.y, road.w, road.h, TOY_CITY.road, '#313848', 1, 5);
+    ctx.fillStyle = TOY_CITY.roadDark;
+    if (road.w > road.h) ctx.fillRect(road.x, road.y + road.h - 3, road.w, 3);
+    else ctx.fillRect(road.x + road.w - 3, road.y, 3, road.h);
+    ctx.fillStyle = TOY_CITY.lane;
+    if (road.w > road.h) for (let xx = road.x + 11; xx < road.x + road.w - 10; xx += 31) ctx.fillRect(xx, road.y + road.h * 0.48, 13, 2);
+    else for (let yy = road.y + 11; yy < road.y + road.h - 10; yy += 31) ctx.fillRect(road.x + road.w * 0.48, yy, 2, 13);
+  }
+
+  toyRect(ctx, cityX + cityW - 42, cityY + 18, 25, 25, '#65d58a', '#317b4c', 1, 8);
+  ctx.fillStyle = '#fff0a2';
+  ctx.beginPath(); ctx.arc(cityX + cityW - 29, cityY + 31, 7, 0, Math.PI * 2); ctx.fill();
+  toyRect(ctx, cityX + 20, cityY + cityH - 48, 28, 19, TOY_CITY.water, '#277c9a', 1, 7);
+  ctx.fillStyle = 'rgba(255,255,255,.55)';
+  ctx.fillRect(cityX + 25, cityY + cityH - 41, 17, 2);
+
+  ctx.fillStyle = '#ffe067';
+  roundCanvasRect(ctx, x + 64, y + PLAYFIELD_TOP_Y + 10, w - 128, 5, 3);
+  ctx.fill();
+  ctx.fillStyle = '#5de4ff';
+  roundCanvasRect(ctx, x + 64, y + h - 88, w - 128, 5, 3);
+  ctx.fill();
+};
+
+registerAtlasSprites = function registerAtlasSpritesDeluxe(atlas) {
+  packHiDpi(atlas, 'ball', BALL_SPRITE_SIZE, BALL_SPRITE_SIZE, (ctx, x, y, w) => {
+    const r = w * 0.5;
+    const g = ctx.createRadialGradient(x + r * 0.65, y + r * 0.52, 2, x + r, y + r, r);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.42, '#dbe6ee');
+    g.addColorStop(1, '#5c6672');
+    ctx.fillStyle = 'rgba(0,0,0,.20)';
+    ctx.beginPath(); ctx.ellipse(x + r + 2, y + r + 3, r * 0.82, r * 0.70, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x + r, y + r, r - 1, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2c3440'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.78)'; ctx.fillRect(x + 10, y + 9, 11, 3);
+  });
+  packHiDpi(atlas, 'flipper', 84, 20, (ctx, x, y) => {
+    toyRect(ctx, x + 3, y + 14, 78, 5, 'rgba(0,0,0,.22)', 'rgba(0,0,0,0)', 0, 3);
+    toyRect(ctx, x, y, 84, 20, '#f7fbff', '#252d3f', 2, 5);
+    ctx.fillStyle = '#ffd95a'; ctx.fillRect(x + 10, y + 6, 60, 4);
+    ctx.fillStyle = '#40bfe5'; ctx.fillRect(x + 14, y + 12, 48, 3);
+    ctx.fillStyle = '#ff5d66'; ctx.fillRect(x + 66, y + 5, 9, 9);
+  });
+  packHiDpi(atlas, 'wall', 20, 20, (ctx, x, y) => {
+    ctx.fillStyle = '#101727'; ctx.fillRect(x, y, 20, 20);
+    const g = ctx.createLinearGradient(x, y, x + 20, y);
+    g.addColorStop(0, '#27354a');
+    g.addColorStop(0.35, '#eef7ff');
+    g.addColorStop(0.55, '#8799aa');
+    g.addColorStop(1, '#202a3b');
+    ctx.fillStyle = g; ctx.fillRect(x + 3, y, 14, 20);
+  });
+  for (const type of ['house', 'shop', 'office', 'civic', 'tower']) {
+    const wide = type === 'tower' ? 92 : type === 'office' || type === 'civic' ? 82 : 72;
+    const tall = type === 'tower' ? 118 : type === 'office' || type === 'civic' ? 100 : 82;
+    packHiDpi(atlas, `wreck_${type}`, wide, tall, (ctx, x, y, w, h) => drawDeluxeBuildingSprite(ctx, x, y, w, h, type));
+  }
+  packHiDpi(atlas, 'playfield', WORLD.w, WORLD.h, (ctx, x, y, w, h) => drawPlayfieldSprite(ctx, x, y, w, h));
+};
+
 const economy = createMedalEconomy();
 const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, upgradeCost: 80, ballLostTimer: 0, scrollTextTimer: 0 };
 const START_POS = { x: 250, y: 640 };
@@ -3830,24 +4081,59 @@ function drawUiBall(vw,vh){
 function drawHud(vw,vh){
   const sx=vw/WORLD.w, sy=vh/WORLD.h;
   const econ=economy.state;
-  uiCtx.fillStyle='rgba(18,34,42,0.82)'; uiCtx.fillRect(10,8,318,94);
-  uiCtx.strokeStyle='#9fd8ec'; uiCtx.lineWidth=2; uiCtx.strokeRect(10.5,8.5,317,93);
-  uiCtx.fillStyle='#fff7cf'; uiCtx.font='900 19px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(`${econ.medals.toLocaleString()} MEDALS`,22,33);
-  uiCtx.fillStyle='#bfeeff'; uiCtx.font='700 13px ui-monospace, SFMono-Regular, Consolas, monospace';
-  uiCtx.fillText(`BALL ${BALL_COST}`,22,57); uiCtx.fillText(`LAST ${state.lastBallNet>=0?'+':''}${state.lastBallNet}`,100,57); uiCtx.fillText(`SESSION ${econ.sessionNet>=0?'+':''}${econ.sessionNet}`,202,57);
-  uiCtx.fillText(`PWR ${state.miningPower}`,22,80); uiCtx.fillText(`BLD ${state.cellsMined}`,100,80); uiCtx.fillText(`PEOPLE ${state.peopleCrushed}`,202,80);
+  uiCtx.save();
+  uiCtx.shadowColor='rgba(10,10,28,.32)';
+  uiCtx.shadowBlur=0;
+  uiCtx.shadowOffsetY=4;
+  roundCanvasRect(uiCtx,10,10,318,86,10);
+  uiCtx.fillStyle='rgba(22,27,48,.92)';
+  uiCtx.fill();
+  uiCtx.shadowColor='transparent';
+  uiCtx.strokeStyle='rgba(255,240,186,.85)';
+  uiCtx.lineWidth=2;
+  uiCtx.stroke();
+  uiCtx.fillStyle='rgba(255,255,255,.08)';
+  uiCtx.fillRect(18,18,302,1);
+  uiCtx.fillStyle='#ffe067';
+  uiCtx.font='900 20px ui-monospace, SFMono-Regular, Consolas, monospace';
+  uiCtx.fillText(`${econ.medals.toLocaleString()} MEDALS`,24,38);
+  const stats=[
+    [`BALL`, BALL_COST],
+    [`LAST`, `${state.lastBallNet>=0?'+':''}${state.lastBallNet}`],
+    [`NET`, `${econ.sessionNet>=0?'+':''}${econ.sessionNet}`],
+    [`PWR`, state.miningPower],
+    [`BLD`, state.cellsMined],
+    [`HIT`, state.peopleCrushed],
+  ];
+  uiCtx.font='900 10px ui-monospace, SFMono-Regular, Consolas, monospace';
+  for(let i=0;i<stats.length;i++){
+    const col=i%3,row=Math.floor(i/3);
+    const x=24+col*94,y=58+row*20;
+    uiCtx.fillStyle='rgba(93,228,255,.82)';
+    uiCtx.fillText(stats[i][0],x,y);
+    uiCtx.fillStyle='#fff7dc';
+    uiCtx.fillText(String(stats[i][1]),x+34,y);
+  }
   const b=uiButtons.upgrade, bx=b.x*sx, by=b.y*sy, bw=b.w*sx, bh=b.h*sy;
   const can=economy.canSpend(state.upgradeCost);
-  uiCtx.fillStyle=can?'#fff06a':'rgba(255,255,255,.22)'; uiCtx.fillRect(bx,by,bw,bh);
-  uiCtx.strokeStyle=can?'#26343d':'rgba(255,255,255,.35)'; uiCtx.lineWidth=2; uiCtx.strokeRect(bx+0.5,by+0.5,bw-1,bh-1);
-  uiCtx.fillStyle=can?'#20313c':'rgba(255,255,255,.7)'; uiCtx.font='900 13px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.textAlign='center';
-  uiCtx.fillText('UPGRADE',bx+bw*0.5,by+bh*0.42);
-  uiCtx.font='700 11px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(`${state.upgradeCost} MED`,bx+bw*0.5,by+bh*0.72);
+  const buttonGrad=uiCtx.createLinearGradient(bx,by,bx,by+bh);
+  if(can){buttonGrad.addColorStop(0,'#fff08a');buttonGrad.addColorStop(1,'#ffb84f');}
+  else{buttonGrad.addColorStop(0,'rgba(255,255,255,.28)');buttonGrad.addColorStop(1,'rgba(255,255,255,.12)');}
+  uiCtx.fillStyle=buttonGrad;
+  roundCanvasRect(uiCtx,bx,by,bw,bh,8*sy); uiCtx.fill();
+  uiCtx.strokeStyle=can?'#24243a':'rgba(255,255,255,.35)'; uiCtx.lineWidth=2; uiCtx.stroke();
+  uiCtx.fillStyle=can?'#22243a':'rgba(255,255,255,.72)'; uiCtx.font='900 13px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.textAlign='center';
+  uiCtx.fillText('UPGRADE',bx+bw*0.5,by+bh*0.43);
+  uiCtx.font='800 11px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.fillText(`${state.upgradeCost} MED`,bx+bw*0.5,by+bh*0.73);
   uiCtx.textAlign='left';
   if(state.mode==='ready'){
-    uiCtx.fillStyle='rgba(255,255,255,.88)'; uiCtx.font='900 18px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.textAlign='center';
-    uiCtx.fillText('FLIPPER START',vw*0.5,vh*0.18); uiCtx.textAlign='left';
+    uiCtx.fillStyle='rgba(22,27,48,.72)';
+    roundCanvasRect(uiCtx,vw*0.5-96,vh*0.185-17,192,30,14); uiCtx.fill();
+    uiCtx.strokeStyle='rgba(255,224,103,.92)'; uiCtx.stroke();
+    uiCtx.fillStyle='#fff7dc'; uiCtx.font='900 16px ui-monospace, SFMono-Regular, Consolas, monospace'; uiCtx.textAlign='center';
+    uiCtx.fillText('FLIPPER START',vw*0.5,vh*0.185+6); uiCtx.textAlign='left';
   }
+  uiCtx.restore();
 }
 function drawTouchPads(vw,vh){
   const coarse=matchMedia('(pointer: coarse)').matches||vw<430;
