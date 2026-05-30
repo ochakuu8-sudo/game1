@@ -3555,7 +3555,7 @@ function flipperSegment(f, angle = f.angle) {
 }
 
 function flipperOpenProgress() {
-  return clamp(state.flipperOpenTimer / FLIPPER_OPEN_SECONDS, 0, 1);
+  return Math.max(0, state.flipperOpenTimer / FLIPPER_OPEN_SECONDS);
 }
 function flipperSlideOffset(side) {
   const shift = (1 - flipperOpenProgress()) * 28;
@@ -4068,7 +4068,7 @@ function update(dt){if(!isFiniteBallState()){recoverFromBrokenPhysics();return;}
 for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){const s=hitSparks[i];s.life-=dt;s.x+=(s.vx||0)*dt;s.y+=(s.vy||0)*dt;s.vy=(s.vy||0)+180*dt;if(s.life<=0)hitSparks.splice(i,1);} updatePeople(dt); updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
 for(const cluster of materialClusters.values()) if(cluster.cooldown>0) cluster.cooldown=Math.max(0,cluster.cooldown-dt);
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0){initTerrain(); resetBall();} return;}
-state.flipperOpenTimer=Math.min(FLIPPER_OPEN_SECONDS,state.flipperOpenTimer+dt);
+state.flipperOpenTimer+=dt;
 const speed=len2(ball.vx,ball.vy); const substeps=clamp(Math.ceil((speed*dt)/(ball.r*0.32)),1,8); const sdt=dt/substeps;
 for(let s=0;s<substeps;s++){ball.vy+=PHYSICS.gravity*sdt; ball.vx*=PHYSICS.airDrag; ball.vy*=PHYSICS.airDrag; ball.x+=ball.vx*sdt; ball.y+=ball.vy*sdt; for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce); for (const seg of rails) segmentCapsuleHit(ball, currentRailSegment(seg)); for(const key of ['left','right']) resolveFlipperHit(flippers[key],key==='left'?input.left:input.right,sdt);
 resolveTerrainCollision(ball);
