@@ -3467,13 +3467,10 @@ const floatingTexts=[]; const hitSparks=[]; const people=[]; const screenShake={
 let materialClusters=new Map();
 const TERRAIN_DEFS={
   dirt:{hp:1,value:0,color:'#8b5a32',light:'#bc7a43',dark:'#5d3924',bounce:0.06,solid:true},
-  clay:{hp:2,value:0,color:'#a95f45',light:'#d08460',dark:'#6b382d',bounce:0.08,solid:true},
-  stone:{hp:3,value:0,color:'#6b6f76',light:'#9aa0a8',dark:'#3f454d',bounce:0.15,solid:true},
-  hardstone:{hp:5,value:0,color:'#4d5360',light:'#7b8492',dark:'#2d3240',bounce:0.22,solid:true},
-  copper:{hp:2,value:1,color:'#b96a38',light:'#ffb16a',dark:'#6d3a24',bounce:0.12,solid:true,ore:true},
-  silver:{hp:3,value:2,color:'#b8ccd6',light:'#effcff',dark:'#68818c',bounce:0.14,solid:true,ore:true},
-  gold:{hp:4,value:4,color:'#f0b931',light:'#fff079',dark:'#986925',bounce:0.16,solid:true,ore:true},
-  gem:{hp:5,value:8,color:'#5ee0d5',light:'#d8fff7',dark:'#1f7e82',bounce:0.18,solid:true,ore:true},
+  copper:{hp:4,value:8,color:'#b96a38',light:'#ffb16a',dark:'#6d3a24',bounce:0.34,solid:true,ore:true},
+  silver:{hp:6,value:16,color:'#b8ccd6',light:'#effcff',dark:'#68818c',bounce:0.40,solid:true,ore:true},
+  gold:{hp:8,value:32,color:'#f0b931',light:'#fff079',dark:'#986925',bounce:0.46,solid:true,ore:true},
+  gem:{hp:10,value:60,color:'#5ee0d5',light:'#d8fff7',dark:'#1f7e82',bounce:0.52,solid:true,ore:true},
   empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0,solid:false}
 };
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
@@ -3619,14 +3616,8 @@ function resolveFlipperHit(f, pressed, sdt) {
 const drain = { x0: 228, x1: 272, y: 760 };
 function addScreenShake(a=2,d=0.08){screenShake.amount=Math.max(screenShake.amount,a);screenShake.duration=Math.max(screenShake.duration,d);screenShake.time=Math.max(screenShake.time,d)}
 function pickTerrainType(depth){
-  const p=(depth*37)%100;
-  if(p<54)return'dirt';
-  if(p<70)return'clay';
-  if(p<86)return'stone';
-  if(p<93)return'copper';
-  if(p<97)return'silver';
-  if(p<99)return'gold';
-  return'gem';
+  void depth;
+  return 'dirt';
 }
 function emptyTerrainCell(){
   return {type:'empty',hp:0,maxHp:0,value:0,solid:false,seed:0,clusterId:null};
@@ -3642,38 +3633,33 @@ function makeTerrainCell(depth,row=0,col=0){
   if(isTerrainSafeCell(row,col)) return emptyTerrainCell();
   const n=Math.abs(Math.sin((row+depth)*12.9898+col*78.233))*43758.5453;
   const noise=n-Math.floor(n);
-  const strata=row/TERRAIN.rows;
-  let type='dirt';
-  if(strata>0.70 && noise>0.36) type='hardstone';
-  else if(strata>0.48 && noise>0.34) type='stone';
-  else if(noise>0.72) type='clay';
-  const oreRoll=(Math.abs(Math.sin((row+depth)*91.7+col*33.3))*9973.21)%1;
-  if(oreRoll>0.965) type=strata>0.64?'gold':strata>0.42?'silver':'copper';
-  if(oreRoll>0.992) type='gem';
-  const def=TERRAIN_DEFS[type];
-  const hp=def.hp+Math.floor(strata*1.6);
-  return {type,hp,maxHp:hp,value:def.value||0,solid:true,seed:noise,clusterId:null};
+  const def=TERRAIN_DEFS.dirt;
+  return {type:'dirt',hp:def.hp,maxHp:def.hp,value:0,solid:true,seed:noise,clusterId:null};
 }
 function applyOreClusters(){
   const rng=createCityRng(0xD16D00+state.depthLevel*101);
   const startRow=Math.max(2,Math.ceil((TERRAIN.digStartY-TERRAIN.top)/TERRAIN.cell)+1);
   const endRow=Math.min(TERRAIN.rows-4,Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell)-1);
   const deposits=[
-    {type:'copper',count:10,minR:startRow+3,maxR:endRow-4,rx:3,ry:2},
-    {type:'silver',count:7,minR:startRow+18,maxR:endRow-4,rx:3,ry:2},
-    {type:'gold',count:4,minR:startRow+34,maxR:endRow-3,rx:2,ry:2},
-    {type:'gem',count:2,minR:startRow+42,maxR:endRow-2,rx:1,ry:1},
+    {type:'gem',count:2,minR:startRow+2,maxR:startRow+17,w:3,h:3},
+    {type:'gold',count:4,minR:startRow+12,maxR:startRow+31,w:4,h:3},
+    {type:'silver',count:6,minR:startRow+26,maxR:startRow+52,w:4,h:3},
+    {type:'copper',count:8,minR:startRow+42,maxR:endRow-6,w:4,h:3},
   ];
+  let nextId=1;
   for(const dep of deposits){
     for(let i=0;i<dep.count;i++){
-      const row=clamp(Math.floor(dep.minR+rng()*Math.max(1,dep.maxR-dep.minR)),startRow,endRow);
-      const col=3+Math.floor(rng()*(TERRAIN.cols-6));
-      for(let rr=row-dep.ry;rr<=row+dep.ry;rr++) for(let cc=col-dep.rx;cc<=col+dep.rx;cc++){
-        if(rr<startRow||rr>endRow||cc<1||cc>=TERRAIN.cols-1) continue;
-        const d=Math.hypot((rr-row)/(dep.ry+0.1),(cc-col)/(dep.rx+0.1));
-        if(d>1 || rng()<0.22) continue;
-        const def=TERRAIN_DEFS[dep.type];
-        TERRAIN.pixels[rr][cc]={type:dep.type,hp:def.hp,maxHp:def.hp,value:def.value,solid:true,seed:rng(),clusterId:null};
+      for(let attempt=0;attempt<80;attempt++){
+        const row=clamp(Math.floor(dep.minR+rng()*Math.max(1,dep.maxR-dep.minR)),startRow,endRow-dep.h);
+        const col=2+Math.floor(rng()*Math.max(1,TERRAIN.cols-dep.w-4));
+        let blocked=false;
+        for(let rr=row-1;rr<=row+dep.h;rr++) for(let cc=col-1;cc<=col+dep.w;cc++){
+          const cell=TERRAIN.pixels[rr]?.[cc];
+          if(cell?.clusterId) blocked=true;
+        }
+        if(blocked) continue;
+        placeOreCluster(`ore_${nextId++}`,row,col,dep.w,dep.h,dep.type,rng);
+        break;
       }
     }
   }
@@ -3706,6 +3692,18 @@ function placeCityBuilding(clusterId,row,col,w,h,type,rng){
   }
   const maxHp=Math.max(2,Math.ceil(Math.sqrt(count))*(def.hp||2));
   materialClusters.set(clusterId,{id:clusterId,type,hp:maxHp,maxHp,value:0,cells:count,minRow:row,maxRow:row+h-1,minCol:col,maxCol:col+w-1});
+}
+function placeOreCluster(clusterId,row,col,w,h,type,rng){
+  const def=TERRAIN_DEFS[type];
+  const cells=[];
+  for(let rr=row;rr<row+h;rr++) for(let cc=col;cc<col+w;cc++){
+    if(rr<0||rr>=TERRAIN.rows||cc<0||cc>=TERRAIN.cols) continue;
+    TERRAIN.pixels[rr][cc]={type,hp:def.hp,maxHp:def.hp,value:def.value,solid:true,seed:rng(),clusterId};
+    cells.push([rr,cc]);
+  }
+  const hp=def.hp;
+  const value=def.value;
+  materialClusters.set(clusterId,{id:clusterId,type,hp,maxHp:hp,value,cells,minRow:row,maxRow:row+h-1,minCol:col,maxCol:col+w-1,exposed:false});
 }
 function rebuildMaterialClusters(){
   materialClusters=new Map();
@@ -3748,20 +3746,6 @@ function initTerrain(){
   for(let row=startRow;row<=endRow;row++) for(let col=1;col<TERRAIN.cols-1;col++){
     const cell=makeTerrainCell(state.depthLevel,row,col);
     TERRAIN.pixels[row][col]=cell;
-  }
-  for(let row=startRow;row<Math.min(endRow,startRow+7);row++) for(let col=24;col<=41;col++){
-    TERRAIN.pixels[row][col]=emptyTerrainCell();
-  }
-  for(let vein=0;vein<9;vein++){
-    const cx=5+Math.floor(rng()*(TERRAIN.cols-10));
-    const cy=startRow+8+Math.floor(rng()*Math.max(1,endRow-startRow-12));
-    const rx=3+Math.floor(rng()*7);
-    const ry=2+Math.floor(rng()*5);
-    for(let row=cy-ry;row<=cy+ry;row++) for(let col=cx-rx;col<=cx+rx;col++){
-      if(row<startRow||row>endRow||col<1||col>=TERRAIN.cols-1) continue;
-      const d=(Math.pow((row-cy)/(ry+0.1),2)+Math.pow((col-cx)/(rx+0.1),2));
-      if(d<1 && rng()>0.38) TERRAIN.pixels[row][col]=emptyTerrainCell();
-    }
   }
   applyOreClusters();
 }
@@ -3822,20 +3806,41 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   const cell=TERRAIN.pixels[row]?.[col];
   if(!cell?.solid) return {hit:false,broken:false};
   const def=TERRAIN_DEFS[cell.type];
+  if(isOreType(cell.type)) return {hit:false,broken:false};
   cell.hp-=Math.max(1,damage);
   addTerrainSparks(hitX,hitY,def.light,cell.hp<=0?5:2,cell.hp<=0?1.15:0.75);
   if(cell.hp>0) return {hit:true,broken:false};
-  const minedType=cell.type;
-  const payout=isOreType(minedType)?formatOreGain(def.value||1):0;
   cell.solid=false; cell.type='empty'; cell.hp=0; cell.value=0; state.cellsMined+=1;
-  if(payout>0){
-    state.peopleCrushed+=1;
-    awardMedals(payout,`ore-${minedType}`,hitX,hitY,def.light);
-    floatingTexts.push({x:hitX,y:hitY-12,text:`${minedType.toUpperCase()}!`,color:def.light,life:0.8});
-    playSfx('collect',0.8,worldPan(hitX));
-    addScreenShake(clamp(impact/200,1.4,4.8),0.10);
+  if(impact>520) addScreenShake(clamp(impact/520,0.4,1.4),0.04);
+  return {hit:true,broken:true};
+}
+function damageOreCluster(cluster,hitX,hitY,impact=0){
+  const def=TERRAIN_DEFS[cluster.type];
+  if(cluster.cooldown>0) return {hit:true,broken:false};
+  cluster.cooldown=0.12;
+  if(!cluster.exposed){
+    cluster.exposed=true;
+    floatingTexts.push({x:hitX,y:hitY-12,text:`${cluster.type.toUpperCase()} FOUND`,color:def.light,life:0.8});
+    playSfx('newCard',0.9,worldPan(hitX));
   }
-  if(impact>220) addScreenShake(clamp(impact/220,1.2,4.2),0.08);
+  cluster.hp-=1;
+  addTerrainSparks(hitX,hitY,def.light,cluster.hp<=0?10:4,cluster.hp<=0?1.8:1.05);
+  if(cluster.hp>0){
+    floatingTexts.push({x:hitX,y:hitY-8,text:`HP ${cluster.hp}/${cluster.maxHp}`,color:def.light,life:0.46});
+    return {hit:true,broken:false};
+  }
+  for(const [r,c] of cluster.cells){
+    const cell=TERRAIN.pixels[r]?.[c];
+    if(!cell || cell.clusterId!==cluster.id) continue;
+    cell.solid=false; cell.type='empty'; cell.hp=0; cell.value=0; cell.clusterId=null;
+  }
+  materialClusters.delete(cluster.id);
+  state.peopleCrushed+=1;
+  const payout=formatOreGain(cluster.value);
+  awardMedals(payout,`ore-cluster-${cluster.type}`,hitX,hitY,def.light);
+  floatingTexts.push({x:hitX,y:hitY-18,text:`${cluster.type.toUpperCase()} +${payout}`,color:def.light,life:0.95});
+  addScreenShake(clamp(impact/170,2.0,6.5),0.12);
+  playSfx('roundClear',0.95,worldPan(hitX));
   return {hit:true,broken:true};
 }
 function digTerrain(cx,cy,radius,power,impact=0){
@@ -3846,6 +3851,7 @@ function digTerrain(cx,cy,radius,power,impact=0){
   let touched=0,broken=0;
   for(let row=minRow;row<=maxRow;row++) for(let col=minCol;col<=maxCol;col++){
     const cell=TERRAIN.pixels[row]?.[col]; if(!cell?.solid) continue;
+    if(isOreType(cell.type)) continue;
     if(!circleIntersectsCell(cx,cy,radius,row,col)) continue;
     const box=terrainCellBox(row,col);
     const ccx=box.x+box.w*0.5,ccy=box.y+box.h*0.5;
@@ -3877,14 +3883,17 @@ function updatePeople(dt){
   }
 }
 function resolveTerrainCollision(body){
+  const speed=Math.hypot(body.vx,body.vy);
+  digTerrain(body.x,body.y,body.r*1.08,state.miningPower,Math.max(0,speed));
   const rad=body.r+2;
   const minCol=Math.max(0,Math.floor((body.x-rad-TERRAIN.left)/TERRAIN.cell));
   const maxCol=Math.min(TERRAIN.cols-1,Math.floor((body.x+rad-TERRAIN.left)/TERRAIN.cell));
   const minRow=Math.max(0,Math.floor((body.y-rad-TERRAIN.top)/TERRAIN.cell));
   const maxRow=Math.min(TERRAIN.rows-1,Math.floor((body.y+rad-TERRAIN.top)/TERRAIN.cell));
-  let nx=0,ny=0,hits=0,b=0.1,maxPen=0,contactX=body.x,contactY=body.y;
+  let nx=0,ny=0,hits=0,b=0.1,maxPen=0,contactX=body.x,contactY=body.y,hitCluster=null;
   for(let row=minRow;row<=maxRow;row++) for(let col=minCol;col<=maxCol;col++){
     const cell=TERRAIN.pixels[row]?.[col]; if(!cell?.solid) continue;
+    if(!isOreType(cell.type)) continue;
     const box=terrainCellBox(row,col);
     let px=clamp(body.x,box.x,box.x+box.w);
     let py=clamp(body.y,box.y,box.y+box.h);
@@ -3908,19 +3917,16 @@ function resolveTerrainCollision(body){
     hits+=1;
     if(pen>maxPen){maxPen=pen;contactX=px;contactY=py;}
     b=Math.max(b,TERRAIN_DEFS[cell.type].bounce);
+    if(cell.clusterId) hitCluster=materialClusters.get(cell.clusterId)||hitCluster;
   }
   if(!hits) return false;
   const len=Math.hypot(nx,ny)||1; nx/=len; ny/=len;
   const impact=Math.max(0,-(body.vx*nx+body.vy*ny));
-  const impactPower=Math.max(1,Math.floor(impact/190));
-  const digRadius=clamp(body.r*(1.08+state.miningPower*0.08)+impact*0.012,body.r*1.05,body.r*1.85);
-  const dig=digTerrain(contactX,contactY,digRadius,state.miningPower+impactPower,impact);
+  const oreHit=hitCluster?damageOreCluster(hitCluster,contactX,contactY,impact):{broken:false};
   body.x+=nx*(maxPen+0.65); body.y+=ny*(maxPen+0.65);
   const vn=body.vx*nx+body.vy*ny;
-  const rebound=dig.broken>0?b*0.55:b;
+  const rebound=oreHit.broken?b*1.12:b;
   if(vn<0){body.vx-=(1+rebound)*vn*nx; body.vy-=(1+rebound)*vn*ny;}
-  const drag=dig.broken>0?0.952:0.982;
-  body.vx*=drag; body.vy*=drag;
   return true;
 }
 function launchBall(){
@@ -4010,7 +4016,8 @@ function drainBall(){
 }
 function update(dt){if(!isFiniteBallState()){recoverFromBrokenPhysics();return;} state.fpsS+=dt;state.fpsN+=1;if(state.fpsS>0.3){state.fps=Math.round(state.fpsN/state.fpsS);state.fpsS=0;state.fpsN=0;} if(screenShake.time>0){screenShake.time=Math.max(0,screenShake.time-dt); if(screenShake.time<=0)screenShake.amount=0;}
 for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){const s=hitSparks[i];s.life-=dt;s.x+=(s.vx||0)*dt;s.y+=(s.vy||0)*dt;s.vy=(s.vy||0)+180*dt;if(s.life<=0)hitSparks.splice(i,1);} updatePeople(dt); updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
-if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0) resetBall(); return;}
+for(const cluster of materialClusters.values()) if(cluster.cooldown>0) cluster.cooldown=Math.max(0,cluster.cooldown-dt);
+if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0){initTerrain(); resetBall();} return;}
 const speed=len2(ball.vx,ball.vy); const substeps=clamp(Math.ceil((speed*dt)/(ball.r*0.32)),1,8); const sdt=dt/substeps;
 for(let s=0;s<substeps;s++){ball.vy+=PHYSICS.gravity*sdt; ball.vx*=PHYSICS.airDrag; ball.vy*=PHYSICS.airDrag; ball.x+=ball.vx*sdt; ball.y+=ball.vy*sdt; for (const w of walls) resolveAABB(ball, w, PHYSICS.wallBounce); for (const seg of rails) segmentCapsuleHit(ball, seg); for(const key of ['left','right']) resolveFlipperHit(flippers[key],key==='left'?input.left:input.right,sdt);
 resolveTerrainCollision(ball);
@@ -4408,7 +4415,9 @@ function drawMineTerrain(sx,sy){
   for(let row=0;row<TERRAIN.rows;row++) for(let col=0;col<TERRAIN.cols;col++){
     const cell=TERRAIN.pixels[row]?.[col];
     if(!cell?.solid) continue;
-    const def=TERRAIN_DEFS[cell.type];
+    const cluster=cell.clusterId?materialClusters.get(cell.clusterId):null;
+    const hiddenOre=isOreType(cell.type)&&!cluster?.exposed;
+    const def=hiddenOre?TERRAIN_DEFS.dirt:TERRAIN_DEFS[cell.type];
     const x=left+col*cellW;
     const y=top+row*cellH;
     const shade=(cell.seed||0);
