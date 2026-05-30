@@ -18,9 +18,9 @@ const PHYSICS = {
   flipperBounce: 0.12,
   flipperFriction: 0.985,
   railFriction: 0.996,
-  maxBallSpeed: 1150,
-  maxUpwardBallSpeed: 1200,
-  minFlipperBallSpeed: 460,
+  maxBallSpeed: 980,
+  maxUpwardBallSpeed: 1120,
+  minFlipperBallSpeed: 380,
   spinDamping: 0.988,
   rollingSpinGain: 0.42,
 };
@@ -3453,6 +3453,7 @@ registerAtlasSprites = function registerAtlasSpritesMine(atlas) {
 
 const economy = createMedalEconomy();
 const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 1, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, upgradeCost: 80, ballLostTimer: 0, scrollTextTimer: 0 };
+const MAX_MINING_POWER = 8;
 const START_POS = { x: 250, y: 640 };
 const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot: 0, spin: 0, active: false };
 const input = { left: false, right: false, pointerSide: 0 };
@@ -3475,7 +3476,7 @@ const TERRAIN_DEFS={
 };
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ x1: 25, y1: 620, x2: 160, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { x1: 475, y1: 620, x2: 340, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
-const flippers={left:{pivot:{x:160,y:704},length:76,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:860,fxCooldown:0},right:{pivot:{x:340,y:704},length:76,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:860,fxCooldown:0}};
+const flippers={left:{pivot:{x:160,y:704},length:76,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:760,fxCooldown:0},right:{pivot:{x:340,y:704},length:76,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:760,fxCooldown:0}};
 function resolveAABB(body, box, restitution = PHYSICS.wallBounce) {
   const px = clamp(body.x, box.x, box.x + box.w);
   const py = clamp(body.y, box.y, box.y + box.h);
@@ -3554,6 +3555,19 @@ function flipperSegment(f, angle = f.angle) {
   };
 }
 
+function flipperPowerScale() {
+  return clamp(0.84 + (state.miningPower - 1) * 0.14, 0.84, 1.68);
+}
+function currentMaxBallSpeed() {
+  return Math.min(1220, PHYSICS.maxBallSpeed + (state.miningPower - 1) * 36);
+}
+function currentMaxUpwardBallSpeed() {
+  return Math.min(1240, PHYSICS.maxUpwardBallSpeed + (state.miningPower - 1) * 32);
+}
+function launchSpeedForPower() {
+  return Math.min(850, 560 + (state.miningPower - 1) * 42);
+}
+
 function applyFlipperImpulse(f, hit, sdt, beforeVx = ball.vx, beforeVy = ball.vy) {
   const omega = (f.angle - f.prev) / Math.max(sdt, 0.0001);
   const rx = hit.cx - f.pivot.x;
@@ -3564,8 +3578,9 @@ function applyFlipperImpulse(f, hit, sdt, beforeVx = ball.vx, beforeVy = ball.vy
   const relVy = beforeVy - surfaceVy;
   const relN = relVx * hit.nx + relVy * hit.ny;
   if (relN >= 0) return null;
+  const powerScale = flipperPowerScale();
   const tipPower = 0.54 + hit.t * 0.22;
-  const boost = clamp(((-relN) * 0.86 + Math.abs(omega) * f.length * 0.16) * tipPower, 0, f.upImpulse);
+  const boost = clamp(((-relN) * 0.78 + Math.abs(omega) * f.length * 0.14) * tipPower * powerScale, 0, f.upImpulse * powerScale);
   const side = f.pivot.x < WORLD.w * 0.5 ? 1 : -1;
   const sweet = hit.t >= 0.42 && hit.t <= 0.88;
   const tangentX = -ry;
@@ -3573,19 +3588,19 @@ function applyFlipperImpulse(f, hit, sdt, beforeVx = ball.vx, beforeVy = ball.vy
   const tangentLen = Math.hypot(tangentX, tangentY) || 1;
   const tx = tangentX / tangentLen;
   const ty = tangentY / tangentLen;
-  ball.vx += hit.nx * boost * 0.60 + tx * boost * 0.17;
-  ball.vy += hit.ny * boost * 0.60 + ty * boost * 0.17;
-  ball.vy -= boost * 0.06;
+  ball.vx += hit.nx * boost * 0.56 + tx * boost * 0.16;
+  ball.vy += hit.ny * boost * 0.56 + ty * boost * 0.16;
+  ball.vy -= boost * 0.05;
   const targetVx = side * (220 + hit.t * 230);
-  const targetVy = -(700 + hit.t * 430 + (sweet ? 110 : 0));
-  const blend = sweet ? 0.36 : 0.24;
+  const targetVy = -(560 + hit.t * 350 + (sweet ? 85 : 0)) * powerScale;
+  const blend = sweet ? 0.34 : 0.22;
   ball.vx += (targetVx - ball.vx) * blend;
   ball.vy += (targetVy - ball.vy) * blend;
   ball.spin = clamp(ball.spin + (boost / Math.max(ball.r, 1)) * (hit.t > 0.5 ? 0.10 : 0.07), -7, 7);
   return { sweet, side, power: boost };
 }
 
-function clampBallSpeed() { const max = ball.vy < -20 ? PHYSICS.maxUpwardBallSpeed : PHYSICS.maxBallSpeed; const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
+function clampBallSpeed() { const max = ball.vy < -20 ? currentMaxUpwardBallSpeed() : currentMaxBallSpeed(); const speed = Math.hypot(ball.vx, ball.vy); if (speed > max) { const k = max / speed; ball.vx *= k; ball.vy *= k; } }
 function ensureMinBallSpeed(min = 360) { const speed = Math.hypot(ball.vx, ball.vy); if (speed > 0 && speed < min) { const k = min / speed; ball.vx *= k; ball.vy *= k; } }
 
 function circleOverlapsBox(body, box) { const nearestX = clamp(body.x, box.x, box.x + box.w); const nearestY = clamp(body.y, box.y, box.y + box.h); const dx = body.x - nearestX; const dy = body.y - nearestY; return dx * dx + dy * dy <= body.r * body.r; }
@@ -3603,7 +3618,8 @@ function resolveFlipperHit(f, pressed, sdt) {
     if (pressed && Math.abs(delta) > 0.0005) {
       shot = applyFlipperImpulse(f, hit, sdt, beforeVx, beforeVy);
       clampBallSpeed();
-      ensureMinBallSpeed(shot?.sweet ? PHYSICS.minFlipperBallSpeed + 80 : PHYSICS.minFlipperBallSpeed);
+      const minShotSpeed = (shot?.sweet ? PHYSICS.minFlipperBallSpeed + 80 : PHYSICS.minFlipperBallSpeed) * flipperPowerScale();
+      ensureMinBallSpeed(Math.min(660, minShotSpeed));
     }
     if (f.fxCooldown <= 0) {
       hitSparks.push({x:hit.cx,y:hit.cy,life:0.16,color:shot?.sweet?'#68e4ff':'#fff7bf'});
@@ -3797,6 +3813,13 @@ function awardMedals(amount, source, x, y, color) {
   floatingTexts.push({x,y,text:`+${payout} MEDALS`,color,life:0.72});
   return payout;
 }
+function powerUpFromOre(cluster, x, y, color) {
+  const before = state.miningPower;
+  state.miningPower = Math.min(MAX_MINING_POWER, state.miningPower + 1);
+  if (state.miningPower === before) return;
+  floatingTexts.push({x,y:y-34,text:`PWR ${state.miningPower}`,color,life:0.95});
+  playSfx('upgrade',0.8,worldPan(x));
+}
 function spawnPeople(x,y,type='house',count=1){
   const room=Math.max(0,60-people.length);
   const total=Math.min(room,count);
@@ -3858,6 +3881,7 @@ function damageOreCluster(cluster,hitX,hitY,impact=0){
   state.peopleCrushed+=1;
   const payout=formatOreGain(cluster.value);
   awardMedals(payout,`ore-cluster-${cluster.type}`,hitX,hitY,def.light);
+  powerUpFromOre(cluster,hitX,hitY,def.light);
   floatingTexts.push({x:hitX,y:hitY-18,text:`${cluster.type.toUpperCase()} +${payout}`,color:def.light,life:0.95});
   addScreenShake(clamp(impact/170,2.0,6.5),0.12);
   playSfx('roundClear',0.95,worldPan(hitX));
@@ -3958,7 +3982,7 @@ function launchBall(){
   }
   state.currentBallCost=BALL_COST;
   state.currentBallPayout=0;
-  ball.x=START_POS.x; ball.y=START_POS.y; ball.active=true; ball.vx=randRange(-120,120); ball.vy=-980; ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));
+  ball.x=START_POS.x; ball.y=START_POS.y; ball.active=true; ball.vx=randRange(-90,90); ball.vy=-launchSpeedForPower(); ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));
 }
 function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready'}
 function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.miningPower=1;state.oreMultiplier=1;state.cellsMined=0;state.peopleCrushed=0;state.depthLevel=0;state.upgradeCost=80;state.scrollTextTimer=0;floatingTexts.length=0;hitSparks.length=0;people.length=0;initTerrain();resetBall();}
@@ -3966,7 +3990,7 @@ function shouldScrollTerrain(){
   return false;
 }
 function scrollTerrainForward(rows=8){state.scrollTextTimer=0; void rows;}
-function tryUpgrade(){if(!economy.spend(state.upgradeCost, 'pin-upgrade')) return; state.miningPower+=1; state.upgradeCost=Math.floor(state.upgradeCost*1.6); floatingTexts.push({x:WORLD.w*0.5,y:140,text:`POWER ${state.miningPower}!`,color:'#fff36b',life:0.8}); playSfx('upgrade',1,0)}
+function tryUpgrade(){if(state.miningPower>=MAX_MINING_POWER) return; if(!economy.spend(state.upgradeCost, 'pin-upgrade')) return; state.miningPower=Math.min(MAX_MINING_POWER,state.miningPower+1); state.upgradeCost=Math.floor(state.upgradeCost*1.6); floatingTexts.push({x:WORLD.w*0.5,y:140,text:`POWER ${state.miningPower}!`,color:'#fff36b',life:0.8}); playSfx('upgrade',1,0)}
 function startFromFlipper(side){
   if(state.mode==='ready') launchBall();
   playSfx('flipper',0.6,side);
@@ -4046,12 +4070,13 @@ ball.vy *= PHYSICS.rollingFriction;
 ball.spin *= PHYSICS.spinDamping;
 ball.rot += ball.spin * sdt;
 const speedNow = Math.hypot(ball.vx, ball.vy);
-if (speedNow > PHYSICS.maxBallSpeed) {
-  const scale = PHYSICS.maxBallSpeed / speedNow;
+const maxSpeedNow = ball.vy < -20 ? currentMaxUpwardBallSpeed() : currentMaxBallSpeed();
+if (speedNow > maxSpeedNow) {
+  const scale = maxSpeedNow / speedNow;
   ball.vx *= scale;
   ball.vy *= scale;
 }
-if (ball.vy < -PHYSICS.maxUpwardBallSpeed) ball.vy = -PHYSICS.maxUpwardBallSpeed;
+if (ball.vy < -currentMaxUpwardBallSpeed()) ball.vy = -currentMaxUpwardBallSpeed();
 if(ball.y>WORLD.h+30||(ball.y>drain.y&&ball.x>drain.x0&&ball.x<drain.x1)){playSfx('drain',0.9,worldPan(ball.x)); drainBall(); break;}}
 if(shouldScrollTerrain()) scrollTerrainForward(8);
 }
