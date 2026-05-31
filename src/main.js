@@ -7,6 +7,8 @@ const GRID_TOP_Y = 132;
 const BALL_RADIUS = 12;
 const BALL_SPRITE_SIZE = 34;
 const BALL_COST = 10;
+const FEVER_STORAGE_KEY = 'medal-pin-fever-v1';
+const FEVER_GAMES_TO_FILL = 3;
 
 const PHYSICS = {
   gravity: 700,
@@ -3452,7 +3454,8 @@ registerAtlasSprites = function registerAtlasSpritesMine(atlas) {
 };
 
 const economy = createMedalEconomy();
-const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 0, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0, flipperOpenTimer: 0 };
+const savedFever = loadFeverProgress();
+const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 0, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0, flipperOpenTimer: 0, feverGauge: savedFever.gauge, feverReady: savedFever.ready, feverMax: 1, isFeverGame: false };
 const MAX_MINING_POWER = 8;
 const FLIPPER_OPEN_SECONDS = 28;
 const START_POS = { x: 250, y: 640 };
@@ -3466,6 +3469,7 @@ const floatingTexts=[]; const hitSparks=[]; const people=[]; const screenShake={
 let materialClusters=new Map();
 const TERRAIN_DEFS={
   dirt:{hp:1,value:0,color:'#8b5a32',light:'#bc7a43',dark:'#5d3924',bounce:0.06,solid:true},
+  feverDirt:{hp:1,value:1,color:'#d8a42d',light:'#fff07a',dark:'#8e5b18',bounce:0.06,solid:true,fever:true},
   copper:{hp:2,value:1,color:'#b96a38',light:'#ffb16a',dark:'#6d3a24',bounce:0.34,solid:true,ore:true},
   silver:{hp:3,value:3,color:'#b8ccd6',light:'#effcff',dark:'#68818c',bounce:0.40,solid:true,ore:true},
   gold:{hp:4,value:8,color:'#f0b931',light:'#fff079',dark:'#986925',bounce:0.46,solid:true,ore:true},
@@ -3475,6 +3479,33 @@ const TERRAIN_DEFS={
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
 const rails=[{ side:'left', x1: 25, y1: 620, x2: 150, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }, { side:'right', x1: 475, y1: 620, x2: 350, y2: 704, r: 11, restitution: PHYSICS.railBounce, friction: PHYSICS.railFriction }];
 const flippers={left:{side:'left',pivot:{x:150,y:704},length:76,radius:11,base:0.46,active:-0.50,angle:0.46,prev:0.46,upImpulse:620,fxCooldown:0},right:{side:'right',pivot:{x:350,y:704},length:76,radius:11,base:Math.PI-0.46,active:Math.PI+0.50,angle:Math.PI-0.46,prev:Math.PI-0.46,upImpulse:620,fxCooldown:0}};
+function loadFeverProgress(){
+  try{
+    const raw=globalThis.localStorage?.getItem(FEVER_STORAGE_KEY);
+    const saved=raw?JSON.parse(raw):null;
+    return {gauge:Math.max(0,Math.floor(saved?.gauge||0)),ready:!!saved?.ready};
+  }catch{
+    return {gauge:0,ready:false};
+  }
+}
+function saveFeverProgress(){
+  try{
+    globalThis.localStorage?.setItem(FEVER_STORAGE_KEY,JSON.stringify({gauge:Math.floor(state.feverGauge),ready:!!state.feverReady}));
+  }catch{}
+}
+function normalizeFeverProgress(){
+  state.feverGauge=Math.max(0,Math.floor(state.feverGauge));
+  if(state.feverGauge>=state.feverMax){
+    state.feverGauge=state.feverMax;
+    state.feverReady=true;
+  }
+  saveFeverProgress();
+}
+function addFeverProgress(amount=1){
+  if(state.isFeverGame||state.feverReady) return;
+  state.feverGauge+=amount;
+  normalizeFeverProgress();
+}
 function resolveAABB(body, box, restitution = PHYSICS.wallBounce) {
   const px = clamp(body.x, box.x, box.x + box.w);
   const py = clamp(body.y, box.y, box.y + box.h);
@@ -3673,8 +3704,9 @@ function makeTerrainCell(depth,row=0,col=0){
   if(isTerrainSafeCell(row,col)) return emptyTerrainCell();
   const n=Math.abs(Math.sin((row+depth)*12.9898+col*78.233))*43758.5453;
   const noise=n-Math.floor(n);
-  const def=TERRAIN_DEFS.dirt;
-  return {type:'dirt',hp:def.hp,maxHp:def.hp,value:0,solid:true,seed:noise,clusterId:null};
+  const type=state.isFeverGame?'feverDirt':'dirt';
+  const def=TERRAIN_DEFS[type];
+  return {type,hp:def.hp,maxHp:def.hp,value:def.value||0,solid:true,seed:noise,clusterId:null};
 }
 function applyOreClusters(){
   const rng=createCityRng(0xD16D00+state.depthLevel*101);
@@ -3801,11 +3833,19 @@ function initTerrain(){
   TERRAIN.pixels=Array.from({length:TERRAIN.rows},()=>Array.from({length:TERRAIN.cols},()=>emptyTerrainCell()));
   const startRow=Math.max(2,Math.ceil((TERRAIN.digStartY-TERRAIN.top)/TERRAIN.cell)+1);
   const endRow=Math.min(TERRAIN.rows-4,Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell)-1);
+  state.feverMax=Math.max(1,(endRow-startRow+1)*(TERRAIN.cols-2)*FEVER_GAMES_TO_FILL);
+  normalizeFeverProgress();
+  state.isFeverGame=state.feverReady;
+  if(state.isFeverGame){
+    state.feverGauge=0;
+    state.feverReady=false;
+    saveFeverProgress();
+  }
   for(let row=startRow;row<=endRow;row++) for(let col=1;col<TERRAIN.cols-1;col++){
     const cell=makeTerrainCell(state.depthLevel,row,col);
     TERRAIN.pixels[row][col]=cell;
   }
-  applyOreClusters();
+  if(!state.isFeverGame) applyOreClusters();
 }
 function terrainCellBox(row,col){
   return {x:TERRAIN.left+col*TERRAIN.cell,y:TERRAIN.top+row*TERRAIN.cell,w:TERRAIN.cell,h:TERRAIN.cell};
@@ -3873,7 +3913,10 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   cell.hp-=Math.max(1,damage);
   addTerrainSparks(hitX,hitY,def.light,cell.hp<=0?5:2,cell.hp<=0?1.15:0.75);
   if(cell.hp>0) return {hit:true,broken:false};
+  const wasFeverDirt=cell.type==='feverDirt';
   cell.solid=false; cell.type='empty'; cell.hp=0; cell.value=0; state.cellsMined+=1;
+  if(wasFeverDirt) awardMedals(1,'fever-dirt',hitX,hitY,TERRAIN_DEFS.feverDirt.light);
+  else addFeverProgress(1);
   if(impact>520) addScreenShake(clamp(impact/520,0.4,1.4),0.04);
   return {hit:true,broken:true};
 }
@@ -4278,10 +4321,10 @@ function drawHud(vw,vh){
   uiCtx.shadowColor='rgba(20,10,0,.32)';
   uiCtx.shadowBlur=10;
   uiCtx.shadowOffsetY=3;
-  roundCanvasRect(uiCtx,14,14,226,72,10);
+  roundCanvasRect(uiCtx,14,14,226,96,10);
   uiCtx.fillStyle='rgba(30,25,29,.84)';
   uiCtx.fill();
-  const g=uiCtx.createLinearGradient(14,14,240,86);
+  const g=uiCtx.createLinearGradient(14,14,240,110);
   g.addColorStop(0,'#fff7a8');
   g.addColorStop(0.46,'#ffd244');
   g.addColorStop(1,'#ff9b2f');
@@ -4305,6 +4348,19 @@ function drawHud(vw,vh){
   uiCtx.fillStyle='#fff4bf';
   uiCtx.fillText(String(econ.medals.toLocaleString()),68,68);
   uiCtx.fillText(`${state.miningPower}/${MAX_MINING_POWER}`,180,68);
+  const feverRatio=clamp(state.feverGauge/Math.max(1,state.feverMax),0,1);
+  uiCtx.font='900 10px ui-monospace, SFMono-Regular, Consolas, monospace';
+  uiCtx.fillStyle=state.isFeverGame?'#fff07a':'rgba(255,255,255,.72)';
+  uiCtx.fillText(state.isFeverGame?'FEVER GAME':'FEVER',28,88);
+  uiCtx.fillStyle='rgba(255,255,255,.18)';
+  roundCanvasRect(uiCtx,86,78,128,10,5);
+  uiCtx.fill();
+  const fg=uiCtx.createLinearGradient(86,78,214,88);
+  fg.addColorStop(0,'#fff4a8');
+  fg.addColorStop(1,'#ffb02e');
+  uiCtx.fillStyle=state.isFeverGame?fg:(state.feverReady?'#fff07a':fg);
+  roundCanvasRect(uiCtx,86,78,128*(state.isFeverGame||state.feverReady?1:feverRatio),10,5);
+  uiCtx.fill();
   uiCtx.restore();
 }
 function drawTouchPads(vw,vh){
