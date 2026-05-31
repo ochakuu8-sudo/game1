@@ -3458,7 +3458,8 @@ const savedFever = loadFeverProgress();
 const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0, flipperOpenTimer: 0, feverGauge: savedFever.gauge, feverReady: savedFever.ready, feverMax: 1, isFeverGame: false, feverPayoutBuffer: 0, feverPayoutX: 0, feverPayoutY: 0, feverPayoutTimer: 0 };
 const FIXED_MINING_POWER = 8;
 const BALL_SPEED_SCALE = 0.92;
-const ORE_CLUSTER_COUNT = 5;
+const ORE_CLUSTER_MIN_COUNT = 4;
+const ORE_CLUSTER_MAX_COUNT = 7;
 const ORE_TYPES = ['copper', 'silver', 'gold', 'gem'];
 const FLIPPER_OPEN_SECONDS = 28;
 const START_POS = { x: 250, y: 640 };
@@ -3716,12 +3717,14 @@ function applyOreClusters(){
   const startRow=Math.max(2,Math.ceil((TERRAIN.digStartY-TERRAIN.top)/TERRAIN.cell)+1);
   const endRow=Math.min(TERRAIN.rows-4,Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell)-1);
   let nextId=1;
-  for(let i=0;i<ORE_CLUSTER_COUNT;i++){
+  const clusterCount=ORE_CLUSTER_MIN_COUNT+Math.floor(rng()*(ORE_CLUSTER_MAX_COUNT-ORE_CLUSTER_MIN_COUNT+1));
+  for(let i=0;i<clusterCount;i++){
     const type=ORE_TYPES[Math.floor(rng()*ORE_TYPES.length)];
-    const w=6;
-    const h=6;
+    const w=5;
+    const h=5;
+    const band=oreRowBand(type,startRow,endRow,h);
     for(let attempt=0;attempt<100;attempt++){
-      const row=startRow+Math.floor(rng()*Math.max(1,endRow-startRow-h+1));
+      const row=band.min+Math.floor(rng()*Math.max(1,band.max-band.min+1));
       const col=2+Math.floor(rng()*Math.max(1,TERRAIN.cols-w-4));
       let blocked=false;
       for(let rr=row-2;rr<=row+h+1;rr++) for(let cc=col-2;cc<=col+w+1;cc++){
@@ -3733,6 +3736,20 @@ function applyOreClusters(){
       break;
     }
   }
+}
+function oreRowBand(type,startRow,endRow,h){
+  const span=Math.max(1,endRow-startRow-h+1);
+  const bands={
+    gem:[0.00,0.28],
+    gold:[0.18,0.50],
+    silver:[0.40,0.74],
+    copper:[0.62,1.00],
+  };
+  const [from,to]=bands[type]||[0,1];
+  return {
+    min:clamp(startRow+Math.floor(span*from),startRow,endRow-h),
+    max:clamp(startRow+Math.floor(span*to),startRow,endRow-h),
+  };
 }
 function createCityRng(seed=12345){
   let value=seed>>>0;
@@ -3765,7 +3782,7 @@ function placeCityBuilding(clusterId,row,col,w,h,type,rng){
 }
 function makeOreShapeCells(row,col,w,h,rng){
   const cells=[];
-  const target=10+Math.floor(rng()*6);
+  const target=6+Math.floor(rng()*3);
   const start=[row+Math.floor(h*0.5),col+Math.floor(w*0.5)];
   cells.push(start);
   const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
@@ -3790,7 +3807,7 @@ function placeOreCluster(clusterId,row,col,w,h,type,rng){
     minRow=Math.min(minRow,rr); maxRow=Math.max(maxRow,rr); minCol=Math.min(minCol,cc); maxCol=Math.max(maxCol,cc);
   }
   const hp=def.hp;
-  const value=def.value*cells.length;
+  const value=def.value;
   materialClusters.set(clusterId,{id:clusterId,type,hp,maxHp:hp,value,cells,minRow,maxRow,minCol,maxCol,exposed:false});
 }
 function rebuildMaterialClusters(){
