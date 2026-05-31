@@ -3593,7 +3593,7 @@ function flipperOpenProgress() {
   return Math.max(0, state.flipperOpenTimer / FLIPPER_OPEN_SECONDS);
 }
 function flipperSlideOffset(side) {
-  const shift = (1 - flipperOpenProgress()) * 28;
+  const shift = 22 - flipperOpenProgress() * 28;
   return side === 'left' ? shift : -shift;
 }
 function currentFlipperPivot(f) {
@@ -3607,8 +3607,8 @@ function currentRailSegment(seg) {
 function currentDrain() {
   const p = flipperOpenProgress();
   return {
-    x0: 240 - p * 34,
-    x1: 260 + p * 34,
+    x0: 236 - p * 34,
+    x1: 264 + p * 34,
     y: drain.y,
   };
 }
