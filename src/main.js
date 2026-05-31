@@ -3455,7 +3455,7 @@ registerAtlasSprites = function registerAtlasSpritesMine(atlas) {
 
 const economy = createMedalEconomy();
 const savedFever = loadFeverProgress();
-const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 0, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0, flipperOpenTimer: 0, feverGauge: savedFever.gauge, feverReady: savedFever.ready, feverMax: 1, isFeverGame: false };
+const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 0, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0, flipperOpenTimer: 0, feverGauge: savedFever.gauge, feverReady: savedFever.ready, feverMax: 1, isFeverGame: false, feverPayoutBuffer: 0, feverPayoutX: 0, feverPayoutY: 0, feverPayoutTimer: 0 };
 const MAX_MINING_POWER = 8;
 const FLIPPER_OPEN_SECONDS = 28;
 const START_POS = { x: 250, y: 640 };
@@ -3875,6 +3875,21 @@ function awardMedals(amount, source, x, y, color) {
   floatingTexts.push({x,y,text:`+${payout}`,color:color||'#ffe067',life:0.86,maxLife:0.86});
   return payout;
 }
+function queueFeverMedal(x,y) {
+  const next = state.feverPayoutBuffer + 1;
+  state.feverPayoutX = (state.feverPayoutX * state.feverPayoutBuffer + x) / next;
+  state.feverPayoutY = (state.feverPayoutY * state.feverPayoutBuffer + y) / next;
+  state.feverPayoutBuffer = next;
+}
+function flushFeverMedals(force=false) {
+  if(state.feverPayoutBuffer<=0) return;
+  if(!force && state.feverPayoutTimer<0.12) return;
+  awardMedals(state.feverPayoutBuffer,'fever-dirt',state.feverPayoutX,state.feverPayoutY,TERRAIN_DEFS.feverDirt.light);
+  state.feverPayoutBuffer=0;
+  state.feverPayoutX=0;
+  state.feverPayoutY=0;
+  state.feverPayoutTimer=0;
+}
 function powerUpFromOre(cluster, x, y, color) {
   const before = state.miningPower;
   state.miningPower = Math.min(MAX_MINING_POWER, state.miningPower + 1);
@@ -3915,7 +3930,7 @@ function damageTerrainCell(row,col,damage,hitX,hitY,impact=0){
   if(cell.hp>0) return {hit:true,broken:false};
   const wasFeverDirt=cell.type==='feverDirt';
   cell.solid=false; cell.type='empty'; cell.hp=0; cell.value=0; state.cellsMined+=1;
-  if(wasFeverDirt) awardMedals(1,'fever-dirt',hitX,hitY,TERRAIN_DEFS.feverDirt.light);
+  if(wasFeverDirt) queueFeverMedal(hitX,hitY);
   else addFeverProgress(1);
   if(impact>520) addScreenShake(clamp(impact/520,0.4,1.4),0.04);
   return {hit:true,broken:true};
@@ -4045,7 +4060,7 @@ function launchBall(){
   ball.x=START_POS.x; ball.y=START_POS.y; ball.active=true; ball.vx=randRange(-90,90); ball.vy=-launchSpeedForPower(); ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));
 }
 function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready';state.miningPower=0;state.flipperOpenTimer=0}
-function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.miningPower=0;state.oreMultiplier=1;state.cellsMined=0;state.peopleCrushed=0;state.depthLevel=0;state.scrollTextTimer=0;state.flipperOpenTimer=0;floatingTexts.length=0;hitSparks.length=0;people.length=0;initTerrain();resetBall();}
+function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.miningPower=0;state.oreMultiplier=1;state.cellsMined=0;state.peopleCrushed=0;state.depthLevel=0;state.scrollTextTimer=0;state.flipperOpenTimer=0;state.feverPayoutBuffer=0;state.feverPayoutTimer=0;floatingTexts.length=0;hitSparks.length=0;people.length=0;initTerrain();resetBall();}
 function shouldScrollTerrain(){
   return false;
 }
@@ -4103,12 +4118,14 @@ function updateFlipper(f, pressed, dt){const target=pressed?f.active:f.base; con
 function isFiniteBallState(){return Number.isFinite(ball.x)&&Number.isFinite(ball.y)&&Number.isFinite(ball.vx)&&Number.isFinite(ball.vy)&&Number.isFinite(ball.spin)&&Number.isFinite(ball.rot);}
 function recoverFromBrokenPhysics(){playSfx('levelReady',0.8,0); resetBall();}
 function drainBall(){
+  flushFeverMedals(true);
   const net=economy.completePlay({cost:state.currentBallCost,payout:state.currentBallPayout,source:'medal-pin'});
   state.lastBallNet=net;
   ball.active=false; state.mode='ball_lost'; state.ballLostTimer=0.7;
 }
 function update(dt){if(!isFiniteBallState()){recoverFromBrokenPhysics();return;} state.fpsS+=dt;state.fpsN+=1;if(state.fpsS>0.3){state.fps=Math.round(state.fpsN/state.fpsS);state.fpsS=0;state.fpsN=0;} if(screenShake.time>0){screenShake.time=Math.max(0,screenShake.time-dt); if(screenShake.time<=0)screenShake.amount=0;}
 for(let i=floatingTexts.length-1;i>=0;i--){const t=floatingTexts[i];t.life-=dt;t.y-=28*dt;if(t.life<=0)floatingTexts.splice(i,1);} for(let i=hitSparks.length-1;i>=0;i--){const s=hitSparks[i];s.life-=dt;s.x+=(s.vx||0)*dt;s.y+=(s.vy||0)*dt;s.vy=(s.vy||0)+180*dt;if(s.life<=0)hitSparks.splice(i,1);} updatePeople(dt); updateFlipper(flippers.left,input.left,dt);updateFlipper(flippers.right,input.right,dt);
+if(state.feverPayoutBuffer>0) state.feverPayoutTimer+=dt;
 for(const cluster of materialClusters.values()) if(cluster.cooldown>0) cluster.cooldown=Math.max(0,cluster.cooldown-dt);
 if(state.mode==='ready'){ball.x=START_POS.x;ball.y=START_POS.y;return;} if(state.mode==='ball_lost'){state.ballLostTimer-=dt; if(state.ballLostTimer<=0){initTerrain(); resetBall();} return;}
 state.flipperOpenTimer+=dt;
@@ -4129,6 +4146,7 @@ if (speedNow > maxSpeedNow) {
 if (ball.vy < -currentMaxUpwardBallSpeed()) ball.vy = -currentMaxUpwardBallSpeed();
 const currentDrainGap = currentDrain();
 if(ball.y>WORLD.h+30||(ball.y>currentDrainGap.y&&ball.x>currentDrainGap.x0&&ball.x<currentDrainGap.x1)){playSfx('drain',0.9,worldPan(ball.x)); drainBall(); break;}}
+flushFeverMedals(false);
 if(shouldScrollTerrain()) scrollTerrainForward(8);
 }
 let dpr=1; function resize(){dpr=Math.min(window.devicePixelRatio||1,DPR_MAX); const rect=wrap.getBoundingClientRect(); const w=Math.floor(rect.width*dpr); const h=Math.floor(rect.height*dpr); glCanvas.width=w; glCanvas.height=h; uiCanvas.width=w; uiCanvas.height=h; gl.viewport(0,0,w,h);} addEventListener('resize',resize);
