@@ -6,7 +6,7 @@ const PLAYFIELD_TOP_Y = 104;
 const GRID_TOP_Y = 132;
 const BALL_RADIUS = 12;
 const BALL_SPRITE_SIZE = 34;
-const BALL_COST = 10;
+const BALL_COST = 50;
 const FEVER_STORAGE_KEY = 'medal-pin-fever-v1';
 const FEVER_GAMES_TO_FILL = 3;
 
@@ -3455,8 +3455,10 @@ registerAtlasSprites = function registerAtlasSpritesMine(atlas) {
 
 const economy = createMedalEconomy();
 const savedFever = loadFeverProgress();
-const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, miningPower: 0, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0, flipperOpenTimer: 0, feverGauge: savedFever.gauge, feverReady: savedFever.ready, feverMax: 1, isFeverGame: false, feverPayoutBuffer: 0, feverPayoutX: 0, feverPayoutY: 0, feverPayoutTimer: 0 };
-const MAX_MINING_POWER = 8;
+const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0, flipperOpenTimer: 0, feverGauge: savedFever.gauge, feverReady: savedFever.ready, feverMax: 1, isFeverGame: false, feverPayoutBuffer: 0, feverPayoutX: 0, feverPayoutY: 0, feverPayoutTimer: 0 };
+const FIXED_MINING_POWER = 8;
+const ORE_CLUSTER_COUNT = 5;
+const ORE_TYPES = ['copper', 'silver', 'gold', 'gem'];
 const FLIPPER_OPEN_SECONDS = 28;
 const START_POS = { x: 250, y: 640 };
 const ball = { x: START_POS.x, y: START_POS.y, vx: 0, vy: 0, r: BALL_RADIUS, rot: 0, spin: 0, active: false };
@@ -3609,16 +3611,16 @@ function currentDrain() {
   };
 }
 function flipperPowerScale() {
-  return clamp(0.58 + state.miningPower * 0.09, 0.58, 1.30);
+  return clamp(0.58 + FIXED_MINING_POWER * 0.09, 0.58, 1.30);
 }
 function currentMaxBallSpeed() {
-  return Math.min(1150, PHYSICS.maxBallSpeed + state.miningPower * 41);
+  return Math.min(1150, PHYSICS.maxBallSpeed + FIXED_MINING_POWER * 41);
 }
 function currentMaxUpwardBallSpeed() {
-  return Math.min(1180, PHYSICS.maxUpwardBallSpeed + state.miningPower * 45);
+  return Math.min(1180, PHYSICS.maxUpwardBallSpeed + FIXED_MINING_POWER * 45);
 }
 function launchSpeedForPower() {
-  return Math.min(780, 460 + state.miningPower * 40);
+  return Math.min(780, 460 + FIXED_MINING_POWER * 40);
 }
 
 function applyFlipperImpulse(f, hit, sdt, beforeVx = ball.vx, beforeVy = ball.vy) {
@@ -3709,30 +3711,25 @@ function makeTerrainCell(depth,row=0,col=0){
   return {type,hp:def.hp,maxHp:def.hp,value:def.value||0,solid:true,seed:noise,clusterId:null};
 }
 function applyOreClusters(){
-  const rng=createCityRng(0xD16D00+state.depthLevel*101);
+  const rng=createCityRng((Math.random()*0xffffffff)>>>0);
   const startRow=Math.max(2,Math.ceil((TERRAIN.digStartY-TERRAIN.top)/TERRAIN.cell)+1);
   const endRow=Math.min(TERRAIN.rows-4,Math.floor((terrainMineBottomY()-TERRAIN.top)/TERRAIN.cell)-1);
-  const deposits=[
-    {type:'gem',count:1,minR:startRow+2,maxR:startRow+17,w:3,h:3},
-    {type:'gold',count:2,minR:startRow+12,maxR:startRow+31,w:3,h:3},
-    {type:'silver',count:3,minR:startRow+26,maxR:startRow+52,w:3,h:3},
-    {type:'copper',count:5,minR:startRow+42,maxR:endRow-6,w:3,h:3},
-  ];
   let nextId=1;
-  for(const dep of deposits){
-    for(let i=0;i<dep.count;i++){
-      for(let attempt=0;attempt<80;attempt++){
-        const row=clamp(Math.floor(dep.minR+rng()*Math.max(1,dep.maxR-dep.minR)),startRow,endRow-dep.h);
-        const col=2+Math.floor(rng()*Math.max(1,TERRAIN.cols-dep.w-4));
-        let blocked=false;
-        for(let rr=row-1;rr<=row+dep.h;rr++) for(let cc=col-1;cc<=col+dep.w;cc++){
-          const cell=TERRAIN.pixels[rr]?.[cc];
-          if(cell?.clusterId) blocked=true;
-        }
-        if(blocked) continue;
-        placeOreCluster(`ore_${nextId++}`,row,col,dep.w,dep.h,dep.type,rng);
-        break;
+  for(let i=0;i<ORE_CLUSTER_COUNT;i++){
+    const type=ORE_TYPES[Math.floor(rng()*ORE_TYPES.length)];
+    const w=6;
+    const h=6;
+    for(let attempt=0;attempt<100;attempt++){
+      const row=startRow+Math.floor(rng()*Math.max(1,endRow-startRow-h+1));
+      const col=2+Math.floor(rng()*Math.max(1,TERRAIN.cols-w-4));
+      let blocked=false;
+      for(let rr=row-2;rr<=row+h+1;rr++) for(let cc=col-2;cc<=col+w+1;cc++){
+        const cell=TERRAIN.pixels[rr]?.[cc];
+        if(cell?.clusterId) blocked=true;
       }
+      if(blocked) continue;
+      placeOreCluster(`ore_${nextId++}`,row,col,w,h,type,rng);
+      break;
     }
   }
 }
@@ -3767,11 +3764,11 @@ function placeCityBuilding(clusterId,row,col,w,h,type,rng){
 }
 function makeOreShapeCells(row,col,w,h,rng){
   const cells=[];
-  const target=3+Math.floor(rng()*3);
+  const target=10+Math.floor(rng()*6);
   const start=[row+Math.floor(h*0.5),col+Math.floor(w*0.5)];
   cells.push(start);
   const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
-  for(let guard=0;guard<40&&cells.length<target;guard++){
+  for(let guard=0;guard<120&&cells.length<target;guard++){
     const base=cells[Math.floor(rng()*cells.length)];
     const [dr,dc]=dirs[Math.floor(rng()*dirs.length)];
     const rr=base[0]+dr;
@@ -3792,7 +3789,7 @@ function placeOreCluster(clusterId,row,col,w,h,type,rng){
     minRow=Math.min(minRow,rr); maxRow=Math.max(maxRow,rr); minCol=Math.min(minCol,cc); maxCol=Math.max(maxCol,cc);
   }
   const hp=def.hp;
-  const value=def.value;
+  const value=def.value*cells.length;
   materialClusters.set(clusterId,{id:clusterId,type,hp,maxHp:hp,value,cells,minRow,maxRow,minCol,maxCol,exposed:false});
 }
 function rebuildMaterialClusters(){
@@ -3890,12 +3887,6 @@ function flushFeverMedals(force=false) {
   state.feverPayoutY=0;
   state.feverPayoutTimer=0;
 }
-function powerUpFromOre(cluster, x, y, color) {
-  const before = state.miningPower;
-  state.miningPower = Math.min(MAX_MINING_POWER, state.miningPower + 1);
-  if (state.miningPower === before) return;
-  playSfx('upgrade',0.8,worldPan(x));
-}
 function spawnPeople(x,y,type='house',count=1){
   const room=Math.max(0,60-people.length);
   const total=Math.min(room,count);
@@ -3957,7 +3948,6 @@ function damageOreCluster(cluster,hitX,hitY,impact=0){
   state.peopleCrushed+=1;
   const payout=formatOreGain(cluster.value);
   awardMedals(payout,`ore-cluster-${cluster.type}`,hitX,hitY,def.light);
-  powerUpFromOre(cluster,hitX,hitY,def.light);
   addScreenShake(clamp(impact/170,2.0,6.5),0.12);
   playSfx('roundClear',0.95,worldPan(hitX));
   return {hit:true,broken:true};
@@ -4003,7 +3993,7 @@ function updatePeople(dt){
 }
 function resolveTerrainCollision(body){
   const speed=Math.hypot(body.vx,body.vy);
-  digTerrain(body.x,body.y,body.r*1.08,state.miningPower,Math.max(0,speed));
+  digTerrain(body.x,body.y,body.r*1.08,FIXED_MINING_POWER,Math.max(0,speed));
   const rad=body.r+2;
   const minCol=Math.max(0,Math.floor((body.x-rad-TERRAIN.left)/TERRAIN.cell));
   const maxCol=Math.min(TERRAIN.cols-1,Math.floor((body.x+rad-TERRAIN.left)/TERRAIN.cell));
@@ -4059,8 +4049,8 @@ function launchBall(){
   state.flipperOpenTimer=0;
   ball.x=START_POS.x; ball.y=START_POS.y; ball.active=true; ball.vx=randRange(-90,90); ball.vy=-launchSpeedForPower(); ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));
 }
-function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready';state.miningPower=0;state.flipperOpenTimer=0}
-function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.miningPower=0;state.oreMultiplier=1;state.cellsMined=0;state.peopleCrushed=0;state.depthLevel=0;state.scrollTextTimer=0;state.flipperOpenTimer=0;state.feverPayoutBuffer=0;state.feverPayoutTimer=0;floatingTexts.length=0;hitSparks.length=0;people.length=0;initTerrain();resetBall();}
+function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready';state.flipperOpenTimer=0}
+function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.oreMultiplier=1;state.cellsMined=0;state.peopleCrushed=0;state.depthLevel=0;state.scrollTextTimer=0;state.flipperOpenTimer=0;state.feverPayoutBuffer=0;state.feverPayoutTimer=0;floatingTexts.length=0;hitSparks.length=0;people.length=0;initTerrain();resetBall();}
 function shouldScrollTerrain(){
   return false;
 }
@@ -4361,11 +4351,11 @@ function drawHud(vw,vh){
   uiCtx.lineWidth=0;
   uiCtx.fillStyle='rgba(255,255,255,.72)';
   uiCtx.fillText('TOTAL',28,68);
-  uiCtx.fillText('POWER',132,68);
+  uiCtx.fillText('PLAY',132,68);
   uiCtx.font='900 13px ui-monospace, SFMono-Regular, Consolas, monospace';
   uiCtx.fillStyle='#fff4bf';
   uiCtx.fillText(String(econ.medals.toLocaleString()),68,68);
-  uiCtx.fillText(`${state.miningPower}/${MAX_MINING_POWER}`,180,68);
+  uiCtx.fillText(String(BALL_COST),180,68);
   const feverRatio=clamp(state.feverGauge/Math.max(1,state.feverMax),0,1);
   uiCtx.font='900 10px ui-monospace, SFMono-Regular, Consolas, monospace';
   uiCtx.fillStyle=state.isFeverGame?'#fff07a':'rgba(255,255,255,.72)';
