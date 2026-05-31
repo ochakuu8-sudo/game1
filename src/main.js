@@ -3474,10 +3474,10 @@ let materialClusters=new Map();
 const TERRAIN_DEFS={
   dirt:{hp:1,value:0,color:'#8b5a32',light:'#bc7a43',dark:'#5d3924',bounce:0.06,solid:true},
   feverDirt:{hp:1,value:1,color:'#d8a42d',light:'#fff07a',dark:'#8e5b18',bounce:0.06,solid:true,fever:true},
-  copper:{hp:2,value:1,color:'#b96a38',light:'#ffb16a',dark:'#6d3a24',bounce:0.34,solid:true,ore:true},
-  silver:{hp:3,value:3,color:'#b8ccd6',light:'#effcff',dark:'#68818c',bounce:0.40,solid:true,ore:true},
-  gold:{hp:4,value:8,color:'#f0b931',light:'#fff079',dark:'#986925',bounce:0.46,solid:true,ore:true},
-  gem:{hp:5,value:15,color:'#5ee0d5',light:'#d8fff7',dark:'#1f7e82',bounce:0.52,solid:true,ore:true},
+  copper:{hp:2,value:10,color:'#b96a38',light:'#ffb16a',dark:'#6d3a24',bounce:0.34,solid:true,ore:true},
+  silver:{hp:3,value:25,color:'#b8ccd6',light:'#effcff',dark:'#68818c',bounce:0.40,solid:true,ore:true},
+  gold:{hp:4,value:50,color:'#f0b931',light:'#fff079',dark:'#986925',bounce:0.46,solid:true,ore:true},
+  gem:{hp:5,value:100,color:'#5ee0d5',light:'#d8fff7',dark:'#1f7e82',bounce:0.52,solid:true,ore:true},
   empty:{hp:0,value:0,color:'transparent',light:'transparent',dark:'transparent',bounce:0,solid:false}
 };
 const walls=[{x:25,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:465,y:PLAYFIELD_TOP_Y,w:10,h:765-PLAYFIELD_TOP_Y},{x:25,y:PLAYFIELD_TOP_Y,w:450,h:10}];
