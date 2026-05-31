@@ -3457,6 +3457,7 @@ const economy = createMedalEconomy();
 const savedFever = loadFeverProgress();
 const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0, flipperOpenTimer: 0, feverGauge: savedFever.gauge, feverReady: savedFever.ready, feverMax: 1, isFeverGame: false, feverPayoutBuffer: 0, feverPayoutX: 0, feverPayoutY: 0, feverPayoutTimer: 0 };
 const FIXED_MINING_POWER = 8;
+const BALL_SPEED_SCALE = 0.92;
 const ORE_CLUSTER_COUNT = 5;
 const ORE_TYPES = ['copper', 'silver', 'gold', 'gem'];
 const FLIPPER_OPEN_SECONDS = 28;
@@ -3614,13 +3615,13 @@ function flipperPowerScale() {
   return clamp(0.58 + FIXED_MINING_POWER * 0.09, 0.58, 1.30);
 }
 function currentMaxBallSpeed() {
-  return Math.min(1150, PHYSICS.maxBallSpeed + FIXED_MINING_POWER * 41);
+  return Math.min(1150, PHYSICS.maxBallSpeed + FIXED_MINING_POWER * 41) * BALL_SPEED_SCALE;
 }
 function currentMaxUpwardBallSpeed() {
-  return Math.min(1180, PHYSICS.maxUpwardBallSpeed + FIXED_MINING_POWER * 45);
+  return Math.min(1180, PHYSICS.maxUpwardBallSpeed + FIXED_MINING_POWER * 45) * BALL_SPEED_SCALE;
 }
 function launchSpeedForPower() {
-  return Math.min(780, 460 + FIXED_MINING_POWER * 40);
+  return Math.min(780, 460 + FIXED_MINING_POWER * 40) * BALL_SPEED_SCALE;
 }
 
 function applyFlipperImpulse(f, hit, sdt, beforeVx = ball.vx, beforeVy = ball.vy) {
