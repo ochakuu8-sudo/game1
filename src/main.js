@@ -4403,15 +4403,23 @@ function drawFloatingMedalText(t,vw,vh){
   uiCtx.translate(x,y);
   uiCtx.scale(pop,pop);
   uiCtx.textAlign='center';
-  uiCtx.font='900 28px Arial, Helvetica, sans-serif';
+  uiCtx.font='900 30px "Trebuchet MS", "Avenir Next", Arial, sans-serif';
   uiCtx.lineJoin='round';
-  uiCtx.lineWidth=4;
-  uiCtx.shadowColor='rgba(0,0,0,.28)';
-  uiCtx.shadowBlur=4;
-  uiCtx.strokeStyle='rgba(49,34,12,.86)';
+  uiCtx.lineWidth=3.5;
+  uiCtx.shadowColor='rgba(24,14,0,.34)';
+  uiCtx.shadowBlur=5;
+  uiCtx.strokeStyle='rgba(54,34,8,.78)';
   uiCtx.strokeText(t.text,0,0);
-  uiCtx.fillStyle='#ffd84a';
+  const gold=uiCtx.createLinearGradient(0,-24,0,7);
+  gold.addColorStop(0,'#fff3ad');
+  gold.addColorStop(0.52,'#ffd65b');
+  gold.addColorStop(1,'#d88b13');
+  uiCtx.fillStyle=gold;
   uiCtx.fillText(t.text,0,0);
+  uiCtx.shadowBlur=0;
+  uiCtx.lineWidth=1.1;
+  uiCtx.strokeStyle='rgba(255,255,255,.42)';
+  uiCtx.strokeText(t.text,0,-0.8);
   uiCtx.restore();
 }
 const PRIM_BUILDING = {
