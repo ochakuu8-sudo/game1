@@ -4403,24 +4403,15 @@ function drawFloatingMedalText(t,vw,vh){
   uiCtx.translate(x,y);
   uiCtx.scale(pop,pop);
   uiCtx.textAlign='center';
-  uiCtx.font='900 30px Georgia, Times New Roman, serif';
+  uiCtx.font='900 28px Arial, Helvetica, sans-serif';
   uiCtx.lineJoin='round';
-  uiCtx.lineWidth=7;
-  uiCtx.shadowColor='rgba(255,170,30,.62)';
-  uiCtx.shadowBlur=12;
-  uiCtx.strokeStyle='#4b2400';
+  uiCtx.lineWidth=4;
+  uiCtx.shadowColor='rgba(0,0,0,.28)';
+  uiCtx.shadowBlur=4;
+  uiCtx.strokeStyle='rgba(49,34,12,.86)';
   uiCtx.strokeText(t.text,0,0);
-  const g=uiCtx.createLinearGradient(0,-28,0,5);
-  g.addColorStop(0,'#fff8b7');
-  g.addColorStop(0.42,'#ffe05c');
-  g.addColorStop(0.72,'#ffae27');
-  g.addColorStop(1,'#f66f1d');
-  uiCtx.fillStyle=g;
+  uiCtx.fillStyle='#ffd84a';
   uiCtx.fillText(t.text,0,0);
-  uiCtx.shadowBlur=0;
-  uiCtx.lineWidth=2;
-  uiCtx.strokeStyle='rgba(255,255,255,.72)';
-  uiCtx.strokeText(t.text,0,-1);
   uiCtx.restore();
 }
 const PRIM_BUILDING = {
