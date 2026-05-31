@@ -30,14 +30,22 @@ function normalizeState(saved) {
 export function createMedalEconomy(options = {}) {
   const storageKey = options.storageKey || DEFAULT_STORAGE_KEY;
   const storage = options.storage || globalThis.localStorage;
+  const autoSave = options.autoSave !== false;
   let state = cloneDefaultState();
+  let dirty = false;
 
-  function save() {
+  function persist() {
     try {
       storage?.setItem(storageKey, JSON.stringify(state));
+      dirty = false;
     } catch {
       // Storage can fail in private contexts. The in-memory economy still works.
     }
+  }
+
+  function save() {
+    dirty = true;
+    if (autoSave) persist();
   }
 
   function load() {
@@ -47,7 +55,7 @@ export function createMedalEconomy(options = {}) {
     } catch {
       state = cloneDefaultState();
     }
-    save();
+    if (autoSave) save();
   }
 
   function snapshot() {
@@ -101,6 +109,10 @@ export function createMedalEconomy(options = {}) {
     save();
   }
 
+  function flush() {
+    if (dirty) persist();
+  }
+
   load();
 
   return {
@@ -112,5 +124,6 @@ export function createMedalEconomy(options = {}) {
     payout,
     completePlay,
     reset,
+    flush,
   };
 }

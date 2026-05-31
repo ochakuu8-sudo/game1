@@ -3339,9 +3339,6 @@ drawPlayfieldSprite = function drawPlayfieldSpriteDeluxe(ctx, x, y, w, h) {
   ctx.fillStyle = '#ffe067';
   roundCanvasRect(ctx, x + 64, y + PLAYFIELD_TOP_Y + 10, w - 128, 5, 3);
   ctx.fill();
-  ctx.fillStyle = '#5de4ff';
-  roundCanvasRect(ctx, x + 64, y + h - 88, w - 128, 5, 3);
-  ctx.fill();
 };
 
 registerAtlasSprites = function registerAtlasSpritesDeluxe(atlas) {
@@ -3415,9 +3412,6 @@ drawPlayfieldSprite = function drawPlayfieldSpriteMine(ctx, x, y, w, h) {
   ctx.fillStyle = '#ffd95a';
   roundCanvasRect(ctx, x + 64, y + PLAYFIELD_TOP_Y + 10, w - 128, 5, 3);
   ctx.fill();
-  ctx.fillStyle = '#5de4ff';
-  roundCanvasRect(ctx, x + 64, y + h - 88, w - 128, 5, 3);
-  ctx.fill();
 };
 
 registerAtlasSprites = function registerAtlasSpritesMine(atlas) {
@@ -3453,7 +3447,7 @@ registerAtlasSprites = function registerAtlasSpritesMine(atlas) {
   packHiDpi(atlas, 'playfield', WORLD.w, WORLD.h, (ctx, x, y, w, h) => drawPlayfieldSprite(ctx, x, y, w, h));
 };
 
-const economy = createMedalEconomy();
+const economy = createMedalEconomy({ autoSave: false });
 const savedFever = loadFeverProgress();
 const state = { mode: 'ready', fps: 0, fpsS: 0, fpsN: 0, currentBallCost: 0, currentBallPayout: 0, lastBallNet: 0, oreMultiplier: 1, cellsMined: 0, peopleCrushed: 0, depthLevel: 0, ballLostTimer: 0, scrollTextTimer: 0, flipperOpenTimer: 0, feverGauge: savedFever.gauge, feverReady: savedFever.ready, feverMax: 1, isFeverGame: false, feverPayoutBuffer: 0, feverPayoutX: 0, feverPayoutY: 0, feverPayoutTimer: 0 };
 const FIXED_MINING_POWER = 8;
@@ -3471,6 +3465,7 @@ const touchState = {
 };
 const floatingTexts=[]; const hitSparks=[]; const people=[]; const screenShake={time:0,duration:0,amount:0};
 let materialClusters=new Map();
+let feverProgressDirty=false;
 const TERRAIN_DEFS={
   dirt:{hp:1,value:0,color:'#8b5a32',light:'#bc7a43',dark:'#5d3924',bounce:0.06,solid:true},
   feverDirt:{hp:1,value:1,color:'#d8a42d',light:'#fff07a',dark:'#8e5b18',bounce:0.06,solid:true,fever:true},
@@ -3495,7 +3490,14 @@ function loadFeverProgress(){
 function saveFeverProgress(){
   try{
     globalThis.localStorage?.setItem(FEVER_STORAGE_KEY,JSON.stringify({gauge:Math.floor(state.feverGauge),ready:!!state.feverReady}));
+    feverProgressDirty=false;
   }catch{}
+}
+function markFeverProgressDirty(){
+  feverProgressDirty=true;
+}
+function flushFeverProgress(){
+  if(feverProgressDirty) saveFeverProgress();
 }
 function normalizeFeverProgress(){
   state.feverGauge=Math.max(0,Math.floor(state.feverGauge));
@@ -3503,7 +3505,7 @@ function normalizeFeverProgress(){
     state.feverGauge=state.feverMax;
     state.feverReady=true;
   }
-  saveFeverProgress();
+  markFeverProgressDirty();
 }
 function addFeverProgress(amount=1){
   if(state.isFeverGame||state.feverReady) return;
@@ -3593,7 +3595,7 @@ function flipperOpenProgress() {
   return Math.max(0, state.flipperOpenTimer / FLIPPER_OPEN_SECONDS);
 }
 function flipperSlideOffset(side) {
-  const shift = 22 - flipperOpenProgress() * 28;
+  const shift = 8 - flipperOpenProgress() * 28;
   return side === 'left' ? shift : -shift;
 }
 function currentFlipperPivot(f) {
@@ -3607,8 +3609,8 @@ function currentRailSegment(seg) {
 function currentDrain() {
   const p = flipperOpenProgress();
   return {
-    x0: 236 - p * 34,
-    x1: 264 + p * 34,
+    x0: 226 - p * 34,
+    x1: 274 + p * 34,
     y: drain.y,
   };
 }
@@ -4062,13 +4064,14 @@ function launchBall(){
     playSfx('drain',0.5,0);
     return;
   }
+  economy.flush();
   state.currentBallCost=BALL_COST;
   state.currentBallPayout=0;
   state.flipperOpenTimer=0;
   ball.x=START_POS.x; ball.y=START_POS.y; ball.active=true; ball.vx=randRange(-90,90); ball.vy=-launchSpeedForPower(); ball.spin=0; state.mode='playing'; playSfx('launch',1,worldPan(ball.x));
 }
 function resetBall(){ball.x=START_POS.x;ball.y=START_POS.y;ball.vx=0;ball.vy=0;ball.rot=0;ball.spin=0;ball.active=false;state.mode='ready';state.flipperOpenTimer=0}
-function restartRun(){economy.reset();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.oreMultiplier=1;state.cellsMined=0;state.peopleCrushed=0;state.depthLevel=0;state.scrollTextTimer=0;state.flipperOpenTimer=0;state.feverPayoutBuffer=0;state.feverPayoutTimer=0;floatingTexts.length=0;hitSparks.length=0;people.length=0;initTerrain();resetBall();}
+function restartRun(){economy.reset();economy.flush();state.currentBallCost=0;state.currentBallPayout=0;state.lastBallNet=0;state.oreMultiplier=1;state.cellsMined=0;state.peopleCrushed=0;state.depthLevel=0;state.scrollTextTimer=0;state.flipperOpenTimer=0;state.feverPayoutBuffer=0;state.feverPayoutTimer=0;floatingTexts.length=0;hitSparks.length=0;people.length=0;initTerrain();resetBall();}
 function shouldScrollTerrain(){
   return false;
 }
@@ -4079,6 +4082,7 @@ function startFromFlipper(side){
 }
 addEventListener('keydown',(e)=>{unlockAudio(); if((e.code==='ArrowLeft'||e.code==='KeyA')&&!input.left){input.left=true;startFromFlipper(-0.45);} if((e.code==='ArrowRight'||e.code==='KeyD')&&!input.right){input.right=true;startFromFlipper(0.45);} if(e.code==='Space'){e.preventDefault(); launchBall();} if(e.code==='KeyR') restartRun();});
 addEventListener('keyup',(e)=>{if(e.code==='ArrowLeft'||e.code==='KeyA') input.left=false; if(e.code==='ArrowRight'||e.code==='KeyD') input.right=false;});
+addEventListener('beforeunload',()=>{flushFeverMedals(true);economy.flush();flushFeverProgress();});
 function pointerToWorld(clientX, clientY) {
   const rect = uiCanvas.getBoundingClientRect();
   const x = (clientX - rect.left) * (WORLD.w / rect.width);
@@ -4128,6 +4132,8 @@ function recoverFromBrokenPhysics(){playSfx('levelReady',0.8,0); resetBall();}
 function drainBall(){
   flushFeverMedals(true);
   const net=economy.completePlay({cost:state.currentBallCost,payout:state.currentBallPayout,source:'medal-pin'});
+  economy.flush();
+  flushFeverProgress();
   state.lastBallNet=net;
   ball.active=false; state.mode='ball_lost'; state.ballLostTimer=0.7;
 }
@@ -4580,7 +4586,13 @@ function drawMineTerrain(sx,sy){
   }
   drawExposedOreClusters(sx,sy);
   rectRenderer.pushRect((TERRAIN.left-5)*sx,mineTop,(TERRAIN.cols*TERRAIN.cell+10)*sx,2*sy,'#ffd95a',0.90);
-  rectRenderer.pushRect((TERRAIN.left-5)*sx,mineBottom,(TERRAIN.cols*TERRAIN.cell+10)*sx,2*sy,'#5de4ff',0.60);
+  const bottomX=(TERRAIN.left-5)*sx;
+  const bottomW=(TERRAIN.cols*TERRAIN.cell+10)*sx;
+  const drainGap=currentDrain();
+  const gapX0=(drainGap.x0-10)*sx;
+  const gapX1=(drainGap.x1+10)*sx;
+  rectRenderer.pushRect(bottomX,mineBottom,Math.max(0,gapX0-bottomX),2*sy,'#5de4ff',0.60);
+  rectRenderer.pushRect(gapX1,mineBottom,Math.max(0,bottomX+bottomW-gapX1),2*sy,'#5de4ff',0.60);
 }
 function oreRowSpans(cells){
   const rows=new Map();

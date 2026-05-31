@@ -47,4 +47,17 @@ loaded.reset();
 assert.equal(loaded.state.medals, 250);
 assert.equal(loaded.state.sessionNet, 0);
 
+const deferredStorage = memoryStorage();
+const deferred = createMedalEconomy({ storage: deferredStorage, storageKey: 'deferred-economy', autoSave: false });
+assert.equal(deferred.spend(50, 'pin-ball'), true);
+assert.equal(deferred.payout(10, 'copper'), 10);
+
+const beforeFlush = createMedalEconomy({ storage: deferredStorage, storageKey: 'deferred-economy' });
+assert.equal(beforeFlush.state.medals, 250);
+
+deferred.flush();
+const afterFlush = createMedalEconomy({ storage: deferredStorage, storageKey: 'deferred-economy' });
+assert.equal(afterFlush.state.medals, 210);
+assert.equal(afterFlush.state.sessionNet, -40);
+
 console.log('medal economy tests passed');
