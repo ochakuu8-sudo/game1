@@ -13,8 +13,13 @@ import { TABLE_W, TABLE_H, BUILDING_SLOTS, DRAIN_Y, BALL_RADIUS, HUMAN_RADIUS } 
 
 type GameState = "title" | "playing" | "gameover";
 
-const STEP_MS = 1000 / 60;
-const MAX_STEPS_PER_FRAME = 5;
+// Physics runs at 120Hz (double the render rate) so the flipper - which
+// snaps its angle/position directly rather than being driven by forces -
+// and fast balls move a shorter distance per discrete step. Matter has no
+// continuous collision detection, so large per-step movement is what let
+// the ball tunnel straight through the flipper.
+const STEP_MS = 1000 / 120;
+const MAX_STEPS_PER_FRAME = 10;
 const INITIAL_BALLS = 4;
 const MULTIBALL_START_THRESHOLD = 8;
 const MULTIBALL_GROWTH = 6;
@@ -45,6 +50,7 @@ export class Game {
   private multiballThreshold = MULTIBALL_START_THRESHOLD;
   private buildingsDestroyedTotal = 0;
   private accumulator = 0;
+  private debugFlipperCollisions = 0;
 
   constructor(app: Application) {
     this.app = app;
@@ -132,12 +138,17 @@ export class Game {
       if (other.label === "building") {
         this.handleBuildingHit(other, ball);
       } else if (other.label === "flipper") {
+        this.debugFlipperCollisions++;
         const flipper = other === this.world.leftFlipper.body ? this.world.leftFlipper : this.world.rightFlipper;
         if (flipper.held) {
+          // The flipper itself carries no velocity (see physics/flipper.ts),
+          // so all of its "kick" comes from this explicit boost, radially
+          // outward from the pivot - roughly the direction a swinging
+          // flipper would actually fling the ball.
           const dx = ball.position.x - flipper.layout.pivot.x;
           const dy = ball.position.y - flipper.layout.pivot.y;
           const dist = Math.hypot(dx, dy) || 1;
-          const boost = 2.4 * this.powerups.flipperPowerMultiplier;
+          const boost = 9 * this.powerups.flipperPowerMultiplier;
           Matter.Body.setVelocity(ball, {
             x: ball.velocity.x + (dx / dist) * boost,
             y: ball.velocity.y + (dy / dist) * boost,
@@ -349,6 +360,19 @@ export class Game {
       ballCount: () => this.world.balls.length,
       reserve: () => this.ballsReserve,
       ballPositions: () => this.world.balls.map((b) => ({ x: b.position.x, y: b.position.y })),
+      flipperCollisions: () => this.debugFlipperCollisions,
+      flipperAngles: () => ({ left: this.world.leftFlipper.currentAngle, right: this.world.rightFlipper.currentAngle }),
+      flipperDrift: () => {
+        const check = (f: typeof this.world.leftFlipper) => {
+          const { pivot, length } = f.layout;
+          const expectedX = pivot.x + Math.cos(f.currentAngle) * (length / 2);
+          const expectedY = pivot.y + Math.sin(f.currentAngle) * (length / 2);
+          const dx = f.body.position.x - expectedX;
+          const dy = f.body.position.y - expectedY;
+          return Math.hypot(dx, dy);
+        };
+        return { left: check(this.world.leftFlipper), right: check(this.world.rightFlipper) };
+      },
     };
   }
 }

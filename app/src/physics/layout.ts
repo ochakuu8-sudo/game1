@@ -91,13 +91,34 @@ export const OUTER_WALLS: WallRect[] = [
 ];
 
 // Outlane guides: single straight rails from just inside the main side
-// walls down past the flipper pivots and past the table's bottom edge, so
-// there is no gap the ball can slip through between the wall and the
-// flipper. Each is one continuous body (not multiple joined segments) so
-// there's no seam to leak through. They start well outside the table
-// (x < 0 / x > TABLE_W) so they fully overlap the main side walls instead
-// of merely touching them.
+// walls down to right beside the flipper's own pivot, so there is no gap
+// the ball can slip through between the wall and the flipper. Each is one
+// continuous body (not multiple joined segments) so there's no seam to
+// leak through, and it starts well outside the table (x < 0 / x > TABLE_W)
+// so it fully overlaps the main side wall instead of merely touching it.
+//
+// The far end stops just outside the flipper's hinge circle (radius =
+// FLIPPER width/2) on the side the flipper never swings toward (both
+// flippers only ever sweep inward, toward the centre), leaving a gap a few
+// pixels wide - too narrow for the ball, but not touching the hinge. It's
+// deliberately not overlapping: the flipper is a non-static body pinned in
+// place every step by Flipper.step(), and constant interpenetration with a
+// static body would otherwise fight that and slowly drag its pivot off
+// target.
+const FLIPPER_HINGE_CLEARANCE = 21; // > FLIPPER width/2 (10), so no overlap
 export const OUTLANE_GUIDES: WallSeg[] = [
-  { x1: -30, y1: 470, x2: LEFT_FLIPPER.pivot.x - 26, y2: TABLE_H + 60, thickness: WALL_T },
-  { x1: TABLE_W + 30, y1: 470, x2: RIGHT_FLIPPER.pivot.x + 26, y2: TABLE_H + 60, thickness: WALL_T },
+  {
+    x1: -30,
+    y1: 470,
+    x2: LEFT_FLIPPER.pivot.x - FLIPPER_HINGE_CLEARANCE,
+    y2: LEFT_FLIPPER.pivot.y,
+    thickness: WALL_T,
+  },
+  {
+    x1: TABLE_W + 30,
+    y1: 470,
+    x2: RIGHT_FLIPPER.pivot.x + FLIPPER_HINGE_CLEARANCE,
+    y2: RIGHT_FLIPPER.pivot.y,
+    thickness: WALL_T,
+  },
 ];

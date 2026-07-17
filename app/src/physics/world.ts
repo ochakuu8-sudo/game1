@@ -28,6 +28,10 @@ export class PinballWorld {
   constructor() {
     this.engine = Engine.create();
     this.engine.gravity.y = 1.0;
+    // Extra solver iterations for more reliable resolution against the
+    // fast-snapping flipper bodies (default is 6/4).
+    this.engine.positionIterations = 12;
+    this.engine.velocityIterations = 10;
     this.world = this.engine.world;
 
     this.buildStaticTable();
