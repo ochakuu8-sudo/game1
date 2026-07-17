@@ -1,5 +1,5 @@
 import { Container, Graphics } from "pixi.js";
-import { OUTER_WALLS, OUTLANE_GUIDES, TABLE_H, type WallRect, type WallSeg } from "./layout";
+import { OUTER_WALLS, OUTLANE_GUIDES, FLIPPER_HINGE_GUARDS, TABLE_H, type WallRect, type WallSeg } from "./layout";
 
 function rectCorners(cx: number, cy: number, w: number, h: number, angle: number) {
   const cos = Math.cos(angle);
@@ -63,6 +63,9 @@ export function buildTableVisuals(): Container {
 
   for (const w of OUTER_WALLS) drawRect(w);
   for (const s of OUTLANE_GUIDES) drawGuide(s);
+  for (const h of FLIPPER_HINGE_GUARDS) {
+    g.circle(h.x, h.y, h.radius).fill(0x3a4766).stroke({ width: 2, color: 0x7a8fc2, alpha: 0.9 });
+  }
 
   c.addChild(g);
   return c;

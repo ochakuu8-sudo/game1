@@ -8,6 +8,7 @@ import {
   RIGHT_FLIPPER,
   OUTER_WALLS,
   OUTLANE_GUIDES,
+  FLIPPER_HINGE_GUARDS,
 } from "./layout";
 import { Flipper } from "./flipper";
 
@@ -71,6 +72,13 @@ export class PinballWorld {
       walls.push(
         Bodies.rectangle((s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2, length, s.thickness, { ...opts, angle }),
       );
+    }
+
+    // Rounded caps bridging each rail to its flipper's hinge - see
+    // layout.ts for why these need to be round rather than another flat
+    // segment (a ball can wedge into a flat-meets-circle corner).
+    for (const g of FLIPPER_HINGE_GUARDS) {
+      walls.push(Bodies.circle(g.x, g.y, g.radius, opts));
     }
 
     World.add(this.world, walls);
