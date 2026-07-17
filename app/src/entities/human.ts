@@ -9,6 +9,8 @@ interface HumanSlot {
   y: number;
   vx: number;
   vy: number;
+  targetVx: number;
+  targetVy: number;
   wanderT: number;
   speed: number;
 }
@@ -39,11 +41,22 @@ export class HumanSwarm {
         x: -9999,
         y: -9999,
         anchorX: 0.5,
-        anchorY: 0.6,
+        anchorY: 0.52,
         alpha: 0,
       });
       this.container.addParticle(particle);
-      this.slots.push({ particle, alive: false, x: 0, y: 0, vx: 0, vy: 0, wanderT: 0, speed: 40 });
+      this.slots.push({
+        particle,
+        alive: false,
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        targetVx: 0,
+        targetVy: 0,
+        wanderT: 0,
+        speed: 40,
+      });
     }
   }
 
@@ -74,11 +87,13 @@ export class HumanSwarm {
       slot.y = y + Math.sin(a) * 12;
       slot.vx = Math.cos(a) * 60;
       slot.vy = Math.sin(a) * 60;
+      slot.targetVx = slot.vx;
+      slot.targetVy = slot.vy;
       slot.wanderT = Math.random() * 1.5;
-      slot.speed = 55 + Math.random() * 45;
+      slot.speed = 45 + Math.random() * 35;
       slot.particle.alpha = 1;
       slot.particle.tint = TINTS[(Math.random() * TINTS.length) | 0];
-      slot.particle.scaleX = slot.particle.scaleY = 0.85 + Math.random() * 0.3;
+      slot.particle.scaleX = slot.particle.scaleY = 0.8 + Math.random() * 0.3;
       spawned++;
       this.aliveCount++;
     }
@@ -119,10 +134,16 @@ export class HumanSwarm {
       slot.wanderT -= dt;
       if (slot.wanderT <= 0) {
         const a = Math.random() * Math.PI * 2;
-        slot.vx = Math.cos(a) * slot.speed;
-        slot.vy = Math.sin(a) * slot.speed;
+        slot.targetVx = Math.cos(a) * slot.speed;
+        slot.targetVy = Math.sin(a) * slot.speed;
         slot.wanderT = 0.6 + Math.random() * 1.2;
       }
+      // Ease toward the current wander target instead of snapping to it,
+      // so idle scurrying reads as a scampering creature rather than
+      // teleporting between straight-line legs every second or so.
+      const ease = 1 - Math.exp(-dt * 5);
+      slot.vx += (slot.targetVx - slot.vx) * ease;
+      slot.vy += (slot.targetVy - slot.vy) * ease;
 
       let moveX = slot.vx;
       let moveY = slot.vy;
@@ -141,16 +162,20 @@ export class HumanSwarm {
       if (slot.x < MARGIN) {
         slot.x = MARGIN;
         slot.vx = Math.abs(slot.vx);
+        slot.targetVx = Math.abs(slot.targetVx);
       } else if (slot.x > TABLE_W - MARGIN) {
         slot.x = TABLE_W - MARGIN;
         slot.vx = -Math.abs(slot.vx);
+        slot.targetVx = -Math.abs(slot.targetVx);
       }
       if (slot.y < TOP_MARGIN) {
         slot.y = TOP_MARGIN;
         slot.vy = Math.abs(slot.vy);
+        slot.targetVy = Math.abs(slot.targetVy);
       } else if (slot.y > TABLE_H - BOTTOM_MARGIN) {
         slot.y = TABLE_H - BOTTOM_MARGIN;
         slot.vy = -Math.abs(slot.vy);
+        slot.targetVy = -Math.abs(slot.targetVy);
       }
 
       slot.particle.x = slot.x;

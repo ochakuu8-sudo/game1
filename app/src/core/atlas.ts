@@ -8,6 +8,7 @@ import {
   Texture,
   type Renderer,
 } from "pixi.js";
+import { BUILDING_SLOTS, buildingRect } from "../physics/layout";
 
 /**
  * Every visual in the game (buildings, humans, ball, flippers, particles,
@@ -17,11 +18,20 @@ import {
  * when hundreds of humans/particles are on screen at once - important for
  * keeping this smooth on phones.
  */
+/** Groups a building's footprint into a texture key - buildings share a
+ * texture whenever they're the same pixel size (regardless of which grid
+ * slot they came from), so the atlas only bakes one facade per distinct
+ * size actually used in physics/layout.ts's BUILDING_SLOTS. */
+export function buildingSizeKey(width: number, height: number): string {
+  return `${Math.round(width)}x${Math.round(height)}`;
+}
+
 export interface Atlas {
   ball: Texture;
   flipper: Texture;
-  buildingWide: Texture;
-  buildingTower: Texture;
+  /** Keyed by buildingSizeKey(width, height) - one facade texture per
+   * distinct building footprint size used in the current layout. */
+  buildings: Record<string, Texture>;
   human: Texture;
   debris: Texture;
   spark: Texture;
@@ -87,35 +97,66 @@ export function buildAtlas(renderer: Renderer): Atlas {
     frames.flipper = new Rectangle(0, ROWS * CELL, FLIPPER_W, FLIPPER_H);
   }
 
-  // --- Buildings (bumper targets), two silhouettes for variety - warm
-  // sunlit walls with sky-reflecting glass windows for the daytime city ---
-  place("buildingWide", (g) => {
-    g.roundRect(-42, -30, 84, 60, 6).fill(0xe0a868);
-    for (let i = 0; i < 3; i++) {
-      for (let j = 0; j < 2; j++) {
-        g.rect(-32 + i * 22, -20 + j * 24, 12, 14).fill(0xbfe8f7);
+  // --- Buildings: one facade texture per distinct footprint size actually
+  // used by the grid layout (physics/layout.ts), rather than fixed
+  // "wide"/"tower" shapes - so 1x1/1x2/2x1/2x2 (and anything else the grid
+  // produces) all get a properly-proportioned window grid. Drawn in white
+  // with near-white windows so each building instance can be recoloured
+  // with a per-Sprite tint (see entities/building.ts) while keeping the
+  // windows reading as a lighter "glass" highlight under any tint.
+  const buildingSizes = new Map<string, { w: number; h: number }>();
+  for (const slot of BUILDING_SLOTS) {
+    const r = buildingRect(slot);
+    buildingSizes.set(buildingSizeKey(r.width, r.height), { w: r.width, h: r.height });
+  }
+
+  const drawBuildingFacade = (g: Graphics, w: number, h: number) => {
+    const r = Math.min(10, w / 6, h / 6);
+    g.roundRect(-w / 2, -h / 2, w, h, r).fill(0xffffff);
+    const winW = Math.min(14, w * 0.18);
+    const winH = Math.min(16, h * 0.14);
+    const cols = Math.max(1, Math.floor((w - 14) / (winW + 8)));
+    const rows = Math.max(1, Math.floor((h - 14) / (winH + 8)));
+    const gapX = (w - cols * winW) / (cols + 1);
+    const gapY = (h - rows * winH) / (rows + 1);
+    for (let i = 0; i < cols; i++) {
+      for (let j = 0; j < rows; j++) {
+        const x = -w / 2 + gapX + i * (winW + gapX);
+        const y = -h / 2 + gapY + j * (winH + gapY);
+        g.rect(x, y, winW, winH).fill(0xeaf7ff);
       }
     }
-    g.roundRect(-42, -30, 84, 60, 6).stroke({ width: 3, color: 0x9c6a34 });
-  });
+    g.roundRect(-w / 2, -h / 2, w, h, r).stroke({ width: 3, color: 0x9aa3ad });
+  };
 
-  place("buildingTower", (g) => {
-    g.roundRect(-26, -46, 52, 92, 6).fill(0x92acc9);
-    for (let i = 0; i < 2; i++) {
-      for (let j = 0; j < 4; j++) {
-        g.rect(-18 + i * 20, -38 + j * 20, 10, 12).fill(0xe8f7ff);
-      }
-    }
-    g.roundRect(-26, -46, 52, 92, 6).stroke({ width: 3, color: 0x50678a });
-  });
+  // Packed into their own strip (like the flipper) since some spans (e.g.
+  // 2x2) are far larger than one CELL and would bleed into neighbours.
+  const buildingStripY = ROWS * CELL + FLIPPER_H;
+  let buildingStripX = 0;
+  let buildingStripH = 0;
+  const buildingFrames: Record<string, Rectangle> = {};
+  for (const [key, { w, h }] of buildingSizes) {
+    const g = new Graphics();
+    drawBuildingFacade(g, w, h);
+    g.position.set(buildingStripX + w / 2, buildingStripY + h / 2);
+    staging.addChild(g);
+    buildingFrames[key] = new Rectangle(buildingStripX, buildingStripY, w, h);
+    buildingStripX += w + 8;
+    buildingStripH = Math.max(buildingStripH, h);
+  }
 
-  // --- Human: tiny fleeing civilian, simple readable blob ---
+  // --- Fleeing creature: a small round critter rather than a humanoid
+  // figure - reads fine at tiny scale and doesn't look broken when
+  // rotated to face its movement direction (a person's head rotating did).
   place("human", (g) => {
-    g.circle(0, -6, 7).fill(0xffe0b2);
-    g.roundRect(-6, -1, 12, 14, 4).fill(0xffffff);
-    g.rect(-6, 12, 4, 8).fill(0x2b2b2b);
-    g.rect(2, 12, 4, 8).fill(0x2b2b2b);
-  }, 48);
+    g.ellipse(0, 0, 7, 6).fill(0xffffff);
+    g.circle(-4.5, -4, 2.6).fill(0xffffff);
+    g.circle(4.5, -4, 2.6).fill(0xffffff);
+    g.ellipse(-3, 7, 2.2, 1.6).fill(0xffffff);
+    g.ellipse(3, 7, 2.2, 1.6).fill(0xffffff);
+    g.circle(-2.5, 0.5, 1.15).fill(0x2b2b2b);
+    g.circle(2.5, 0.5, 1.15).fill(0x2b2b2b);
+  }, 32);
 
   // --- Debris chunk (building destruction) ---
   place("debris", (g) => {
@@ -164,18 +205,23 @@ export function buildAtlas(renderer: Renderer): Atlas {
   }
 
   const atlasW = COLS * CELL;
-  const atlasH = ROWS * CELL + FLIPPER_H;
+  const atlasH = ROWS * CELL + FLIPPER_H + buildingStripH;
   const renderTexture = RenderTexture.create({ width: atlasW, height: atlasH, resolution: 2 });
   renderer.render({ container: staging, target: renderTexture });
   staging.destroy({ children: true });
 
   const slice = (name: string) => new Texture({ source: renderTexture.source, frame: frames[name] });
+  const sliceRect = (frame: Rectangle) => new Texture({ source: renderTexture.source, frame });
+
+  const buildings: Record<string, Texture> = {};
+  for (const [key, frame] of Object.entries(buildingFrames)) {
+    buildings[key] = sliceRect(frame);
+  }
 
   return {
     ball: slice("ball"),
     flipper: slice("flipper"),
-    buildingWide: slice("buildingWide"),
-    buildingTower: slice("buildingTower"),
+    buildings,
     human: slice("human"),
     debris: slice("debris"),
     spark: slice("spark"),

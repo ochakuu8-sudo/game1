@@ -2,7 +2,7 @@ import Matter from "matter-js";
 import {
   TABLE_W,
   BUILDING_SLOTS,
-  BUILDING_VARIANTS,
+  buildingRect,
   BALL_RADIUS,
   LEFT_FLIPPER,
   RIGHT_FLIPPER,
@@ -42,12 +42,12 @@ export class PinballWorld {
     World.add(this.world, [this.leftFlipper.body, this.rightFlipper.body]);
 
     for (const slot of BUILDING_SLOTS) {
-      const v = BUILDING_VARIANTS[slot.variant];
-      const body = Bodies.rectangle(slot.x, slot.y, v.width, v.height, {
+      const r = buildingRect(slot);
+      const body = Bodies.rectangle(r.x, r.y, r.width, r.height, {
         isStatic: true,
         label: "building",
         restitution: 0.7,
-        chamfer: { radius: v.cornerRadius },
+        chamfer: { radius: r.cornerRadius },
       });
       this.buildingBodies.push(body);
     }

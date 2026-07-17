@@ -34,33 +34,70 @@ export const RIGHT_FLIPPER: FlipperLayout = {
   side: "right",
 };
 
+// City block grid the buildings are placed on, occupying whole numbers of
+// cells (1x1, 1x2, 2x1, 2x2, ...) like real street blocks, instead of being
+// scattered at arbitrary coordinates. Sits between the top wall and the
+// outlane rails (which start at y=470, see OUTLANE_GUIDES below).
+export const GRID_COLS = 4;
+export const GRID_ROWS = 4;
+const GRID_LEFT = 40;
+const GRID_TOP = 72;
+const GRID_RIGHT = TABLE_W - 40;
+const GRID_BOTTOM = 440;
+export const GRID_CELL_W = (GRID_RIGHT - GRID_LEFT) / GRID_COLS;
+export const GRID_CELL_H = (GRID_BOTTOM - GRID_TOP) / GRID_ROWS;
+// Gap left between a building's actual (collidable/drawn) footprint and its
+// cell(s)' edges, so adjacent buildings never touch - this is what forms
+// the "streets" the ball travels down, on top of any whole cells left
+// empty in the layout below.
+const GRID_INSET = 12;
+
 export interface BuildingSlot {
-  x: number;
-  y: number;
-  variant: "wide" | "tower";
+  col: number;
+  row: number;
+  spanCols: number;
+  spanRows: number;
 }
 
-// Physical footprint of each building variant - must match the shapes baked
-// in core/atlas.ts (buildingWide / buildingTower Graphics) so the collision
-// box lines up with what's actually drawn on screen.
-export const BUILDING_VARIANTS = {
-  wide: { width: 84, height: 60, cornerRadius: 8 },
-  tower: { width: 52, height: 92, cornerRadius: 8 },
-} as const;
+export interface BuildingRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  cornerRadius: number;
+}
 
-// Six building bumper sites across the upper 2/3 of the table.
+export function buildingRect(slot: BuildingSlot): BuildingRect {
+  const cellX = GRID_LEFT + slot.col * GRID_CELL_W;
+  const cellY = GRID_TOP + slot.row * GRID_CELL_H;
+  const cellW = slot.spanCols * GRID_CELL_W;
+  const cellH = slot.spanRows * GRID_CELL_H;
+  return {
+    x: cellX + cellW / 2,
+    y: cellY + cellH / 2,
+    width: cellW - GRID_INSET * 2,
+    height: cellH - GRID_INSET * 2,
+    cornerRadius: 8,
+  };
+}
+
+// A small city block laid out on the 4x4 grid above: a mix of 1x1, 1x2,
+// 2x1 and 2x2 footprints, with a couple of whole cells left empty (on top
+// of the per-building street inset) as wider through-lanes for the ball.
 export const BUILDING_SLOTS: BuildingSlot[] = [
-  { x: TABLE_W * 0.27, y: TABLE_H * 0.22, variant: "tower" },
-  { x: TABLE_W * 0.73, y: TABLE_H * 0.22, variant: "tower" },
-  { x: TABLE_W * 0.5, y: TABLE_H * 0.35, variant: "wide" },
-  { x: TABLE_W * 0.22, y: TABLE_H * 0.48, variant: "wide" },
-  { x: TABLE_W * 0.78, y: TABLE_H * 0.48, variant: "wide" },
-  { x: TABLE_W * 0.5, y: TABLE_H * 0.6, variant: "tower" },
+  { col: 0, row: 0, spanCols: 2, spanRows: 2 }, // big block, top-left
+  { col: 2, row: 0, spanCols: 1, spanRows: 1 }, // small
+  { col: 3, row: 0, spanCols: 1, spanRows: 1 }, // small
+  { col: 3, row: 1, spanCols: 1, spanRows: 2 }, // tower, right side
+  { col: 0, row: 2, spanCols: 2, spanRows: 1 }, // wide, below the block
+  { col: 0, row: 3, spanCols: 1, spanRows: 1 }, // small
+  { col: 1, row: 3, spanCols: 2, spanRows: 1 }, // wide
+  { col: 3, row: 3, spanCols: 1, spanRows: 1 }, // small
 ];
 
 export const DRAIN_Y = TABLE_H + 40;
 export const BALL_RADIUS = 13;
-export const HUMAN_RADIUS = 10;
+export const HUMAN_RADIUS = 6;
 
 // --- Static table boundary geometry, shared by the physics world builder
 // (physics/world.ts) and the visual renderer (physics/tableVisuals.ts) so

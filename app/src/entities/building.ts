@@ -1,10 +1,15 @@
 import { Container, Sprite } from "pixi.js";
 import type Matter from "matter-js";
-import type { Atlas } from "../core/atlas";
-import type { BuildingSlot } from "../physics/layout";
+import { buildingSizeKey, type Atlas } from "../core/atlas";
+import { buildingRect, type BuildingSlot } from "../physics/layout";
 
 const REBUILD_TIME = 5.5;
 const HIT_FLASH_TIME = 0.12;
+
+// Daytime facade tints - each building instance picks one so the same
+// handful of baked textures (one per footprint size) still reads as a
+// varied city block rather than identical copies.
+const TINTS = [0xe0a868, 0x92acc9, 0xd9917a, 0x9fc494, 0xc9a7d9, 0xe0c468];
 
 export class Building {
   container: Container;
@@ -12,6 +17,8 @@ export class Building {
   private digitTens: Sprite;
   private digitOnes: Sprite;
   private atlas: Atlas;
+  private baseTint: number;
+  private cellCount: number;
   slot: BuildingSlot;
   body: Matter.Body;
 
@@ -26,15 +33,21 @@ export class Building {
     this.atlas = atlas;
     this.slot = slot;
     this.body = body;
+    this.cellCount = slot.spanCols * slot.spanRows;
+
+    const rect = buildingRect(slot);
+    this.baseTint = TINTS[(Math.random() * TINTS.length) | 0];
 
     this.container = new Container();
-    this.container.position.set(slot.x, slot.y);
+    this.container.position.set(rect.x, rect.y);
 
-    this.sprite = new Sprite(slot.variant === "wide" ? atlas.buildingWide : atlas.buildingTower);
+    const texture = atlas.buildings[buildingSizeKey(rect.width, rect.height)];
+    this.sprite = new Sprite(texture);
     this.sprite.anchor.set(0.5);
+    this.sprite.tint = this.baseTint;
     this.container.addChild(this.sprite);
 
-    const digitY = slot.variant === "wide" ? -46 : -62;
+    const digitY = -rect.height / 2 - 14;
     this.digitTens = new Sprite(atlas.digits[0]);
     this.digitTens.anchor.set(0.5);
     this.digitTens.scale.set(0.42);
@@ -50,13 +63,15 @@ export class Building {
 
   spawn(level: number) {
     this.level = level;
-    this.maxHp = Math.min(4 + level, 11);
+    // Bigger footprints (a 2x2 block vs a 1x1) take more hits to clear.
+    this.maxHp = Math.min(3 + level + (this.cellCount - 1) * 2, 20);
     this.hp = this.maxHp;
     this.destroyed = false;
     this.rebuildTimer = 0;
     this.container.visible = true;
     this.container.scale.set(1);
     this.container.alpha = 1;
+    this.sprite.tint = this.baseTint;
     this.refreshDigits();
   }
 
@@ -87,8 +102,6 @@ export class Building {
     if (this.hitFlash > 0) {
       this.hitFlash -= dt;
       const f = Math.max(0, this.hitFlash / HIT_FLASH_TIME);
-      this.sprite.tint = f > 0 ? 0xffffff : 0xffffff;
-      this.sprite.alpha = this.destroyed ? this.sprite.alpha : 1;
       this.container.scale.set(1 + f * 0.08);
     } else if (!this.destroyed) {
       this.container.scale.set(1);
