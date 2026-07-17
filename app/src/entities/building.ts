@@ -42,6 +42,13 @@ export class Building {
     this.container.position.set(rect.x, rect.y);
 
     const texture = atlas.buildings[buildingSizeKey(rect.width, rect.height)];
+    const shadow = new Sprite(texture);
+    shadow.anchor.set(0.5);
+    shadow.tint = 0x101820;
+    shadow.alpha = 0.28;
+    shadow.position.set(4, 6);
+    this.container.addChild(shadow);
+
     this.sprite = new Sprite(texture);
     this.sprite.anchor.set(0.5);
     this.sprite.tint = this.baseTint;

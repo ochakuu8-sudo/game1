@@ -116,8 +116,9 @@ export class Game {
     const g = new Graphics();
     // A top-down city playfield: asphalt surrounds concrete blocks, with a
     // connected street grid instead of a sky behind floating buildings.
-    g.rect(0, 0, TABLE_W, TABLE_H).fill(0x303940);
-    g.rect(26, 54, TABLE_W - 52, 410).fill(0x667078);
+    g.rect(0, 0, TABLE_W, TABLE_H).fill(0x18242c);
+    g.rect(12, 48, TABLE_W - 24, 430).roundRect(18, 54, TABLE_W - 36, 410, 12).fill(0x3f4d55);
+    g.roundRect(25, 53, TABLE_W - 50, 412, 8).fill(0x758088).stroke({ width: 2, color: 0xa8b0b5, alpha: 0.35 });
     // Narrow local streets separate the smaller lots inside each district.
     for (let col = 0; col <= GRID_COLS; col++) {
       const x = GRID_LEFT + ((GRID_RIGHT - GRID_LEFT) * col) / GRID_COLS;
@@ -138,6 +139,14 @@ export class Game {
     g.rect(avenueLeft, 54, avenueRight - avenueLeft, 410).fill(0x303940);
     g.rect(26, avenueTop, TABLE_W - 52, avenueBottom - avenueTop).fill(0x303940);
 
+    // curbs, lane reflectors and pools of light add depth without additional
+    // textures or draw calls.
+    g.rect(26, 54, TABLE_W - 52, 2).fill({ color: 0xdbe2e5, alpha: 0.45 });
+    for (let y = 70; y < 450; y += 36) {
+      g.circle(avenueLeft + 5, y, 2).fill({ color: 0x8eeaff, alpha: 0.75 });
+      g.circle(avenueRight - 5, y, 2).fill({ color: 0x8eeaff, alpha: 0.75 });
+    }
+
     // Dashed centre lines make the open ball routes immediately readable.
     const avenueCenterX = (avenueLeft + avenueRight) / 2;
     const avenueCenterY = (avenueTop + avenueBottom) / 2;
@@ -157,6 +166,8 @@ export class Game {
       g.circle(x, y - 28, 6).fill({ color: 0x161b1e, alpha: 0.4 });
       g.circle(x + 15, y - 22, 6).fill({ color: 0x161b1e, alpha: 0.4 });
     }
+    // subtle lower-playfield vignette/paneling breaks up the large empty area.
+    g.roundRect(44, 492, TABLE_W - 88, 145, 24).fill({ color: 0x0d171d, alpha: 0.22 }).stroke({ width: 2, color: 0x6f8995, alpha: 0.22 });
     c.addChild(g);
     return c;
   }

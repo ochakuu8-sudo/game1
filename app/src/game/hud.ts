@@ -65,7 +65,11 @@ export class HUD {
   constructor() {
     this.container = new Container();
 
-    const topBar = new Graphics().rect(0, 0, TABLE_W, 46).fill({ color: 0x05050a, alpha: 0.55 });
+    const topBar = new Graphics()
+      .rect(0, 0, TABLE_W, 48).fill({ color: 0x071219, alpha: 0.9 })
+      .rect(0, 46, TABLE_W, 2).fill({ color: 0x68d7e8, alpha: 0.55 })
+      .roundRect(7, 5, 128, 35, 8).fill({ color: 0x17303c, alpha: 0.9 }).stroke({ width: 1, color: 0x68d7e8, alpha: 0.4 })
+      .roundRect(TABLE_W - 132, 5, 125, 35, 8).fill({ color: 0x17303c, alpha: 0.9 }).stroke({ width: 1, color: 0x68d7e8, alpha: 0.4 });
     this.container.addChild(topBar);
 
     this.scoreText = new Text({ text: "0", style: scoreStyle });
