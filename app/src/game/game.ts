@@ -65,8 +65,7 @@ export class Game {
     this.root = new Container();
     app.stage.addChild(this.root);
 
-    this.root.addChild(this.buildSkyBackdrop());
-    this.root.addChild(this.buildKaijuBackdrop());
+    this.root.addChild(this.buildCityBackdrop());
     this.root.addChild(buildTableVisuals());
 
     const buildingLayer = new Container();
@@ -109,47 +108,33 @@ export class Game {
     app.ticker.add((ticker) => this.tick(ticker.deltaMS));
   }
 
-  private buildSkyBackdrop(): Container {
+  private buildCityBackdrop(): Container {
     const c = new Container();
     const g = new Graphics();
-    // Bright daytime sky, lighter near the horizon.
-    g.rect(0, 0, TABLE_W, TABLE_H * 0.55).fill(0x7ec8f2);
-    g.rect(0, TABLE_H * 0.55, TABLE_W, TABLE_H * 0.45).fill(0x9adcf0);
-
-    // Sun with a soft glow.
-    const sunX = TABLE_W * 0.78;
-    g.circle(sunX, 66, 52).fill({ color: 0xfff2b0, alpha: 0.25 });
-    g.circle(sunX, 66, 32).fill({ color: 0xfff6c8, alpha: 0.95 });
-
-    const cloud = (cx: number, cy: number, scale: number) => {
-      g.ellipse(cx, cy, 26 * scale, 14 * scale).fill({ color: 0xffffff, alpha: 0.9 });
-      g.ellipse(cx - 18 * scale, cy + 5 * scale, 17 * scale, 11 * scale).fill({ color: 0xffffff, alpha: 0.9 });
-      g.ellipse(cx + 18 * scale, cy + 5 * scale, 17 * scale, 11 * scale).fill({ color: 0xffffff, alpha: 0.9 });
-    };
-    cloud(90, 58, 0.9);
-    cloud(55, 132, 0.6);
-    cloud(TABLE_W - 70, 150, 0.7);
-
+    // A top-down city playfield: asphalt surrounds concrete blocks, with a
+    // connected street grid instead of a sky behind floating buildings.
+    g.rect(0, 0, TABLE_W, TABLE_H).fill(0x303940);
+    g.rect(26, 54, TABLE_W - 52, 410).fill(0x667078);
+    for (const x of [40, 125, 210, 295, 380]) {
+      g.rect(x - 10, 54, 20, 410).fill(0x303940);
+      for (let y = 61; y < 455; y += 25) g.rect(x - 1, y, 2, 11).fill({ color: 0xf4d35e, alpha: 0.75 });
+    }
+    for (const y of [72, 164, 256, 348, 440]) {
+      g.rect(26, y - 10, TABLE_W - 52, 20).fill(0x303940);
+      for (let x = 32; x < TABLE_W - 28; x += 25) g.rect(x, y - 1, 11, 2).fill({ color: 0xffffff, alpha: 0.5 });
+    }
+    // Crosswalks make the scale and street direction immediately readable.
+    for (const y of [150, 334]) {
+      for (let x = 191; x <= 221; x += 6) g.rect(x, y, 3, 18).fill({ color: 0xffffff, alpha: 0.75 });
+    }
+    // Scorched kaiju footprints tie the destructive ball path to the city.
+    for (const [x, y] of [[92, 510], [318, 570]] as const) {
+      g.ellipse(x, y, 20, 30).fill({ color: 0x161b1e, alpha: 0.45 });
+      g.circle(x - 15, y - 22, 6).fill({ color: 0x161b1e, alpha: 0.4 });
+      g.circle(x, y - 28, 6).fill({ color: 0x161b1e, alpha: 0.4 });
+      g.circle(x + 15, y - 22, 6).fill({ color: 0x161b1e, alpha: 0.4 });
+    }
     c.addChild(g);
-    return c;
-  }
-
-  private buildKaijuBackdrop(): Container {
-    // Big translucent kaiju silhouette looming behind the skyline - pure
-    // decoration, one Graphics object regardless so it doesn't cost extra
-    // draw calls beyond what a single sprite would.
-    const c = new Container();
-    const g = new Graphics();
-    const cx = TABLE_W / 2;
-    const silhouette = 0x33465c;
-    g.ellipse(cx, 150, 92, 120).fill({ color: silhouette, alpha: 0.45 });
-    g.circle(cx, 40, 58).fill({ color: silhouette, alpha: 0.45 });
-    g.poly([cx - 30, 0, cx - 10, -34, cx + 4, 2]).fill({ color: silhouette, alpha: 0.45 });
-    g.poly([cx + 10, 0, cx + 30, -30, cx + 40, 6]).fill({ color: silhouette, alpha: 0.45 });
-    g.circle(cx - 20, 34, 6).fill({ color: 0xff5a3c, alpha: 0.7 });
-    g.circle(cx + 20, 34, 6).fill({ color: 0xff5a3c, alpha: 0.7 });
-    c.addChild(g);
-    c.alpha = 0.85;
     return c;
   }
 

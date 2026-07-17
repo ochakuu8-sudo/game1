@@ -11,7 +11,7 @@ async function main() {
     canvas,
     width: TABLE_W,
     height: TABLE_H,
-    backgroundColor: 0x7ec8f2,
+    backgroundColor: 0x303940,
     resolution: Math.min(window.devicePixelRatio || 1, 2),
     autoDensity: true,
     antialias: true,

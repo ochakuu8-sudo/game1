@@ -81,18 +81,22 @@ export function buildingRect(slot: BuildingSlot): BuildingRect {
   };
 }
 
-// A small city block laid out on the 4x4 grid above: a mix of 1x1, 1x2,
-// 2x1 and 2x2 footprints, with a couple of whole cells left empty (on top
-// of the per-building street inset) as wider through-lanes for the ball.
+// Individual buildings occupy individual blocks, leaving every road in the
+// grid connected. Four open blocks act as plazas/parks and give the kaiju
+// ball wider intersections to build speed in.
 export const BUILDING_SLOTS: BuildingSlot[] = [
-  { col: 0, row: 0, spanCols: 2, spanRows: 2 }, // big block, top-left
-  { col: 2, row: 0, spanCols: 1, spanRows: 1 }, // small
-  { col: 3, row: 0, spanCols: 1, spanRows: 1 }, // small
-  { col: 3, row: 1, spanCols: 1, spanRows: 2 }, // tower, right side
-  { col: 0, row: 2, spanCols: 2, spanRows: 1 }, // wide, below the block
-  { col: 0, row: 3, spanCols: 1, spanRows: 1 }, // small
-  { col: 1, row: 3, spanCols: 2, spanRows: 1 }, // wide
-  { col: 3, row: 3, spanCols: 1, spanRows: 1 }, // small
+  { col: 0, row: 0, spanCols: 1, spanRows: 1 },
+  { col: 1, row: 0, spanCols: 1, spanRows: 1 },
+  { col: 3, row: 0, spanCols: 1, spanRows: 1 },
+  { col: 0, row: 1, spanCols: 1, spanRows: 1 },
+  { col: 2, row: 1, spanCols: 1, spanRows: 1 },
+  { col: 3, row: 1, spanCols: 1, spanRows: 1 },
+  { col: 0, row: 2, spanCols: 1, spanRows: 1 },
+  { col: 1, row: 2, spanCols: 1, spanRows: 1 },
+  { col: 3, row: 2, spanCols: 1, spanRows: 1 },
+  { col: 0, row: 3, spanCols: 1, spanRows: 1 },
+  { col: 2, row: 3, spanCols: 1, spanRows: 1 },
+  { col: 3, row: 3, spanCols: 1, spanRows: 1 },
 ];
 
 export const DRAIN_Y = TABLE_H + 40;

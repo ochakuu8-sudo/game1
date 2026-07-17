@@ -77,11 +77,17 @@ export function buildAtlas(renderer: Renderer): Atlas {
     frames[name] = new Rectangle(x + CELL / 2 - half, y + CELL / 2 - half, size, size);
   };
 
-  // --- Ball: chrome-ish sphere ---
+  // --- Ball: the kaiju itself, compressed into a pinball-sized monster head. ---
   place("ball", (g) => {
-    g.circle(0, 0, 26).fill(0xe8edf4);
-    g.circle(-8, -9, 10).fill(0xffffff);
-    g.circle(0, 0, 26).stroke({ width: 2, color: 0x8892a0, alpha: 0.6 });
+    g.poly([-19, -15, -12, -29, -3, -18, 8, -30, 17, -13]).fill(0x315d46);
+    g.circle(0, 0, 25).fill(0x4c8b5f);
+    g.circle(-9, -6, 6).fill(0xffe85c);
+    g.circle(9, -6, 6).fill(0xffe85c);
+    g.rect(-10, -8, 3, 6).fill(0x151b18);
+    g.rect(7, -8, 3, 6).fill(0x151b18);
+    g.arc(0, 7, 12, 0.1, Math.PI - 0.1).stroke({ width: 3, color: 0x183326 });
+    g.poly([-9, 9, -5, 15, -2, 9, 2, 15, 5, 9, 9, 14]).fill(0xf5efe0);
+    g.circle(0, 0, 25).stroke({ width: 3, color: 0x244b36 });
   }, 64);
 
   // --- Flipper: tapered paddle, drawn hinge-anchored in its own reserved
@@ -113,20 +119,11 @@ export function buildAtlas(renderer: Renderer): Atlas {
   const drawBuildingFacade = (g: Graphics, w: number, h: number) => {
     const r = Math.min(10, w / 6, h / 6);
     g.roundRect(-w / 2, -h / 2, w, h, r).fill(0xffffff);
-    const winW = Math.min(14, w * 0.18);
-    const winH = Math.min(16, h * 0.14);
-    const cols = Math.max(1, Math.floor((w - 14) / (winW + 8)));
-    const rows = Math.max(1, Math.floor((h - 14) / (winH + 8)));
-    const gapX = (w - cols * winW) / (cols + 1);
-    const gapY = (h - rows * winH) / (rows + 1);
-    for (let i = 0; i < cols; i++) {
-      for (let j = 0; j < rows; j++) {
-        const x = -w / 2 + gapX + i * (winW + gapX);
-        const y = -h / 2 + gapY + j * (winH + gapY);
-        g.rect(x, y, winW, winH).fill(0xeaf7ff);
-      }
-    }
-    g.roundRect(-w / 2, -h / 2, w, h, r).stroke({ width: 3, color: 0x9aa3ad });
+    g.roundRect(-w / 2 + 7, -h / 2 + 7, w - 14, h - 14, Math.max(3, r - 3)).fill(0xcdd3d6);
+    g.rect(-w * 0.22, -h * 0.18, w * 0.44, h * 0.36).fill(0x8f999d);
+    g.rect(-w * 0.16, -h * 0.12, w * 0.32, h * 0.24).fill(0xb8c0c3);
+    for (const x of [-w * 0.32, w * 0.32]) g.circle(x, h * 0.28, Math.min(5, w / 14)).fill(0x768186);
+    g.roundRect(-w / 2, -h / 2, w, h, r).stroke({ width: 3, color: 0x747d80 });
   };
 
   // Packed into their own strip (like the flipper) since some spans (e.g.
@@ -145,17 +142,14 @@ export function buildAtlas(renderer: Renderer): Atlas {
     buildingStripH = Math.max(buildingStripH, h);
   }
 
-  // --- Fleeing creature: a small round critter rather than a humanoid
-  // figure - reads fine at tiny scale and doesn't look broken when
-  // rotated to face its movement direction (a person's head rotating did).
+  // --- Top-down human: head, torso, arms and separated walking legs. ---
   place("human", (g) => {
-    g.ellipse(0, 0, 7, 6).fill(0xffffff);
-    g.circle(-4.5, -4, 2.6).fill(0xffffff);
-    g.circle(4.5, -4, 2.6).fill(0xffffff);
-    g.ellipse(-3, 7, 2.2, 1.6).fill(0xffffff);
-    g.ellipse(3, 7, 2.2, 1.6).fill(0xffffff);
-    g.circle(-2.5, 0.5, 1.15).fill(0x2b2b2b);
-    g.circle(2.5, 0.5, 1.15).fill(0x2b2b2b);
+    g.circle(0, -7, 4).fill(0xffd3b0);
+    g.roundRect(-4, -3, 8, 10, 3).fill(0xffffff);
+    g.moveTo(-3, 0).lineTo(-7, 5).stroke({ width: 2.5, color: 0xffd3b0 });
+    g.moveTo(3, 0).lineTo(7, 4).stroke({ width: 2.5, color: 0xffd3b0 });
+    g.moveTo(-2, 6).lineTo(-4, 12).stroke({ width: 3, color: 0x263a59 });
+    g.moveTo(2, 6).lineTo(5, 11).stroke({ width: 3, color: 0x263a59 });
   }, 32);
 
   // --- Debris chunk (building destruction) ---
