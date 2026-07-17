@@ -35,6 +35,7 @@ export function buildTableVisuals(): Container {
 
   const fill = 0x2f3a52;
   const edge = 0x596b8f;
+  const railFill = 0x3a4766;
 
   const drawRect = (r: WallRect) => {
     const pts = rectCorners(r.x, r.y, r.w, r.h, r.angle ?? 0);
@@ -49,11 +50,20 @@ export function buildTableVisuals(): Container {
     const angle = Math.atan2(dy, dx);
     const cx = (s.x1 + s.x2) / 2;
     const cy = (s.y1 + s.y2) / 2;
+
+    // Filled with no per-shape stroke, and rounded off at both ends with
+    // plain circles in the same fill colour - a straight-edged rectangle
+    // meeting the round flipper-hinge guard at an angle used to leave a
+    // visibly sharp kink right at the joint. Capsule-style rounding (plus
+    // relying on the hinge guard being large enough to fully absorb the
+    // join, see layout.ts) blends the two into one smooth shape instead.
     const pts = rectCorners(cx, cy, length, s.thickness, angle);
-    g.poly(pts.flatMap((p) => [p.x, p.y])).fill(0x3a4766).stroke({ width: 2, color: 0x7a8fc2, alpha: 0.9 });
+    g.poly(pts.flatMap((p) => [p.x, p.y])).fill(railFill);
+    g.circle(s.x1, s.y1, s.thickness / 2).fill(railFill);
+    g.circle(s.x2, s.y2, s.thickness / 2).fill(railFill);
 
     // A bright stripe down the middle of the rail so the slope reads
-    // clearly against the dark playfield, chevron-style toward the flipper.
+    // clearly against the dark playfield.
     const nx = (-dy / length) * (s.thickness / 2 - 3);
     const ny = (dx / length) * (s.thickness / 2 - 3);
     g.moveTo(s.x1 + nx, s.y1 + ny)
@@ -64,7 +74,7 @@ export function buildTableVisuals(): Container {
   for (const w of OUTER_WALLS) drawRect(w);
   for (const s of OUTLANE_GUIDES) drawGuide(s);
   for (const h of FLIPPER_HINGE_GUARDS) {
-    g.circle(h.x, h.y, h.radius).fill(0x3a4766).stroke({ width: 2, color: 0x7a8fc2, alpha: 0.9 });
+    g.circle(h.x, h.y, h.radius).fill(railFill);
   }
 
   c.addChild(g);

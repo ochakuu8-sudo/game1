@@ -123,6 +123,6 @@ export interface HingeGuard {
 }
 
 export const FLIPPER_HINGE_GUARDS: HingeGuard[] = [
-  { x: LEFT_FLIPPER.pivot.x - 15, y: LEFT_FLIPPER.pivot.y, radius: 18 },
-  { x: RIGHT_FLIPPER.pivot.x + 15, y: RIGHT_FLIPPER.pivot.y, radius: 18 },
+  { x: LEFT_FLIPPER.pivot.x - 15, y: LEFT_FLIPPER.pivot.y, radius: 25 },
+  { x: RIGHT_FLIPPER.pivot.x + 15, y: RIGHT_FLIPPER.pivot.y, radius: 25 },
 ];
