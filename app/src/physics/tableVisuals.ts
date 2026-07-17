@@ -33,9 +33,9 @@ export function buildTableVisuals(): Container {
   const c = new Container();
   const g = new Graphics();
 
-  const fill = 0x2f3a52;
-  const edge = 0x596b8f;
-  const railFill = 0x3a4766;
+  const fill = 0xaab1ba;
+  const edge = 0x7d8794;
+  const railFill = 0xc2c8d0;
 
   const drawRect = (r: WallRect) => {
     const pts = rectCorners(r.x, r.y, r.w, r.h, r.angle ?? 0);

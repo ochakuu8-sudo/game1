@@ -65,8 +65,7 @@ export class Game {
     this.root = new Container();
     app.stage.addChild(this.root);
 
-    const bg = new Graphics().rect(0, 0, TABLE_W, TABLE_H).fill(0x0d0f1a);
-    this.root.addChild(bg);
+    this.root.addChild(this.buildSkyBackdrop());
     this.root.addChild(this.buildKaijuBackdrop());
     this.root.addChild(buildTableVisuals());
 
@@ -110,6 +109,31 @@ export class Game {
     app.ticker.add((ticker) => this.tick(ticker.deltaMS));
   }
 
+  private buildSkyBackdrop(): Container {
+    const c = new Container();
+    const g = new Graphics();
+    // Bright daytime sky, lighter near the horizon.
+    g.rect(0, 0, TABLE_W, TABLE_H * 0.55).fill(0x7ec8f2);
+    g.rect(0, TABLE_H * 0.55, TABLE_W, TABLE_H * 0.45).fill(0x9adcf0);
+
+    // Sun with a soft glow.
+    const sunX = TABLE_W * 0.78;
+    g.circle(sunX, 66, 52).fill({ color: 0xfff2b0, alpha: 0.25 });
+    g.circle(sunX, 66, 32).fill({ color: 0xfff6c8, alpha: 0.95 });
+
+    const cloud = (cx: number, cy: number, scale: number) => {
+      g.ellipse(cx, cy, 26 * scale, 14 * scale).fill({ color: 0xffffff, alpha: 0.9 });
+      g.ellipse(cx - 18 * scale, cy + 5 * scale, 17 * scale, 11 * scale).fill({ color: 0xffffff, alpha: 0.9 });
+      g.ellipse(cx + 18 * scale, cy + 5 * scale, 17 * scale, 11 * scale).fill({ color: 0xffffff, alpha: 0.9 });
+    };
+    cloud(90, 58, 0.9);
+    cloud(55, 132, 0.6);
+    cloud(TABLE_W - 70, 150, 0.7);
+
+    c.addChild(g);
+    return c;
+  }
+
   private buildKaijuBackdrop(): Container {
     // Big translucent kaiju silhouette looming behind the skyline - pure
     // decoration, one Graphics object regardless so it doesn't cost extra
@@ -117,14 +141,15 @@ export class Game {
     const c = new Container();
     const g = new Graphics();
     const cx = TABLE_W / 2;
-    g.ellipse(cx, 150, 92, 120).fill({ color: 0x1c2b22, alpha: 0.5 });
-    g.circle(cx, 40, 58).fill({ color: 0x1c2b22, alpha: 0.5 });
-    g.poly([cx - 30, 0, cx - 10, -34, cx + 4, 2]).fill({ color: 0x1c2b22, alpha: 0.5 });
-    g.poly([cx + 10, 0, cx + 30, -30, cx + 40, 6]).fill({ color: 0x1c2b22, alpha: 0.5 });
-    g.circle(cx - 20, 34, 6).fill({ color: 0xff5a3c, alpha: 0.65 });
-    g.circle(cx + 20, 34, 6).fill({ color: 0xff5a3c, alpha: 0.65 });
+    const silhouette = 0x33465c;
+    g.ellipse(cx, 150, 92, 120).fill({ color: silhouette, alpha: 0.45 });
+    g.circle(cx, 40, 58).fill({ color: silhouette, alpha: 0.45 });
+    g.poly([cx - 30, 0, cx - 10, -34, cx + 4, 2]).fill({ color: silhouette, alpha: 0.45 });
+    g.poly([cx + 10, 0, cx + 30, -30, cx + 40, 6]).fill({ color: silhouette, alpha: 0.45 });
+    g.circle(cx - 20, 34, 6).fill({ color: 0xff5a3c, alpha: 0.7 });
+    g.circle(cx + 20, 34, 6).fill({ color: 0xff5a3c, alpha: 0.7 });
     c.addChild(g);
-    c.alpha = 0.8;
+    c.alpha = 0.85;
     return c;
   }
 

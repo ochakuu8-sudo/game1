@@ -12,7 +12,7 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #05050a;
+  background: #3f6d8f;
   touch-action: none;
   overscroll-behavior: none;
 }
@@ -22,7 +22,7 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  background: #05050a;
+  background: #3f6d8f;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -87,25 +87,26 @@ export function buildAtlas(renderer: Renderer): Atlas {
     frames.flipper = new Rectangle(0, ROWS * CELL, FLIPPER_W, FLIPPER_H);
   }
 
-  // --- Buildings (bumper targets), two silhouettes for variety ---
+  // --- Buildings (bumper targets), two silhouettes for variety - warm
+  // sunlit walls with sky-reflecting glass windows for the daytime city ---
   place("buildingWide", (g) => {
-    g.roundRect(-42, -30, 84, 60, 6).fill(0x3a4a63);
+    g.roundRect(-42, -30, 84, 60, 6).fill(0xe0a868);
     for (let i = 0; i < 3; i++) {
       for (let j = 0; j < 2; j++) {
-        g.rect(-32 + i * 22, -20 + j * 24, 12, 14).fill(0xffd873);
+        g.rect(-32 + i * 22, -20 + j * 24, 12, 14).fill(0xbfe8f7);
       }
     }
-    g.roundRect(-42, -30, 84, 60, 6).stroke({ width: 3, color: 0x1c2534 });
+    g.roundRect(-42, -30, 84, 60, 6).stroke({ width: 3, color: 0x9c6a34 });
   });
 
   place("buildingTower", (g) => {
-    g.roundRect(-26, -46, 52, 92, 6).fill(0x4a3a63);
+    g.roundRect(-26, -46, 52, 92, 6).fill(0x92acc9);
     for (let i = 0; i < 2; i++) {
       for (let j = 0; j < 4; j++) {
-        g.rect(-18 + i * 20, -38 + j * 20, 10, 12).fill(0xffd873);
+        g.rect(-18 + i * 20, -38 + j * 20, 10, 12).fill(0xe8f7ff);
       }
     }
-    g.roundRect(-26, -46, 52, 92, 6).stroke({ width: 3, color: 0x241c34 });
+    g.roundRect(-26, -46, 52, 92, 6).stroke({ width: 3, color: 0x50678a });
   });
 
   // --- Human: tiny fleeing civilian, simple readable blob ---
