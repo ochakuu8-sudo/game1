@@ -346,6 +346,7 @@ export class Game {
       humanDebug: () => this.humans.debugSlots(),
       ballCount: () => this.world.balls.length,
       reserve: () => this.ballsReserve,
+      ballPositions: () => this.world.balls.map((b) => ({ x: b.position.x, y: b.position.y })),
     };
   }
 }

@@ -52,44 +52,28 @@ export class PinballWorld {
     walls.push(Bodies.rectangle(WALL_T + 26, WALL_T + 10, 70, WALL_T, { ...opts, angle: -0.6 }));
     walls.push(Bodies.rectangle(TABLE_W - WALL_T - 26, WALL_T + 10, 70, WALL_T, { ...opts, angle: 0.6 }));
 
-    // Slingshot funnel walls feeding the flippers, mirrored left/right
-    const funnelY = TABLE_H - 190;
-    walls.push(
-      Bodies.fromVertices(
-        TABLE_W * 0.16,
-        funnelY + 55,
-        [
-          [
-            { x: -WALL_T / 2, y: -80 },
-            { x: WALL_T / 2, y: -80 },
-            { x: 60, y: 80 },
-            { x: 60 - WALL_T, y: 80 },
-          ],
-        ],
-        { ...opts },
-        true,
-      ),
-    );
-    walls.push(
-      Bodies.fromVertices(
-        TABLE_W * 0.84,
-        funnelY + 55,
-        [
-          [
-            { x: WALL_T / 2, y: -80 },
-            { x: -WALL_T / 2, y: -80 },
-            { x: -60, y: 80 },
-            { x: -60 + WALL_T, y: 80 },
-          ],
-        ],
-        { ...opts },
-        true,
-      ),
-    );
+    // Slingshot/outlane guides feeding each flipper: a diagonal segment from
+    // the side wall down to just outside the flipper's pivot, then a second
+    // segment continuing straight past the table's bottom edge. Without the
+    // second segment the ball can squeeze through the gap between the
+    // flipper's outer/pivot side and the side wall and drain there instead
+    // of only through the intended centre gap between the two flippers.
+    const seg = (x1: number, y1: number, x2: number, y2: number) => {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const length = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      return Bodies.rectangle((x1 + x2) / 2, (y1 + y2) / 2, length, WALL_T, { ...opts, angle });
+    };
 
-    // Outer lane walls below the funnels, guarding the flipper gap
-    walls.push(Bodies.rectangle(WALL_T / 2 + 6, TABLE_H - 70, WALL_T, 160, opts));
-    walls.push(Bodies.rectangle(TABLE_W - WALL_T / 2 - 6, TABLE_H - 70, WALL_T, 160, opts));
+    const leftPivot = LEFT_FLIPPER.pivot;
+    const rightPivot = RIGHT_FLIPPER.pivot;
+
+    walls.push(seg(WALL_T, 530, leftPivot.x - 34, leftPivot.y - 25));
+    walls.push(seg(leftPivot.x - 34, leftPivot.y - 25, leftPivot.x - 24, TABLE_H + 60));
+
+    walls.push(seg(TABLE_W - WALL_T, 530, rightPivot.x + 34, rightPivot.y - 25));
+    walls.push(seg(rightPivot.x + 34, rightPivot.y - 25, rightPivot.x + 24, TABLE_H + 60));
 
     World.add(this.world, walls);
   }
