@@ -28,6 +28,13 @@ const MULTIBALL_START_THRESHOLD = 8;
 const MULTIBALL_GROWTH = 6;
 const MULTIBALL_BALL_CAP = 6;
 const POWERUP_EVERY_N_BUILDINGS = 3;
+// The city starts with only a couple of lots built; the rest trickle in
+// over time (see Game.scheduleBuildingSpawns) instead of the whole grid
+// being full from the first frame.
+const STARTER_BUILDING_MIN = 2;
+const STARTER_BUILDING_MAX = 3;
+const BUILDING_SPAWN_INTERVAL = 2.2;
+const BUILDING_SPAWN_JITTER = 1.1;
 
 export class Game {
   private app: Application;
@@ -81,6 +88,7 @@ export class Game {
       this.buildingByBody.set(body, b);
       buildingLayer.addChild(b.container);
     });
+    this.scheduleBuildingSpawns();
 
     this.root.addChild(this.humans.container);
 
@@ -345,12 +353,33 @@ export class Game {
     this.hud.setBalls(this.ballsReserve, this.world.balls.length);
   }
 
+  /** Picks a couple of random lots to build immediately and staggers the
+   * rest to spawn in one at a time over the following minutes, in a
+   * shuffled (not row-by-row) order, instead of the whole grid starting
+   * full. Reused both on first load and on every subsequent restart. */
+  private scheduleBuildingSpawns() {
+    const order = this.buildings.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    const starterCount = STARTER_BUILDING_MIN + Math.floor(Math.random() * (STARTER_BUILDING_MAX - STARTER_BUILDING_MIN + 1));
+    order.forEach((buildingIndex, pos) => {
+      const b = this.buildings[buildingIndex];
+      if (pos < starterCount) {
+        b.spawn(1);
+        this.world.setBuildingActive(b.body, true);
+      } else {
+        const delay = (pos - starterCount) * BUILDING_SPAWN_INTERVAL + Math.random() * BUILDING_SPAWN_JITTER;
+        b.scheduleSpawn(delay);
+        this.world.setBuildingActive(b.body, false);
+      }
+    });
+  }
+
   private startGame() {
     for (const body of [...this.world.balls]) this.removeBallEntity(body);
-    for (const b of this.buildings) {
-      b.spawn(3);
-      this.world.setBuildingActive(b.body, true);
-    }
+    this.scheduleBuildingSpawns();
     this.humans.reset();
     this.powerups = new PowerUpManager();
 
@@ -450,6 +479,7 @@ export class Game {
         while (b.hp > 1) b.hit();
         this.handleBuildingHit(b.body, this.world.balls[0] ?? b.body);
       },
+      buildingStats: () => ({ active: this.buildings.filter((b) => !b.destroyed).length, total: this.buildings.length }),
       forceMultiball: () => this.triggerMultiball(),
       forceGameOver: () => this.gameOver(),
       state: () => this.state,

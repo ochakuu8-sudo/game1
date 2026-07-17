@@ -41,6 +41,10 @@ export class PinballWorld {
     this.rightFlipper = new Flipper(RIGHT_FLIPPER);
     World.add(this.world, [this.leftFlipper.body, this.rightFlipper.body]);
 
+    // Bodies are created up front (Building instances index into this array
+    // 1:1), but not added to the world yet - most lots start dormant and are
+    // added later via setBuildingActive() when the game schedules their
+    // first spawn (see Game.scheduleBuildingSpawns).
     for (const slot of BUILDING_SLOTS) {
       const r = buildingRect(slot);
       const body = Bodies.rectangle(r.x, r.y, r.width, r.height, {
@@ -51,7 +55,6 @@ export class PinballWorld {
       });
       this.buildingBodies.push(body);
     }
-    World.add(this.world, this.buildingBodies);
   }
 
   private buildStaticTable() {

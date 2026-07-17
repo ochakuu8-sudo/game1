@@ -31,6 +31,12 @@ export class Building {
   rebuildTimer = 0;
   hitFlash = 0;
   level = 0;
+  /** Counts down to this building's very first appearance. Non-null only
+   * before it has ever spawned - a separate concept from `rebuildTimer`
+   * (which recovers a *destroyed* building) since a not-yet-built lot can
+   * sit dormant far longer than the short post-destruction animation
+   * window that timer's math assumes. */
+  private pendingSpawnTimer: number | null = null;
 
   constructor(atlas: Atlas, slot: BuildingSlot, body: Matter.Body) {
     this.atlas = atlas;
@@ -76,7 +82,30 @@ export class Building {
     this.digitOnes.position.set(this.digitSpacing, digitY);
     this.container.addChild(this.digitTens, this.digitOnes);
 
-    this.spawn(3);
+    // Starts fully dormant (invisible, no body in the physics world) - the
+    // game decides per-instance whether to spawn it immediately or on a
+    // delay via spawn()/scheduleSpawn().
+    this.destroyed = true;
+    this.container.visible = false;
+    this.container.alpha = 0;
+  }
+
+  /** Arrange for this lot's first building to appear after `delay` seconds
+   * instead of immediately - used to trickle the city in over time rather
+   * than starting with every lot already built. A full reset (not just
+   * setting the timer) since this can be called on a building that's
+   * currently active - e.g. re-rolling which lots start built on a restart
+   * - and must fully hide/deactivate it, not just queue a future respawn
+   * on top of whatever state it was already in. */
+  scheduleSpawn(delay: number) {
+    this.pendingSpawnTimer = delay;
+    this.destroyed = true;
+    this.hp = 0;
+    this.maxHp = 0;
+    this.hitFlash = 0;
+    this.rebuildTimer = 0;
+    this.container.visible = false;
+    this.container.alpha = 0;
   }
 
   spawn(level: number) {
@@ -119,6 +148,16 @@ export class Building {
   }
 
   update(dt: number): "rebuilt" | null {
+    if (this.pendingSpawnTimer !== null) {
+      this.pendingSpawnTimer -= dt;
+      if (this.pendingSpawnTimer <= 0) {
+        this.pendingSpawnTimer = null;
+        this.spawn(1);
+        return "rebuilt";
+      }
+      return null;
+    }
+
     if (this.hitFlash > 0) {
       this.hitFlash -= dt;
       const f = Math.max(0, this.hitFlash / HIT_FLASH_TIME);
