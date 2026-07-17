@@ -38,8 +38,8 @@ export const RIGHT_FLIPPER: FlipperLayout = {
 // cells (1x1, 1x2, 2x1, 2x2, ...) like real street blocks, instead of being
 // scattered at arbitrary coordinates. Sits between the top wall and the
 // outlane rails (which start at y=470, see OUTLANE_GUIDES below).
-export const GRID_COLS = 6;
-export const GRID_ROWS = 6;
+export const GRID_COLS = 8;
+export const GRID_ROWS = 8;
 export const GRID_LEFT = 40;
 export const GRID_TOP = 72;
 export const GRID_RIGHT = TABLE_W - 40;
@@ -50,7 +50,7 @@ export const GRID_CELL_H = (GRID_BOTTOM - GRID_TOP) / GRID_ROWS;
 // cell(s)' edges, so adjacent buildings never touch - this is what forms
 // the "streets" the ball travels down, on top of any whole cells left
 // empty in the layout below.
-const GRID_INSET = 9;
+const GRID_INSET = 5;
 
 export interface BuildingSlot {
   col: number;
@@ -81,12 +81,15 @@ export function buildingRect(slot: BuildingSlot): BuildingRect {
   };
 }
 
-// A dense miniature city of one-cell buildings. A handful of open blocks
-// act as plazas/parks and give the kaiju ball wider intersections.
-const PLAZAS = new Set(["2,1", "4,2", "1,3", "3,4", "5,5"]);
+// Four compact 3x3 neighbourhoods sit in the corners of the city grid.
+// The two unused centre columns and rows form a continuous, ball-width
+// avenue between every neighbourhood instead of relying on narrow gaps
+// between individual buildings.
+const DISTRICT_COLUMNS = new Set([0, 1, 2, 5, 6, 7]);
+const DISTRICT_ROWS = new Set([0, 1, 2, 5, 6, 7]);
 export const BUILDING_SLOTS: BuildingSlot[] = Array.from({ length: GRID_ROWS }, (_, row) =>
   Array.from({ length: GRID_COLS }, (_, col) => ({ col, row, spanCols: 1, spanRows: 1 })),
-).flat().filter((slot) => !PLAZAS.has(`${slot.col},${slot.row}`));
+).flat().filter((slot) => DISTRICT_COLUMNS.has(slot.col) && DISTRICT_ROWS.has(slot.row));
 
 export const DRAIN_Y = TABLE_H + 40;
 export const BALL_RADIUS = 13;
