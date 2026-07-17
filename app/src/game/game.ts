@@ -9,7 +9,10 @@ import { ParticleFX } from "../fx/particles";
 import { PowerUpManager } from "./powerups";
 import { HUD } from "./hud";
 import { buildTableVisuals } from "../physics/tableVisuals";
-import { TABLE_W, TABLE_H, BUILDING_SLOTS, DRAIN_Y, BALL_RADIUS, HUMAN_RADIUS } from "../physics/layout";
+import {
+  TABLE_W, TABLE_H, BUILDING_SLOTS, DRAIN_Y, BALL_RADIUS, HUMAN_RADIUS,
+  GRID_COLS, GRID_ROWS, GRID_LEFT, GRID_TOP, GRID_RIGHT, GRID_BOTTOM,
+} from "../physics/layout";
 
 type GameState = "title" | "playing" | "gameover";
 
@@ -115,13 +118,15 @@ export class Game {
     // connected street grid instead of a sky behind floating buildings.
     g.rect(0, 0, TABLE_W, TABLE_H).fill(0x303940);
     g.rect(26, 54, TABLE_W - 52, 410).fill(0x667078);
-    for (const x of [40, 125, 210, 295, 380]) {
-      g.rect(x - 10, 54, 20, 410).fill(0x303940);
-      for (let y = 61; y < 455; y += 25) g.rect(x - 1, y, 2, 11).fill({ color: 0xf4d35e, alpha: 0.75 });
+    for (let col = 0; col <= GRID_COLS; col++) {
+      const x = GRID_LEFT + ((GRID_RIGHT - GRID_LEFT) * col) / GRID_COLS;
+      g.rect(x - 7, 54, 14, 410).fill(0x303940);
+      for (let y = 61; y < 455; y += 18) g.rect(x - 1, y, 2, 8).fill({ color: 0xf4d35e, alpha: 0.75 });
     }
-    for (const y of [72, 164, 256, 348, 440]) {
-      g.rect(26, y - 10, TABLE_W - 52, 20).fill(0x303940);
-      for (let x = 32; x < TABLE_W - 28; x += 25) g.rect(x, y - 1, 11, 2).fill({ color: 0xffffff, alpha: 0.5 });
+    for (let row = 0; row <= GRID_ROWS; row++) {
+      const y = GRID_TOP + ((GRID_BOTTOM - GRID_TOP) * row) / GRID_ROWS;
+      g.rect(26, y - 7, TABLE_W - 52, 14).fill(0x303940);
+      for (let x = 32; x < TABLE_W - 28; x += 18) g.rect(x, y - 1, 8, 2).fill({ color: 0xffffff, alpha: 0.5 });
     }
     // Crosswalks make the scale and street direction immediately readable.
     for (const y of [150, 334]) {
@@ -221,6 +226,7 @@ export class Game {
     const destroyed = building.hit();
 
     if (destroyed) {
+      this.world.setBuildingActive(buildingBody, false);
       this.addScore(150);
       this.fx.buildingCollapse(buildingBody.position.x, buildingBody.position.y);
       const humanCount = Math.min(3 + Math.floor(this.buildingsDestroyedTotal / 3), 8);
@@ -299,7 +305,10 @@ export class Game {
 
   private startGame() {
     for (const body of [...this.world.balls]) this.removeBallEntity(body);
-    for (const b of this.buildings) b.spawn(3);
+    for (const b of this.buildings) {
+      b.spawn(3);
+      this.world.setBuildingActive(b.body, true);
+    }
     this.humans.reset();
     this.powerups = new PowerUpManager();
 
@@ -358,7 +367,9 @@ export class Game {
 
     this.fx.update(dt);
 
-    for (const b of this.buildings) b.update(dt);
+    for (const b of this.buildings) {
+      if (b.update(dt) === "rebuilt") this.world.setBuildingActive(b.body, true);
+    }
 
     for (const body of this.world.balls) {
       const sprite = this.ballSprites.get(body);
