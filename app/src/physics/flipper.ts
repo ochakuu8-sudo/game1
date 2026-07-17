@@ -13,10 +13,16 @@ export class Flipper {
   layout: FlipperLayout;
   currentAngle: number;
   held = false;
+  /** +1 if activating rotates the angle up (clockwise in screen/y-down
+   * terms), -1 if down - i.e. the sign of the flipper's angular velocity
+   * while held. Used to derive the tangential (swing-direction) kick
+   * instead of a naive push straight away from the pivot. */
+  readonly sweepSign: number;
 
   constructor(layout: FlipperLayout) {
     this.layout = layout;
     this.currentAngle = layout.restAngle;
+    this.sweepSign = Math.sign(layout.activeAngle - layout.restAngle);
 
     const { pivot, length, width, restAngle } = layout;
     const cx = pivot.x + Math.cos(restAngle) * (length / 2);

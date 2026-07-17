@@ -51,6 +51,7 @@ export class Game {
   private buildingsDestroyedTotal = 0;
   private accumulator = 0;
   private debugFlipperCollisions = 0;
+  private debugLastBoost: unknown = null;
 
   constructor(app: Application) {
     this.app = app;
@@ -142,17 +143,43 @@ export class Game {
         const flipper = other === this.world.leftFlipper.body ? this.world.leftFlipper : this.world.rightFlipper;
         if (flipper.held) {
           // The flipper itself carries no velocity (see physics/flipper.ts),
-          // so all of its "kick" comes from this explicit boost, radially
-          // outward from the pivot - roughly the direction a swinging
-          // flipper would actually fling the ball.
-          const dx = ball.position.x - flipper.layout.pivot.x;
-          const dy = ball.position.y - flipper.layout.pivot.y;
-          const dist = Math.hypot(dx, dy) || 1;
-          const boost = 9 * this.powerups.flipperPowerMultiplier;
-          Matter.Body.setVelocity(ball, {
-            x: ball.velocity.x + (dx / dist) * boost,
-            y: ball.velocity.y + (dy / dist) * boost,
-          });
+          // so all of its "kick" comes from this explicit boost.
+          //
+          // Direction: tangent to the flipper's OWN current angle (not the
+          // pivot->ball vector). Deriving it from the ball's position is
+          // numerically unstable near the hinge - a small radius means any
+          // perpendicular offset (the ball sitting slightly off the blade's
+          // centerline, which it always is a little, being round) swings
+          // the angle wildly, which used to send close-to-hinge hits off in
+          // near-random directions. The flipper's own angle has no such
+          // issue.
+          const angle = flipper.currentAngle;
+          const tx = -Math.sin(angle) * flipper.sweepSign;
+          const ty = Math.cos(angle) * flipper.sweepSign;
+
+          // Magnitude: scaled by how far out along the blade the contact
+          // is (projected onto the blade's own direction), same as a real
+          // flipper - a hit right at the hinge has almost no leverage/kick,
+          // one at the tip has full swing speed. Floored so a near-hinge
+          // graze still does *something* rather than feeling dead.
+          const relX = ball.position.x - flipper.layout.pivot.x;
+          const relY = ball.position.y - flipper.layout.pivot.y;
+          const radiusAlongBlade = relX * Math.cos(angle) + relY * Math.sin(angle);
+          const reach = Math.max(0, Math.min(flipper.layout.length, radiusAlongBlade)) / flipper.layout.length;
+
+          // SET (not add to) the ball's velocity. Adding used to leave the
+          // result dominated by whatever momentum the ball already had -
+          // gravity and recent bounces routinely gave it more downward
+          // speed than a partial-reach kick's small added upward
+          // component could overcome, so it kept heading down/sideways
+          // right through an apparently-successful flip. Setting it
+          // outright makes the flipper always decisively redirect the
+          // ball, which is how most arcade-style pinball implementations
+          // (not just literal rigid-body sims) handle this.
+          const boost = 14 * this.powerups.flipperPowerMultiplier * Math.max(0.55, reach);
+          const newVel = { x: tx * boost, y: ty * boost };
+          Matter.Body.setVelocity(ball, newVel);
+          this.debugLastBoost = { angle, tx, ty, reach, boost, resultVel: { ...newVel } };
         }
       }
     }
@@ -360,8 +387,17 @@ export class Game {
       ballCount: () => this.world.balls.length,
       reserve: () => this.ballsReserve,
       ballPositions: () => this.world.balls.map((b) => ({ x: b.position.x, y: b.position.y })),
+      ballVelocities: () => this.world.balls.map((b) => ({ x: b.velocity.x, y: b.velocity.y })),
+      teleportBall: (x: number, y: number, vx = 0, vy = 0) => {
+        const b = this.world.balls[0];
+        if (!b) return;
+        Matter.Body.setPosition(b, { x, y });
+        Matter.Body.setVelocity(b, { x: vx, y: vy });
+      },
       flipperCollisions: () => this.debugFlipperCollisions,
       flipperAngles: () => ({ left: this.world.leftFlipper.currentAngle, right: this.world.rightFlipper.currentAngle }),
+      flipperHeld: () => ({ left: this.world.leftFlipper.held, right: this.world.rightFlipper.held, inputLeft: this.input.left, inputRight: this.input.right }),
+      lastBoost: () => this.debugLastBoost,
       flipperDrift: () => {
         const check = (f: typeof this.world.leftFlipper) => {
           const { pivot, length } = f.layout;
