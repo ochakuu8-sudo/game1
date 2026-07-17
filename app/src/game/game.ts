@@ -118,19 +118,37 @@ export class Game {
     // connected street grid instead of a sky behind floating buildings.
     g.rect(0, 0, TABLE_W, TABLE_H).fill(0x303940);
     g.rect(26, 54, TABLE_W - 52, 410).fill(0x667078);
+    // Narrow local streets separate the smaller lots inside each district.
     for (let col = 0; col <= GRID_COLS; col++) {
       const x = GRID_LEFT + ((GRID_RIGHT - GRID_LEFT) * col) / GRID_COLS;
-      g.rect(x - 7, 54, 14, 410).fill(0x303940);
-      for (let y = 61; y < 455; y += 18) g.rect(x - 1, y, 2, 8).fill({ color: 0xf4d35e, alpha: 0.75 });
+      g.rect(x - 4, 54, 8, 410).fill(0x303940);
     }
     for (let row = 0; row <= GRID_ROWS; row++) {
       const y = GRID_TOP + ((GRID_BOTTOM - GRID_TOP) * row) / GRID_ROWS;
-      g.rect(26, y - 7, TABLE_W - 52, 14).fill(0x303940);
-      for (let x = 32; x < TABLE_W - 28; x += 18) g.rect(x, y - 1, 8, 2).fill({ color: 0xffffff, alpha: 0.5 });
+      g.rect(26, y - 4, TABLE_W - 52, 8).fill(0x303940);
     }
-    // Crosswalks make the scale and street direction immediately readable.
-    for (const y of [150, 334]) {
-      for (let x = 191; x <= 221; x += 6) g.rect(x, y, 3, 18).fill({ color: 0xffffff, alpha: 0.75 });
+
+    // A broad cross-shaped arterial occupies two whole grid cells. It keeps
+    // the four neighbourhoods visually grouped and, importantly, leaves a
+    // continuous route wider than the ball through the building field.
+    const avenueLeft = GRID_LEFT + 3 * ((GRID_RIGHT - GRID_LEFT) / GRID_COLS);
+    const avenueRight = GRID_LEFT + 5 * ((GRID_RIGHT - GRID_LEFT) / GRID_COLS);
+    const avenueTop = GRID_TOP + 3 * ((GRID_BOTTOM - GRID_TOP) / GRID_ROWS);
+    const avenueBottom = GRID_TOP + 5 * ((GRID_BOTTOM - GRID_TOP) / GRID_ROWS);
+    g.rect(avenueLeft, 54, avenueRight - avenueLeft, 410).fill(0x303940);
+    g.rect(26, avenueTop, TABLE_W - 52, avenueBottom - avenueTop).fill(0x303940);
+
+    // Dashed centre lines make the open ball routes immediately readable.
+    const avenueCenterX = (avenueLeft + avenueRight) / 2;
+    const avenueCenterY = (avenueTop + avenueBottom) / 2;
+    for (let y = 61; y < 455; y += 18) g.rect(avenueCenterX - 1, y, 2, 8).fill({ color: 0xf4d35e, alpha: 0.75 });
+    for (let x = 32; x < TABLE_W - 28; x += 18) g.rect(x, avenueCenterY - 1, 8, 2).fill({ color: 0xffffff, alpha: 0.55 });
+
+    // Crosswalks mark the entrances to each neighbourhood.
+    for (const y of [avenueTop - 10, avenueBottom - 8]) {
+      for (let x = avenueLeft + 8; x < avenueRight - 5; x += 7) {
+        g.rect(x, y, 3, 18).fill({ color: 0xffffff, alpha: 0.75 });
+      }
     }
     // Scorched kaiju footprints tie the destructive ball path to the city.
     for (const [x, y] of [[92, 510], [318, 570]] as const) {
