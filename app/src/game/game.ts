@@ -114,19 +114,20 @@ export class Game {
   private buildCityBackdrop(): Container {
     const c = new Container();
     const g = new Graphics();
-    // A top-down city playfield: asphalt surrounds concrete blocks, with a
-    // connected street grid instead of a sky behind floating buildings.
-    g.rect(0, 0, TABLE_W, TABLE_H).fill(0x18242c);
-    g.rect(12, 48, TABLE_W - 24, 430).roundRect(18, 54, TABLE_W - 36, 410, 12).fill(0x3f4d55);
-    g.roundRect(25, 53, TABLE_W - 50, 412, 8).fill(0x758088).stroke({ width: 2, color: 0xa8b0b5, alpha: 0.35 });
+    // A top-down candy-city playfield: pastel sky frames a cream-coloured
+    // town square, with lavender streets instead of dark asphalt - a
+    // cheerful, casual-game palette rather than a gritty nighttime city.
+    g.rect(0, 0, TABLE_W, TABLE_H).fill(0xbde6ff);
+    g.rect(12, 48, TABLE_W - 24, 430).roundRect(18, 54, TABLE_W - 36, 410, 12).fill(0xffe3a8);
+    g.roundRect(25, 53, TABLE_W - 50, 412, 8).fill(0xfff3d9).stroke({ width: 2, color: 0xffcf7a, alpha: 0.6 });
     // Narrow local streets separate the smaller lots inside each district.
     for (let col = 0; col <= GRID_COLS; col++) {
       const x = GRID_LEFT + ((GRID_RIGHT - GRID_LEFT) * col) / GRID_COLS;
-      g.rect(x - 4, 54, 8, 410).fill(0x303940);
+      g.rect(x - 4, 54, 8, 410).fill(0xd8cff2);
     }
     for (let row = 0; row <= GRID_ROWS; row++) {
       const y = GRID_TOP + ((GRID_BOTTOM - GRID_TOP) * row) / GRID_ROWS;
-      g.rect(26, y - 4, TABLE_W - 52, 8).fill(0x303940);
+      g.rect(26, y - 4, TABLE_W - 52, 8).fill(0xd8cff2);
     }
 
     // A broad cross-shaped arterial occupies two whole grid cells. It keeps
@@ -136,38 +137,54 @@ export class Game {
     const avenueRight = GRID_LEFT + 5 * ((GRID_RIGHT - GRID_LEFT) / GRID_COLS);
     const avenueTop = GRID_TOP + 3 * ((GRID_BOTTOM - GRID_TOP) / GRID_ROWS);
     const avenueBottom = GRID_TOP + 5 * ((GRID_BOTTOM - GRID_TOP) / GRID_ROWS);
-    g.rect(avenueLeft, 54, avenueRight - avenueLeft, 410).fill(0x303940);
-    g.rect(26, avenueTop, TABLE_W - 52, avenueBottom - avenueTop).fill(0x303940);
+    g.rect(avenueLeft, 54, avenueRight - avenueLeft, 410).fill(0xd8cff2);
+    g.rect(26, avenueTop, TABLE_W - 52, avenueBottom - avenueTop).fill(0xd8cff2);
 
     // curbs, lane reflectors and pools of light add depth without additional
     // textures or draw calls.
-    g.rect(26, 54, TABLE_W - 52, 2).fill({ color: 0xdbe2e5, alpha: 0.45 });
+    g.rect(26, 54, TABLE_W - 52, 2).fill({ color: 0xffffff, alpha: 0.6 });
     for (let y = 70; y < 450; y += 36) {
-      g.circle(avenueLeft + 5, y, 2).fill({ color: 0x8eeaff, alpha: 0.75 });
-      g.circle(avenueRight - 5, y, 2).fill({ color: 0x8eeaff, alpha: 0.75 });
+      g.circle(avenueLeft + 5, y, 2).fill({ color: 0xffd166, alpha: 0.85 });
+      g.circle(avenueRight - 5, y, 2).fill({ color: 0xffd166, alpha: 0.85 });
     }
 
     // Dashed centre lines make the open ball routes immediately readable.
     const avenueCenterX = (avenueLeft + avenueRight) / 2;
     const avenueCenterY = (avenueTop + avenueBottom) / 2;
-    for (let y = 61; y < 455; y += 18) g.rect(avenueCenterX - 1, y, 2, 8).fill({ color: 0xf4d35e, alpha: 0.75 });
-    for (let x = 32; x < TABLE_W - 28; x += 18) g.rect(x, avenueCenterY - 1, 8, 2).fill({ color: 0xffffff, alpha: 0.55 });
+    for (let y = 61; y < 455; y += 18) g.rect(avenueCenterX - 1, y, 2, 8).fill({ color: 0xff8fab, alpha: 0.85 });
+    for (let x = 32; x < TABLE_W - 28; x += 18) g.rect(x, avenueCenterY - 1, 8, 2).fill({ color: 0xffffff, alpha: 0.7 });
 
     // Crosswalks mark the entrances to each neighbourhood.
     for (const y of [avenueTop - 10, avenueBottom - 8]) {
       for (let x = avenueLeft + 8; x < avenueRight - 5; x += 7) {
-        g.rect(x, y, 3, 18).fill({ color: 0xffffff, alpha: 0.75 });
+        g.rect(x, y, 3, 18).fill({ color: 0xffffff, alpha: 0.8 });
       }
     }
-    // Scorched kaiju footprints tie the destructive ball path to the city.
+    // Cute little kaiju footprints tie the destructive ball path to the
+    // city - a soft brown smudge rather than a scorch mark.
     for (const [x, y] of [[92, 510], [318, 570]] as const) {
-      g.ellipse(x, y, 20, 30).fill({ color: 0x161b1e, alpha: 0.45 });
-      g.circle(x - 15, y - 22, 6).fill({ color: 0x161b1e, alpha: 0.4 });
-      g.circle(x, y - 28, 6).fill({ color: 0x161b1e, alpha: 0.4 });
-      g.circle(x + 15, y - 22, 6).fill({ color: 0x161b1e, alpha: 0.4 });
+      g.ellipse(x, y, 20, 30).fill({ color: 0xb98b6a, alpha: 0.35 });
+      g.circle(x - 15, y - 22, 6).fill({ color: 0xb98b6a, alpha: 0.3 });
+      g.circle(x, y - 28, 6).fill({ color: 0xb98b6a, alpha: 0.3 });
+      g.circle(x + 15, y - 22, 6).fill({ color: 0xb98b6a, alpha: 0.3 });
     }
-    // subtle lower-playfield vignette/paneling breaks up the large empty area.
-    g.roundRect(44, 492, TABLE_W - 88, 145, 24).fill({ color: 0x0d171d, alpha: 0.22 }).stroke({ width: 2, color: 0x6f8995, alpha: 0.22 });
+    // subtle lower-playfield paneling breaks up the large open sky area.
+    g.roundRect(44, 492, TABLE_W - 88, 145, 24).fill({ color: 0xffffff, alpha: 0.18 }).stroke({ width: 2, color: 0xffffff, alpha: 0.3 });
+
+    // A smiling sun peeking over the top edge and a couple of fluffy
+    // clouds drifting through the open sky below the town square.
+    const sunX = TABLE_W * 0.82;
+    g.circle(sunX, 6, 30).fill({ color: 0xfff2b0, alpha: 0.9 });
+    g.circle(sunX, 6, 44).fill({ color: 0xfff2b0, alpha: 0.3 });
+    const cloud = (cx: number, cy: number, scale: number) => {
+      g.ellipse(cx, cy, 24 * scale, 13 * scale).fill({ color: 0xffffff, alpha: 0.9 });
+      g.ellipse(cx - 16 * scale, cy + 4 * scale, 15 * scale, 10 * scale).fill({ color: 0xffffff, alpha: 0.9 });
+      g.ellipse(cx + 16 * scale, cy + 4 * scale, 15 * scale, 10 * scale).fill({ color: 0xffffff, alpha: 0.9 });
+    };
+    cloud(70, 555, 0.9);
+    cloud(TABLE_W - 60, 650, 0.75);
+    cloud(TABLE_W * 0.5, 700, 0.6);
+
     c.addChild(g);
     return c;
   }

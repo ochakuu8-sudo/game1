@@ -32,6 +32,9 @@ export interface Atlas {
   /** Keyed by buildingSizeKey(width, height) - one facade texture per
    * distinct building footprint size used in the current layout. */
   buildings: Record<string, Texture>;
+  /** Same keys as `buildings` - a "dizzy" (X-eyed) variant flashed briefly
+   * on a hit for a cartoon reaction. */
+  buildingsDizzy: Record<string, Texture>;
   human: Texture;
   humanRun: Texture;
   debris: Texture;
@@ -78,27 +81,37 @@ export function buildAtlas(renderer: Renderer): Atlas {
     frames[name] = new Rectangle(x + CELL / 2 - half, y + CELL / 2 - half, size, size);
   };
 
-  // --- Ball: the kaiju itself, compressed into a pinball-sized monster head. ---
+  // --- Ball: a cute round kaiju face - big googly eyes, blush, a happy
+  // little fang instead of a menacing monster, for the casual/kawaii look. ---
   place("ball", (g) => {
-    g.poly([-19, -15, -12, -29, -3, -18, 8, -30, 17, -13]).fill(0x315d46);
-    g.circle(0, 0, 25).fill(0x4c8b5f);
-    g.circle(-9, -6, 6).fill(0xffe85c);
-    g.circle(9, -6, 6).fill(0xffe85c);
-    g.rect(-10, -8, 3, 6).fill(0x151b18);
-    g.rect(7, -8, 3, 6).fill(0x151b18);
-    g.arc(0, 7, 12, 0.1, Math.PI - 0.1).stroke({ width: 3, color: 0x183326 });
-    g.poly([-9, 9, -5, 15, -2, 9, 2, 15, 5, 9, 9, 14]).fill(0xf5efe0);
-    g.circle(0, 0, 25).stroke({ width: 3, color: 0x244b36 });
+    g.circle(-13, -21, 6.5).fill(0x8fe0b0);
+    g.circle(0, -25, 7.5).fill(0x8fe0b0);
+    g.circle(13, -21, 6.5).fill(0x8fe0b0);
+    g.circle(0, 0, 25).fill(0x8fe0b0);
+    g.circle(-16, 7, 5).fill({ color: 0xff9eb9, alpha: 0.75 });
+    g.circle(16, 7, 5).fill({ color: 0xff9eb9, alpha: 0.75 });
+    g.circle(-9, -3, 7.5).fill(0xffffff);
+    g.circle(9, -3, 7.5).fill(0xffffff);
+    g.circle(-7, -1, 4.2).fill(0x2b2b2b);
+    g.circle(11, -1, 4.2).fill(0x2b2b2b);
+    g.circle(-8.5, -4.5, 1.6).fill(0xffffff);
+    g.circle(9.5, -4.5, 1.6).fill(0xffffff);
+    g.arc(0, 8, 9, 0.2, Math.PI - 0.2).stroke({ width: 3, color: 0x3a8f63 });
+    g.poly([-3, 12, 0, 17, 3, 12]).fill(0xffffff);
+    g.circle(0, 0, 25).stroke({ width: 3, color: 0x4bab78 });
   }, 64);
 
-  // --- Flipper: tapered paddle, drawn hinge-anchored in its own reserved
-  // strip (see FLIPPER_* constants) rather than the shared icon grid ---
+  // --- Flipper: rounded candy-coloured paddle with a glossy highlight,
+  // drawn hinge-anchored in its own reserved strip (see FLIPPER_* constants)
+  // rather than the shared icon grid ---
   {
     const g = new Graphics();
-    g.poly([0, -14, 70, -7, 70, 7, 0, 14]).fill(0xff5a3c);
-    g.circle(0, 0, 14).fill(0xff7a55);
-    g.circle(70, 0, 7).fill(0xff7a55);
-    g.poly([4, -10, 62, -5, 62, -1, 4, -4]).fill(0xffb199);
+    g.poly([0, -13, 66, -8, 70, 0, 66, 8, 0, 13]).fill(0xff6f91);
+    g.circle(0, 0, 13).fill(0xff6f91);
+    g.circle(70, 0, 7).fill(0xff85a3);
+    g.ellipse(24, -5, 24, 4.5).fill({ color: 0xffffff, alpha: 0.5 });
+    g.poly([0, -13, 66, -8, 70, 0, 66, 8, 0, 13]).stroke({ width: 2, color: 0xd94f74 });
+    g.circle(0, 0, 13).stroke({ width: 2, color: 0xd94f74 });
     g.position.set(FLIPPER_HINGE_X, ROWS * CELL + FLIPPER_HINGE_Y);
     staging.addChild(g);
     frames.flipper = new Rectangle(0, ROWS * CELL, FLIPPER_W, FLIPPER_H);
@@ -117,52 +130,107 @@ export function buildAtlas(renderer: Renderer): Atlas {
     buildingSizes.set(buildingSizeKey(r.width, r.height), { w: r.width, h: r.height });
   }
 
-  const drawBuildingFacade = (g: Graphics, w: number, h: number) => {
-    const r = Math.min(10, w / 6, h / 6);
+  // Round "porthole" windows and a friendly cartoon face on every building -
+  // a `dizzy` variant (X eyes, wobbly mouth) is baked alongside the normal
+  // one so entities/building.ts can flash it briefly on a hit, like a
+  // classic cartoon "OW!" reaction.
+  const drawBuildingFacade = (g: Graphics, w: number, h: number, dizzy: boolean) => {
+    const r = Math.min(16, w / 4, h / 4);
     g.roundRect(-w / 2, -h / 2, w, h, r).fill(0xffffff);
-    g.roundRect(-w / 2 + 7, -h / 2 + 7, w - 14, h - 14, Math.max(3, r - 3)).fill(0xcdd3d6);
-    g.rect(-w * 0.22, -h * 0.18, w * 0.44, h * 0.36).fill(0x8f999d);
-    g.rect(-w * 0.16, -h * 0.12, w * 0.32, h * 0.24).fill(0xb8c0c3);
-    for (const x of [-w * 0.32, w * 0.32]) g.circle(x, h * 0.28, Math.min(5, w / 14)).fill(0x768186);
-    g.roundRect(-w / 2, -h / 2, w, h, r).stroke({ width: 3, color: 0x747d80 });
+
+    const winR = Math.max(2.5, Math.min(6, w * 0.09, h * 0.09));
+    const cols = Math.max(1, Math.floor(w / (winR * 4.2)));
+    const rows = Math.max(1, Math.floor((h * 0.55) / (winR * 4.2)));
+    const spanW = cols * winR * 4.2;
+    const spanH = rows * winR * 4.2;
+    const top = -h * 0.42;
+    for (let i = 0; i < cols; i++) {
+      for (let j = 0; j < rows; j++) {
+        const x = -spanW / 2 + winR * 2.1 + i * winR * 4.2;
+        const y = top + winR * 2.1 + j * winR * 4.2;
+        g.circle(x, y, winR).fill(0xdcf3ff);
+      }
+    }
+
+    const eyeY = -h * 0.06;
+    const eyeR = Math.max(3, Math.min(8, w * 0.11));
+    const spacing = Math.min(w * 0.24, eyeR * 2.6);
+    const mouthY = eyeY + eyeR * 2.1;
+    if (dizzy) {
+      const s = eyeR * 0.62;
+      for (const ex of [-spacing, spacing]) {
+        g.moveTo(ex - s, eyeY - s).lineTo(ex + s, eyeY + s);
+        g.moveTo(ex - s, eyeY + s).lineTo(ex + s, eyeY - s);
+      }
+      g.stroke({ width: Math.max(1.5, eyeR * 0.35), color: 0x2b2b2b });
+      g.circle(0, mouthY + 1, eyeR * 0.55).fill(0xffffff).stroke({ width: 1.5, color: 0x2b2b2b });
+    } else {
+      g.circle(-spacing, eyeY, eyeR).fill(0xffffff);
+      g.circle(spacing, eyeY, eyeR).fill(0xffffff);
+      g.circle(-spacing + eyeR * 0.3, eyeY, eyeR * 0.55).fill(0x2b2b2b);
+      g.circle(spacing + eyeR * 0.3, eyeY, eyeR * 0.55).fill(0x2b2b2b);
+      g.arc(0, mouthY - eyeR * 0.4, eyeR * 0.9, 0.15, Math.PI - 0.15).stroke({
+        width: Math.max(1.5, eyeR * 0.3),
+        color: 0x2b2b2b,
+      });
+    }
+    g.roundRect(-w / 2, -h / 2, w, h, r).stroke({ width: 3, color: 0x000000, alpha: 0.22 });
   };
 
   // Packed into their own strip (like the flipper) since some spans (e.g.
   // 2x2) are far larger than one CELL and would bleed into neighbours.
+  // Normal and dizzy variants sit side by side per size.
   const buildingStripY = ROWS * CELL + FLIPPER_H;
   let buildingStripX = 0;
   let buildingStripH = 0;
   const buildingFrames: Record<string, Rectangle> = {};
+  const dizzyFrames: Record<string, Rectangle> = {};
   for (const [key, { w, h }] of buildingSizes) {
     const g = new Graphics();
-    drawBuildingFacade(g, w, h);
+    drawBuildingFacade(g, w, h, false);
     g.position.set(buildingStripX + w / 2, buildingStripY + h / 2);
     staging.addChild(g);
     buildingFrames[key] = new Rectangle(buildingStripX, buildingStripY, w, h);
     buildingStripX += w + 8;
+
+    const gd = new Graphics();
+    drawBuildingFacade(gd, w, h, true);
+    gd.position.set(buildingStripX + w / 2, buildingStripY + h / 2);
+    staging.addChild(gd);
+    dizzyFrames[key] = new Rectangle(buildingStripX, buildingStripY, w, h);
+    buildingStripX += w + 8;
+
     buildingStripH = Math.max(buildingStripH, h);
   }
 
-  // --- Upright, front-facing pedestrians. Two silhouettes are alternated by
-  // the swarm to make a readable run cycle without rotating people sideways. ---
+  // --- Chibi panicking pedestrian: big round head, tiny body, arms thrown
+  // up mid-scream. Two silhouettes (arms/legs swapped) are alternated by
+  // the swarm for a bouncy, readable "running in a panic" cycle. ---
   const drawHuman = (g: Graphics, phase: number) => {
-    // soft ground contact makes it immediately clear that the figure is
-    // standing rather than being viewed lying flat from above.
-    g.ellipse(0, 12, 12, 4).fill({ color: 0x101820, alpha: 0.3 });
-    g.circle(0, -9, 4.5).fill(0xffd2ad).stroke({ width: 1, color: 0x7b4b38 });
-    g.arc(0, -10, 4.3, Math.PI, Math.PI * 2).fill(0x352c32);
-    g.roundRect(-4.5, -4.5, 9, 11, 2).fill(0xffffff).stroke({ width: 1, color: 0x34465c });
-    g.moveTo(-3.5, -2).lineTo(-7 + phase * 2, 4 + phase * 2).stroke({ width: 2.4, color: 0xffd2ad });
-    g.moveTo(3.5, -2).lineTo(7 - phase * 2, 4 - phase * 2).stroke({ width: 2.4, color: 0xffd2ad });
-    g.moveTo(-2.2, 6).lineTo(-4 - phase * 3, 12).stroke({ width: 3, color: 0x253752 });
-    g.moveTo(2.2, 6).lineTo(4 + phase * 3, 12).stroke({ width: 3, color: 0x253752 });
+    g.ellipse(0, 11, 9, 3).fill({ color: 0x101820, alpha: 0.25 });
+    // legs, kicked out oppositely each frame
+    g.moveTo(-1.5, 7).lineTo(-3.5 - phase * 3, 12).stroke({ width: 2.6, color: 0x3a4a68 });
+    g.moveTo(1.5, 7).lineTo(3.5 + phase * 3, 12).stroke({ width: 2.6, color: 0x3a4a68 });
+    // tiny round body
+    g.circle(0, 4, 4.5).fill(0xffffff).stroke({ width: 1, color: 0x3a4a68 });
+    // arms thrown straight up in a panic
+    g.moveTo(-3, 2).lineTo(-7, -8 + phase).stroke({ width: 2.2, color: 0xffd2ad });
+    g.moveTo(3, 2).lineTo(7, -8 - phase).stroke({ width: 2.2, color: 0xffd2ad });
+    // big chibi head
+    g.circle(0, -5, 7.5).fill(0xffd2ad).stroke({ width: 1, color: 0xb98456 });
+    g.circle(-3, -10, 3).fill(0x3a2a20);
+    g.circle(3, -10, 3).fill(0x3a2a20);
+    g.circle(-2.6, -6, 1.2).fill(0x2b2b2b);
+    g.circle(2.6, -6, 1.2).fill(0x2b2b2b);
+    g.ellipse(0, -2, 1.8, 2.4).fill(0x8a4b38); // wide-open scream mouth
   };
   place("human", (g) => drawHuman(g, -1), 32);
   place("humanRun", (g) => drawHuman(g, 1), 32);
 
-  // --- Debris chunk (building destruction) ---
+  // --- Debris chunk (building destruction) - rounded cartoon rubble ---
   place("debris", (g) => {
-    g.poly([-8, -6, 8, -8, 9, 6, -6, 9]).fill(0x8a93a3);
+    g.poly([-7, -5, 6, -7, 8, 5, -5, 7]).fill(0xc9b8a3);
+    g.poly([-7, -5, 6, -7, 8, 5, -5, 7]).stroke({ width: 1.5, color: 0x8a7863 });
   }, 32);
 
   // --- Spark (hit feedback) ---
@@ -219,11 +287,16 @@ export function buildAtlas(renderer: Renderer): Atlas {
   for (const [key, frame] of Object.entries(buildingFrames)) {
     buildings[key] = sliceRect(frame);
   }
+  const buildingsDizzy: Record<string, Texture> = {};
+  for (const [key, frame] of Object.entries(dizzyFrames)) {
+    buildingsDizzy[key] = sliceRect(frame);
+  }
 
   return {
     ball: slice("ball"),
     flipper: slice("flipper"),
     buildings,
+    buildingsDizzy,
     human: slice("human"),
     humanRun: slice("humanRun"),
     debris: slice("debris"),
