@@ -55,6 +55,7 @@ export class Game {
   private accumulator = 0;
   private debugFlipperCollisions = 0;
   private debugLastBoost: unknown = null;
+  private lastFlipperKickAt = new Map<Matter.Body, number>();
 
   constructor(app: Application) {
     this.app = app;
@@ -202,7 +203,30 @@ export class Game {
       } else if (other.label === "flipper") {
         this.debugFlipperCollisions++;
         const flipper = other === this.world.leftFlipper.body ? this.world.leftFlipper : this.world.rightFlipper;
-        if (flipper.held) {
+        // Gate on both "held" AND a short per-ball cooldown since the last
+        // kick, not on angularVelocity. Gating on angularVelocity alone
+        // seemed right (only reward an *actively swinging* flipper) but it
+        // broke the single most common real move - catching the ball at
+        // rest on a lowered flipper and then flipping it - because the
+        // ball is typically already touching the blade continuously before
+        // the press even starts. Matter only fires collisionStart once for
+        // a pair that never separates, so that single event often lands
+        // *after* the ~60ms swing has already finished (angularVelocity
+        // back to 0), and gating on motion threw the kick away entirely.
+        // The real bug was never "the flipper wasn't moving" - it was the
+        // kick re-firing on every single re-trigger with no memory of the
+        // previous one, so a ball settling against an already-raised
+        // flipper got launched again each time it fell back into contact,
+        // forever. A short cooldown keyed per-ball fixes that directly:
+        // the first touch (whenever it lands, moving or not) still gets a
+        // full kick, but a rapid bounce-and-recontact loop only gets
+        // energy added once, so restitution/friction can actually let it
+        // settle instead of being re-launched every cycle.
+        const KICK_COOLDOWN_MS = 200;
+        const now = this.world.engine.timing.timestamp;
+        const lastKick = this.lastFlipperKickAt.get(ball) ?? -Infinity;
+        if (flipper.held && now - lastKick > KICK_COOLDOWN_MS) {
+          this.lastFlipperKickAt.set(ball, now);
           // The flipper itself carries no velocity (see physics/flipper.ts),
           // so all of its "kick" comes from this explicit boost.
           //
@@ -241,9 +265,10 @@ export class Game {
           // apparently-successful flip. Setting it outright makes the
           // flipper always decisively redirect the ball, which is how
           // most arcade-style pinball implementations (not just literal
-          // rigid-body transfer) handle this. MIN_KICK is a floor so a
-          // ball merely resting on an already-raised, unmoving flipper
-          // still gets *something* rather than feeling dead.
+          // rigid-body transfer) handle this. MIN_KICK is just a floor on
+          // this boost so a hit near the hinge - where radiusAlongBlade is
+          // tiny, or where the flipper's already stopped by the time this
+          // fires - still gets a decent kick instead of an unnoticeable one.
           const MIN_KICK = 5.5;
           const KICK_GAIN = 2.2; // tuned for game feel, not physically derived
           const boost = Math.max(MIN_KICK, rotationalSpeed * KICK_GAIN) * this.powerups.flipperPowerMultiplier;
