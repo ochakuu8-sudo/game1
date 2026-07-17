@@ -13,14 +13,22 @@
 - **Matter.js** — フリッパー・バンパー化した建物・壁などのピンボール物理
 - 人間の徘徊/逃走AIは物理エンジンに乗せず、軽量な独自ステップ処理
 
+## リポジトリ構成
+
+ソースコードは `app/` 以下にあります。リポジトリのルート直下（`index.html` / `assets/` / `favicon.svg`）には**ビルド済みの静的ファイル**を置いています。これは GitHub Pages が `main` ブランチのルートを公開する設定になっているためで、`app/` の中身をそのまま置いても（Vite の TypeScript 参照は事前ビルドが必須なので）ブラウザ側で実行できません。
+
 ## 開発
 
 ```bash
+cd app
 npm install
 npm run dev      # 開発サーバー
-npm run build    # dist/ に本番ビルド
-npm run zip      # ビルドして release/kaiju-pinball-web.zip を作成 (itch.ioにそのままアップロード可)
+npm run build    # app/dist/ に本番ビルド
+npm run zip      # ビルドして app/release/kaiju-pinball-web.zip を作成 (itch.ioにそのままアップロード可)
+npm run pages    # ビルドしてリポジトリルートに配置し直す (GitHub Pages公開用。実行後 git add -A && git commit && git push が必要)
 ```
+
+コードを変更したら、コミット前に必ず `npm run pages` を実行してルート直下の公開用ファイルも更新してください。
 
 ## 操作
 
