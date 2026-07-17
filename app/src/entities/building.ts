@@ -110,8 +110,10 @@ export class Building {
 
   spawn(level: number) {
     this.level = level;
-    // Bigger footprints (a 2x2 block vs a 1x1) take more hits to clear.
-    this.maxHp = Math.min(3 + level + (this.cellCount - 1) * 2, 20);
+    // A freshly-spawned level-1 lot starts at 1 HP - a single hit down.
+    // Bigger footprints (a 2x2 block vs a 1x1) take more hits to clear, and
+    // each rebuild after a destruction comes back tougher (level + 1).
+    this.maxHp = Math.max(1, Math.min(level + (this.cellCount - 1) * 2, 20));
     this.hp = this.maxHp;
     this.destroyed = false;
     this.rebuildTimer = 0;
