@@ -117,7 +117,7 @@ export class HUD {
     c.addChild(title);
 
     const sub = new Text({
-      text: "建物を壊して数字を0に。\n逃げ回る生き物を踏み潰して\nマルチボールを狙え！\n\nタップで開始\n画面左右タップでフリッパー操作",
+      text: "怪獣を弾いて街を破壊せよ！\n建物の数字を0にして、\n避難する人間を追いかけろ。\n\nタップで開始\n画面左右タップでフリッパー操作",
       style: subStyle,
     });
     sub.anchor.set(0.5);

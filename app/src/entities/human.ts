@@ -11,7 +11,9 @@ interface HumanSlot {
   vy: number;
   targetVx: number;
   targetVy: number;
-  wanderT: number;
+  exitX: number;
+  exitY: number;
+  stride: number;
   speed: number;
 }
 
@@ -54,7 +56,9 @@ export class HumanSwarm {
         vy: 0,
         targetVx: 0,
         targetVy: 0,
-        wanderT: 0,
+        exitX: 0,
+        exitY: 0,
+        stride: 0,
         speed: 40,
       });
     }
@@ -89,8 +93,22 @@ export class HumanSwarm {
       slot.vy = Math.sin(a) * 60;
       slot.targetVx = slot.vx;
       slot.targetVy = slot.vy;
-      slot.wanderT = Math.random() * 1.5;
       slot.speed = 45 + Math.random() * 35;
+      slot.stride = Math.random() * Math.PI * 2;
+      // Run toward the closest edge of the city instead of aimlessly
+      // orbiting the wreck. A little spread keeps evacuees from forming a
+      // single mechanical line while preserving an obvious escape route.
+      const exits = [
+        { x: MARGIN - 8, y: slot.y },
+        { x: TABLE_W - MARGIN + 8, y: slot.y },
+        { x: slot.x, y: TOP_MARGIN - 8 },
+        { x: slot.x, y: TABLE_H - BOTTOM_MARGIN + 8 },
+      ];
+      const exit = exits.reduce((best, candidate) =>
+        Math.hypot(candidate.x - slot.x, candidate.y - slot.y) < Math.hypot(best.x - slot.x, best.y - slot.y) ? candidate : best,
+      );
+      slot.exitX = exit.x + (Math.random() - 0.5) * 36;
+      slot.exitY = exit.y + (Math.random() - 0.5) * 36;
       slot.particle.alpha = 1;
       slot.particle.tint = TINTS[(Math.random() * TINTS.length) | 0];
       slot.particle.scaleX = slot.particle.scaleY = 0.8 + Math.random() * 0.3;
@@ -106,7 +124,8 @@ export class HumanSwarm {
     for (const slot of this.slots) {
       if (!slot.alive) continue;
 
-      // Flee from the nearest ball if it's close, otherwise wander.
+      // Everyone runs for an evacuation edge, veering sharply away from
+      // any kaiju ball that cuts across the route.
       let fleeX = 0;
       let fleeY = 0;
       let nearestSq = Infinity;
@@ -131,16 +150,11 @@ export class HumanSwarm {
       }
       if (!slot.alive) continue;
 
-      slot.wanderT -= dt;
-      if (slot.wanderT <= 0) {
-        const a = Math.random() * Math.PI * 2;
-        slot.targetVx = Math.cos(a) * slot.speed;
-        slot.targetVy = Math.sin(a) * slot.speed;
-        slot.wanderT = 0.6 + Math.random() * 1.2;
-      }
-      // Ease toward the current wander target instead of snapping to it,
-      // so idle scurrying reads as a scampering creature rather than
-      // teleporting between straight-line legs every second or so.
+      const exitDx = slot.exitX - slot.x;
+      const exitDy = slot.exitY - slot.y;
+      const exitDistance = Math.hypot(exitDx, exitDy) || 1;
+      slot.targetVx = (exitDx / exitDistance) * slot.speed;
+      slot.targetVy = (exitDy / exitDistance) * slot.speed;
       const ease = 1 - Math.exp(-dt * 5);
       slot.vx += (slot.targetVx - slot.vx) * ease;
       slot.vy += (slot.targetVy - slot.vy) * ease;
@@ -159,28 +173,21 @@ export class HumanSwarm {
       slot.x += moveX * dt;
       slot.y += moveY * dt;
 
-      if (slot.x < MARGIN) {
-        slot.x = MARGIN;
-        slot.vx = Math.abs(slot.vx);
-        slot.targetVx = Math.abs(slot.targetVx);
-      } else if (slot.x > TABLE_W - MARGIN) {
-        slot.x = TABLE_W - MARGIN;
-        slot.vx = -Math.abs(slot.vx);
-        slot.targetVx = -Math.abs(slot.targetVx);
-      }
-      if (slot.y < TOP_MARGIN) {
-        slot.y = TOP_MARGIN;
-        slot.vy = Math.abs(slot.vy);
-        slot.targetVy = Math.abs(slot.targetVy);
-      } else if (slot.y > TABLE_H - BOTTOM_MARGIN) {
-        slot.y = TABLE_H - BOTTOM_MARGIN;
-        slot.vy = -Math.abs(slot.vy);
-        slot.targetVy = -Math.abs(slot.targetVy);
+      if (exitDistance < 8) {
+        slot.alive = false;
+        slot.particle.alpha = 0;
+        slot.particle.x = -9999;
+        this.aliveCount--;
+        continue;
       }
 
       slot.particle.x = slot.x;
       slot.particle.y = slot.y;
       slot.particle.rotation = Math.atan2(moveY, moveX) + Math.PI / 2;
+      slot.stride += dt * (10 + slot.speed * 0.08);
+      const bob = Math.sin(slot.stride) * 0.07;
+      slot.particle.scaleX = 0.9 - bob;
+      slot.particle.scaleY = 0.9 + bob;
     }
   }
 }
