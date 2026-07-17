@@ -13,6 +13,7 @@ interface HumanSlot {
   targetVy: number;
   stride: number;
   speed: number;
+  frame: number;
 }
 
 const MAX_HUMANS = 90;
@@ -25,15 +26,17 @@ const TINTS = [0xffffff, 0xffe0b2, 0xb2e0ff, 0xffb2d0, 0xc9ffb2];
 export class HumanSwarm {
   container: ParticleContainer;
   private slots: HumanSlot[] = [];
+  private runTextures: Atlas["human"][];
   aliveCount = 0;
 
   constructor(atlas: Atlas) {
+    this.runTextures = [atlas.human, atlas.humanRun];
     this.container = new ParticleContainer({
       // color must stay dynamic: it packs alpha too, and humans spawn/pop by
       // toggling alpha every frame (static color only re-uploads on an
       // explicit container.update() call, which would otherwise leave newly
       // spawned humans invisible).
-      dynamicProperties: { position: true, rotation: true, color: true, vertex: false, uvs: false },
+      dynamicProperties: { position: true, rotation: true, color: true, vertex: false, uvs: true },
     });
     for (let i = 0; i < MAX_HUMANS; i++) {
       const particle = new Particle({
@@ -56,6 +59,7 @@ export class HumanSwarm {
         targetVy: 0,
         stride: 0,
         speed: 40,
+        frame: -1,
       });
     }
   }
@@ -91,6 +95,7 @@ export class HumanSwarm {
       slot.targetVy = slot.vy;
       slot.speed = 45 + Math.random() * 35;
       slot.stride = Math.random() * Math.PI * 2;
+      slot.frame = -1;
       slot.particle.alpha = 1;
       slot.particle.tint = TINTS[(Math.random() * TINTS.length) | 0];
       slot.particle.scaleX = slot.particle.scaleY = 0.8 + Math.random() * 0.3;
@@ -171,11 +176,18 @@ export class HumanSwarm {
 
       slot.particle.x = slot.x;
       slot.particle.y = slot.y;
-      slot.particle.rotation = Math.atan2(moveY, moveX) + Math.PI / 2;
+      // Pedestrians stay visually upright. Rotating the whole sprite toward
+      // its velocity made people appear to tumble/lie down as they fled.
+      slot.particle.rotation = 0;
       slot.stride += dt * (10 + slot.speed * 0.08);
-      const bob = Math.sin(slot.stride) * 0.07;
-      slot.particle.scaleX = 0.9 - bob;
-      slot.particle.scaleY = 0.9 + bob;
+      const frame = Math.sin(slot.stride) >= 0 ? 1 : 0;
+      if (frame !== slot.frame) {
+        slot.frame = frame;
+        slot.particle.texture = this.runTextures[frame];
+      }
+      const bob = Math.abs(Math.sin(slot.stride)) * 0.035;
+      slot.particle.scaleX = 0.96;
+      slot.particle.scaleY = 0.96 - bob;
     }
   }
 }

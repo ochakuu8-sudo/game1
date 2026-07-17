@@ -33,6 +33,7 @@ export interface Atlas {
    * distinct building footprint size used in the current layout. */
   buildings: Record<string, Texture>;
   human: Texture;
+  humanRun: Texture;
   debris: Texture;
   spark: Texture;
   smoke: Texture;
@@ -142,15 +143,22 @@ export function buildAtlas(renderer: Renderer): Atlas {
     buildingStripH = Math.max(buildingStripH, h);
   }
 
-  // --- Top-down human: head, torso, arms and separated walking legs. ---
-  place("human", (g) => {
-    g.circle(0, -7, 4).fill(0xffd3b0);
-    g.roundRect(-4, -3, 8, 10, 3).fill(0xffffff);
-    g.moveTo(-3, 0).lineTo(-7, 5).stroke({ width: 2.5, color: 0xffd3b0 });
-    g.moveTo(3, 0).lineTo(7, 4).stroke({ width: 2.5, color: 0xffd3b0 });
-    g.moveTo(-2, 6).lineTo(-4, 12).stroke({ width: 3, color: 0x263a59 });
-    g.moveTo(2, 6).lineTo(5, 11).stroke({ width: 3, color: 0x263a59 });
-  }, 32);
+  // --- Upright, front-facing pedestrians. Two silhouettes are alternated by
+  // the swarm to make a readable run cycle without rotating people sideways. ---
+  const drawHuman = (g: Graphics, phase: number) => {
+    // soft ground contact makes it immediately clear that the figure is
+    // standing rather than being viewed lying flat from above.
+    g.ellipse(0, 12, 12, 4).fill({ color: 0x101820, alpha: 0.3 });
+    g.circle(0, -9, 4.5).fill(0xffd2ad).stroke({ width: 1, color: 0x7b4b38 });
+    g.arc(0, -10, 4.3, Math.PI, Math.PI * 2).fill(0x352c32);
+    g.roundRect(-4.5, -4.5, 9, 11, 2).fill(0xffffff).stroke({ width: 1, color: 0x34465c });
+    g.moveTo(-3.5, -2).lineTo(-7 + phase * 2, 4 + phase * 2).stroke({ width: 2.4, color: 0xffd2ad });
+    g.moveTo(3.5, -2).lineTo(7 - phase * 2, 4 - phase * 2).stroke({ width: 2.4, color: 0xffd2ad });
+    g.moveTo(-2.2, 6).lineTo(-4 - phase * 3, 12).stroke({ width: 3, color: 0x253752 });
+    g.moveTo(2.2, 6).lineTo(4 + phase * 3, 12).stroke({ width: 3, color: 0x253752 });
+  };
+  place("human", (g) => drawHuman(g, -1), 32);
+  place("humanRun", (g) => drawHuman(g, 1), 32);
 
   // --- Debris chunk (building destruction) ---
   place("debris", (g) => {
@@ -217,6 +225,7 @@ export function buildAtlas(renderer: Renderer): Atlas {
     flipper: slice("flipper"),
     buildings,
     human: slice("human"),
+    humanRun: slice("humanRun"),
     debris: slice("debris"),
     spark: slice("spark"),
     smoke: slice("smoke"),
