@@ -18,6 +18,14 @@ export class Flipper {
    * while held. Used to derive the tangential (swing-direction) kick
    * instead of a naive push straight away from the pivot. */
   readonly sweepSign: number;
+  /** Radians turned *this step* (i.e. angular velocity in "per physics
+   * step" units, which conveniently is exactly the unit Matter's own
+   * body.velocity is in given a constant step size - no further
+   * conversion needed). Used so a ball caught mid-snap gets flung much
+   * harder than one merely resting on an already-raised, stationary
+   * flipper - matching how a real flipper's kick depends on how fast it's
+   * actually moving when it makes contact. */
+  angularVelocity = 0;
 
   constructor(layout: FlipperLayout) {
     this.layout = layout;
@@ -54,6 +62,7 @@ export class Flipper {
       diff = Math.sign(diff) * maxStep;
     }
     this.currentAngle += diff;
+    this.angularVelocity = diff;
 
     // Pin the body to the exact position/angle a rigid arm of this length
     // would have at currentAngle, computed fresh from the pivot every step

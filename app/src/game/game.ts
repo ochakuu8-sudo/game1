@@ -157,29 +157,38 @@ export class Game {
           const tx = -Math.sin(angle) * flipper.sweepSign;
           const ty = Math.cos(angle) * flipper.sweepSign;
 
-          // Magnitude: scaled by how far out along the blade the contact
-          // is (projected onto the blade's own direction), same as a real
-          // flipper - a hit right at the hinge has almost no leverage/kick,
-          // one at the tip has full swing speed. Floored so a near-hinge
-          // graze still does *something* rather than feeling dead.
+          // Magnitude: real v = ω × r, same as an actual rigid flipper -
+          // how far out along the blade the contact is (projected onto the
+          // blade's own direction; a hit right at the hinge has almost no
+          // leverage) times how fast the flipper is *actually rotating
+          // right now*. That second factor is what was missing before: the
+          // kick was a flat number regardless of whether the flipper was
+          // mid-snap or sitting there already raised, so it didn't feel
+          // connected to the flipper's own motion. Catching the ball right
+          // as it snaps up now gives a noticeably harder hit than resting
+          // it on a flipper that's already up and stopped.
           const relX = ball.position.x - flipper.layout.pivot.x;
           const relY = ball.position.y - flipper.layout.pivot.y;
-          const radiusAlongBlade = relX * Math.cos(angle) + relY * Math.sin(angle);
-          const reach = Math.max(0, Math.min(flipper.layout.length, radiusAlongBlade)) / flipper.layout.length;
+          const radiusAlongBlade = Math.max(0, Math.min(flipper.layout.length, relX * Math.cos(angle) + relY * Math.sin(angle)));
+          const rotationalSpeed = Math.abs(flipper.angularVelocity) * radiusAlongBlade;
 
           // SET (not add to) the ball's velocity. Adding used to leave the
           // result dominated by whatever momentum the ball already had -
           // gravity and recent bounces routinely gave it more downward
-          // speed than a partial-reach kick's small added upward
-          // component could overcome, so it kept heading down/sideways
-          // right through an apparently-successful flip. Setting it
-          // outright makes the flipper always decisively redirect the
-          // ball, which is how most arcade-style pinball implementations
-          // (not just literal rigid-body sims) handle this.
-          const boost = 14 * this.powerups.flipperPowerMultiplier * Math.max(0.55, reach);
+          // speed than a kick's added upward component could overcome, so
+          // it kept heading down/sideways right through an
+          // apparently-successful flip. Setting it outright makes the
+          // flipper always decisively redirect the ball, which is how
+          // most arcade-style pinball implementations (not just literal
+          // rigid-body transfer) handle this. MIN_KICK is a floor so a
+          // ball merely resting on an already-raised, unmoving flipper
+          // still gets *something* rather than feeling dead.
+          const MIN_KICK = 5.5;
+          const KICK_GAIN = 2.2; // tuned for game feel, not physically derived
+          const boost = Math.max(MIN_KICK, rotationalSpeed * KICK_GAIN) * this.powerups.flipperPowerMultiplier;
           const newVel = { x: tx * boost, y: ty * boost };
           Matter.Body.setVelocity(ball, newVel);
-          this.debugLastBoost = { angle, tx, ty, reach, boost, resultVel: { ...newVel } };
+          this.debugLastBoost = { angle, tx, ty, radiusAlongBlade, angularVelocity: flipper.angularVelocity, boost, resultVel: { ...newVel } };
         }
       }
     }
