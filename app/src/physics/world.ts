@@ -104,6 +104,14 @@ export class PinballWorld {
     World.remove(this.world, ball);
   }
 
+  setBuildingActive(body: Matter.Body, active: boolean) {
+    if (active) {
+      if (!this.world.bodies.includes(body)) World.add(this.world, body);
+    } else {
+      World.remove(this.world, body);
+    }
+  }
+
   step(dtMs: number) {
     this.leftFlipper.step();
     this.rightFlipper.step();

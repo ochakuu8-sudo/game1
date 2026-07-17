@@ -11,8 +11,6 @@ interface HumanSlot {
   vy: number;
   targetVx: number;
   targetVy: number;
-  exitX: number;
-  exitY: number;
   stride: number;
   speed: number;
 }
@@ -56,8 +54,6 @@ export class HumanSwarm {
         vy: 0,
         targetVx: 0,
         targetVy: 0,
-        exitX: 0,
-        exitY: 0,
         stride: 0,
         speed: 40,
       });
@@ -95,20 +91,6 @@ export class HumanSwarm {
       slot.targetVy = slot.vy;
       slot.speed = 45 + Math.random() * 35;
       slot.stride = Math.random() * Math.PI * 2;
-      // Run toward the closest edge of the city instead of aimlessly
-      // orbiting the wreck. A little spread keeps evacuees from forming a
-      // single mechanical line while preserving an obvious escape route.
-      const exits = [
-        { x: MARGIN - 8, y: slot.y },
-        { x: TABLE_W - MARGIN + 8, y: slot.y },
-        { x: slot.x, y: TOP_MARGIN - 8 },
-        { x: slot.x, y: TABLE_H - BOTTOM_MARGIN + 8 },
-      ];
-      const exit = exits.reduce((best, candidate) =>
-        Math.hypot(candidate.x - slot.x, candidate.y - slot.y) < Math.hypot(best.x - slot.x, best.y - slot.y) ? candidate : best,
-      );
-      slot.exitX = exit.x + (Math.random() - 0.5) * 36;
-      slot.exitY = exit.y + (Math.random() - 0.5) * 36;
       slot.particle.alpha = 1;
       slot.particle.tint = TINTS[(Math.random() * TINTS.length) | 0];
       slot.particle.scaleX = slot.particle.scaleY = 0.8 + Math.random() * 0.3;
@@ -124,8 +106,7 @@ export class HumanSwarm {
     for (const slot of this.slots) {
       if (!slot.alive) continue;
 
-      // Everyone runs for an evacuation edge, veering sharply away from
-      // any kaiju ball that cuts across the route.
+      // Keep wandering through the city, veering sharply away from a kaiju.
       let fleeX = 0;
       let fleeY = 0;
       let nearestSq = Infinity;
@@ -150,11 +131,13 @@ export class HumanSwarm {
       }
       if (!slot.alive) continue;
 
-      const exitDx = slot.exitX - slot.x;
-      const exitDy = slot.exitY - slot.y;
-      const exitDistance = Math.hypot(exitDx, exitDy) || 1;
-      slot.targetVx = (exitDx / exitDistance) * slot.speed;
-      slot.targetVy = (exitDy / exitDistance) * slot.speed;
+      // A small random turn makes the crowd feel panicked rather than like
+      // particles following a fixed route.
+      const turn = (Math.random() - 0.5) * dt * 3;
+      const cos = Math.cos(turn);
+      const sin = Math.sin(turn);
+      slot.targetVx = slot.vx * cos - slot.vy * sin;
+      slot.targetVy = slot.vx * sin + slot.vy * cos;
       const ease = 1 - Math.exp(-dt * 5);
       slot.vx += (slot.targetVx - slot.vx) * ease;
       slot.vy += (slot.targetVy - slot.vy) * ease;
@@ -173,12 +156,17 @@ export class HumanSwarm {
       slot.x += moveX * dt;
       slot.y += moveY * dt;
 
-      if (exitDistance < 8) {
-        slot.alive = false;
-        slot.particle.alpha = 0;
-        slot.particle.x = -9999;
-        this.aliveCount--;
-        continue;
+      // Humans never leave the playfield: clamp them inside the visible
+      // city and reflect their velocity when they reach any boundary.
+      const maxX = TABLE_W - MARGIN;
+      const maxY = TABLE_H - BOTTOM_MARGIN;
+      if (slot.x < MARGIN || slot.x > maxX) {
+        slot.x = Math.max(MARGIN, Math.min(maxX, slot.x));
+        slot.vx = slot.targetVx = slot.x === MARGIN ? Math.abs(slot.vx) : -Math.abs(slot.vx);
+      }
+      if (slot.y < TOP_MARGIN || slot.y > maxY) {
+        slot.y = Math.max(TOP_MARGIN, Math.min(maxY, slot.y));
+        slot.vy = slot.targetVy = slot.y === TOP_MARGIN ? Math.abs(slot.vy) : -Math.abs(slot.vy);
       }
 
       slot.particle.x = slot.x;
