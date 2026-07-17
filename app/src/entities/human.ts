@@ -35,8 +35,16 @@ export class HumanSwarm {
       // color must stay dynamic: it packs alpha too, and humans spawn/pop by
       // toggling alpha every frame (static color only re-uploads on an
       // explicit container.update() call, which would otherwise leave newly
-      // spawned humans invisible).
-      dynamicProperties: { position: true, rotation: true, color: true, vertex: false, uvs: true },
+      // spawned humans invisible). vertex packs scaleX/scaleY (and the
+      // anchor/texture-trim used to size the quad) - it must also be
+      // dynamic since scale is set per-spawn (random size variety) and
+      // every frame (the walk-cycle squash bob below); with it static,
+      // those writes land on the JS object but never reach the GPU buffer
+      // without an explicit container.update() call, so every human
+      // silently rendered at its very first (default 1x1) scale
+      // regardless of what the code set afterwards - confirmed by forcing
+      // an exaggerated scale range and seeing no size change on screen.
+      dynamicProperties: { position: true, rotation: true, color: true, vertex: true, uvs: true },
     });
     for (let i = 0; i < MAX_HUMANS; i++) {
       const particle = new Particle({
