@@ -38,8 +38,8 @@ export const RIGHT_FLIPPER: FlipperLayout = {
 // cells (1x1, 1x2, 2x1, 2x2, ...) like real street blocks, instead of being
 // scattered at arbitrary coordinates. Sits between the top wall and the
 // outlane rails (which start at y=470, see OUTLANE_GUIDES below).
-export const GRID_COLS = 8;
-export const GRID_ROWS = 8;
+export const GRID_COLS = 12;
+export const GRID_ROWS = 13;
 export const GRID_LEFT = 40;
 export const GRID_TOP = 72;
 export const GRID_RIGHT = TABLE_W - 40;
@@ -81,15 +81,11 @@ export function buildingRect(slot: BuildingSlot): BuildingRect {
   };
 }
 
-// Four compact 3x3 neighbourhoods sit in the corners of the city grid.
-// The two unused centre columns and rows form a continuous, ball-width
-// avenue between every neighbourhood instead of relying on narrow gaps
-// between individual buildings.
-const DISTRICT_COLUMNS = new Set([0, 1, 2, 5, 6, 7]);
-const DISTRICT_ROWS = new Set([0, 1, 2, 5, 6, 7]);
+// Every cell is a building - no reserved districts/avenues, the whole grid
+// is packed edge to edge (GRID_INSET above is what forms the streets).
 export const BUILDING_SLOTS: BuildingSlot[] = Array.from({ length: GRID_ROWS }, (_, row) =>
   Array.from({ length: GRID_COLS }, (_, col) => ({ col, row, spanCols: 1, spanRows: 1 })),
-).flat().filter((slot) => DISTRICT_COLUMNS.has(slot.col) && DISTRICT_ROWS.has(slot.row));
+).flat();
 
 export const DRAIN_Y = TABLE_H + 40;
 export const BALL_RADIUS = 13;

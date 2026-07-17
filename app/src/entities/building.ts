@@ -18,6 +18,7 @@ export class Building {
   private dizzyTexture: Sprite["texture"];
   private digitTens: Sprite;
   private digitOnes: Sprite;
+  private digitSpacing: number;
   private atlas: Atlas;
   private baseTint: number;
   private cellCount: number;
@@ -58,15 +59,21 @@ export class Building {
     this.sprite.tint = this.baseTint;
     this.container.addChild(this.sprite);
 
-    const digitY = -rect.height / 2 - 14;
+    // Scale the HP digits with the building's own footprint (capped at the
+    // old fixed 0.42) rather than a flat size, so a small grid cell's label
+    // doesn't dwarf the building it's sitting on.
+    const digitScale = Math.min(0.42, Math.max(0.2, rect.width / 64));
+    const digitHalfH = 32 * digitScale;
+    this.digitSpacing = 13 * (digitScale / 0.42);
+    const digitY = -rect.height / 2 - digitHalfH - 2;
     this.digitTens = new Sprite(atlas.digits[0]);
     this.digitTens.anchor.set(0.5);
-    this.digitTens.scale.set(0.42);
-    this.digitTens.position.set(-13, digitY);
+    this.digitTens.scale.set(digitScale);
+    this.digitTens.position.set(-this.digitSpacing, digitY);
     this.digitOnes = new Sprite(atlas.digits[0]);
     this.digitOnes.anchor.set(0.5);
-    this.digitOnes.scale.set(0.42);
-    this.digitOnes.position.set(13, digitY);
+    this.digitOnes.scale.set(digitScale);
+    this.digitOnes.position.set(this.digitSpacing, digitY);
     this.container.addChild(this.digitTens, this.digitOnes);
 
     this.spawn(3);
@@ -93,7 +100,7 @@ export class Building {
     this.digitTens.visible = tens > 0;
     if (tens > 0) this.digitTens.texture = this.atlas.digits[tens];
     this.digitOnes.texture = this.atlas.digits[ones];
-    this.digitOnes.position.x = tens > 0 ? 13 : 0;
+    this.digitOnes.position.x = tens > 0 ? this.digitSpacing : 0;
   }
 
   /** Register a ball impact. Returns true the instant it drops to 0 HP. */
