@@ -38,7 +38,12 @@ export class Flipper {
 
     this.body = Matter.Bodies.rectangle(cx, cy, length, width, {
       angle: restAngle,
-      chamfer: { radius: width / 2 },
+      // Matter's auto quality for a rounded corner this small (radius 10)
+      // works out to only ~4 straight segments per end - a visibly
+      // faceted "circle" a rolling ball can catch on as it crosses each
+      // facet's edge. Forcing a higher quality gives a much closer
+      // approximation to an actual circular cap.
+      chamfer: { radius: width / 2, quality: 12 },
       label: "flipper",
       friction: 0.05,
       restitution: 0.35,

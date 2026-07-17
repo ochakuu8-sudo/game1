@@ -89,7 +89,23 @@ export class PinballWorld {
 
   spawnBall(x = TABLE_W / 2, y = 60): Matter.Body {
     const ball = Bodies.circle(x, y, BALL_RADIUS, {
-      restitution: 0.55,
+      // Matter.js always uses the *higher* of the two colliding bodies'
+      // restitution for a pair (see collision/Pair.js), so this value alone
+      // governs every ball collision regardless of what the other body
+      // (flipper, wall, building) is set to. It also has no concept of a
+      // resting/rolling contact distinct from an impact: every discrete
+      // step that finds the ball touching a surface re-applies `(1 +
+      // restitution) * normalVelocity` (Resolver.js), so a ball merely
+      // resting or rolling on an incline - where gravity keeps nudging it
+      // back into the surface every step - gets a fresh little rebound
+      // each time instead of settling, which reads as a continuous judder.
+      // Keeping this low (rather than 0, which would feel completely dead
+      // off walls) leaves normal bounces recognisable while making
+      // resting/rolling contact - on the flipper or anywhere else - stay
+      // smooth. The deliberate "bounce" moments (flipper kicks, building
+      // hits) are explicit velocity sets elsewhere and don't depend on this
+      // at all.
+      restitution: 0.12,
       friction: 0.02,
       frictionAir: 0.0008,
       density: 0.04,

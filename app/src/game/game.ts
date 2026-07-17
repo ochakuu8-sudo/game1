@@ -62,6 +62,7 @@ export class Game {
   private accumulator = 0;
   private debugFlipperCollisions = 0;
   private debugLastBoost: unknown = null;
+  private debugStepVel: Array<{ x: number; y: number; px: number; py: number }> = [];
   private lastFlipperKickAt = new Map<Matter.Body, number>();
 
   constructor(app: Application) {
@@ -427,6 +428,13 @@ export class Game {
       this.world.step(STEP_MS);
       this.accumulator -= STEP_MS;
       steps++;
+      if (import.meta.env.DEV) {
+        const b = this.world.balls[0];
+        if (b) {
+          this.debugStepVel.push({ x: b.velocity.x, y: b.velocity.y, px: b.position.x, py: b.position.y });
+          if (this.debugStepVel.length > 2000) this.debugStepVel.shift();
+        }
+      }
     }
     if (steps === MAX_STEPS_PER_FRAME) this.accumulator = 0;
 
@@ -480,6 +488,7 @@ export class Game {
         this.handleBuildingHit(b.body, this.world.balls[0] ?? b.body);
       },
       buildingStats: () => ({ active: this.buildings.filter((b) => !b.destroyed).length, total: this.buildings.length }),
+      stepVelHistory: () => { const h = this.debugStepVel; this.debugStepVel = []; return h; },
       forceMultiball: () => this.triggerMultiball(),
       forceGameOver: () => this.gameOver(),
       state: () => this.state,
