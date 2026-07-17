@@ -8,6 +8,7 @@ import { HumanSwarm } from "../entities/human";
 import { ParticleFX } from "../fx/particles";
 import { PowerUpManager } from "./powerups";
 import { HUD } from "./hud";
+import { buildTableVisuals } from "../physics/tableVisuals";
 import { TABLE_W, TABLE_H, BUILDING_SLOTS, DRAIN_Y, BALL_RADIUS, HUMAN_RADIUS } from "../physics/layout";
 
 type GameState = "title" | "playing" | "gameover";
@@ -60,6 +61,7 @@ export class Game {
     const bg = new Graphics().rect(0, 0, TABLE_W, TABLE_H).fill(0x0d0f1a);
     this.root.addChild(bg);
     this.root.addChild(this.buildKaijuBackdrop());
+    this.root.addChild(buildTableVisuals());
 
     const buildingLayer = new Container();
     this.root.addChild(buildingLayer);

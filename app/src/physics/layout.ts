@@ -38,19 +38,66 @@ export interface BuildingSlot {
   x: number;
   y: number;
   variant: "wide" | "tower";
-  radius: number;
 }
+
+// Physical footprint of each building variant - must match the shapes baked
+// in core/atlas.ts (buildingWide / buildingTower Graphics) so the collision
+// box lines up with what's actually drawn on screen.
+export const BUILDING_VARIANTS = {
+  wide: { width: 84, height: 60, cornerRadius: 8 },
+  tower: { width: 52, height: 92, cornerRadius: 8 },
+} as const;
 
 // Six building bumper sites across the upper 2/3 of the table.
 export const BUILDING_SLOTS: BuildingSlot[] = [
-  { x: TABLE_W * 0.27, y: TABLE_H * 0.22, variant: "tower", radius: 40 },
-  { x: TABLE_W * 0.73, y: TABLE_H * 0.22, variant: "tower", radius: 40 },
-  { x: TABLE_W * 0.5, y: TABLE_H * 0.35, variant: "wide", radius: 38 },
-  { x: TABLE_W * 0.22, y: TABLE_H * 0.48, variant: "wide", radius: 36 },
-  { x: TABLE_W * 0.78, y: TABLE_H * 0.48, variant: "wide", radius: 36 },
-  { x: TABLE_W * 0.5, y: TABLE_H * 0.6, variant: "tower", radius: 38 },
+  { x: TABLE_W * 0.27, y: TABLE_H * 0.22, variant: "tower" },
+  { x: TABLE_W * 0.73, y: TABLE_H * 0.22, variant: "tower" },
+  { x: TABLE_W * 0.5, y: TABLE_H * 0.35, variant: "wide" },
+  { x: TABLE_W * 0.22, y: TABLE_H * 0.48, variant: "wide" },
+  { x: TABLE_W * 0.78, y: TABLE_H * 0.48, variant: "wide" },
+  { x: TABLE_W * 0.5, y: TABLE_H * 0.6, variant: "tower" },
 ];
 
 export const DRAIN_Y = TABLE_H + 40;
 export const BALL_RADIUS = 13;
 export const HUMAN_RADIUS = 10;
+
+// --- Static table boundary geometry, shared by the physics world builder
+// (physics/world.ts) and the visual renderer (physics/tableVisuals.ts) so
+// the walls the ball bounces off are always exactly what the player sees.
+
+export interface WallRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  angle?: number;
+}
+
+export interface WallSeg {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  thickness: number;
+}
+
+export const OUTER_WALLS: WallRect[] = [
+  { x: WALL_T / 2, y: TABLE_H / 2, w: WALL_T, h: TABLE_H }, // left
+  { x: TABLE_W - WALL_T / 2, y: TABLE_H / 2, w: WALL_T, h: TABLE_H }, // right
+  { x: TABLE_W / 2, y: WALL_T / 2, w: TABLE_W, h: WALL_T }, // top
+  { x: WALL_T + 26, y: WALL_T + 10, w: 70, h: WALL_T, angle: -0.6 }, // top-left bevel
+  { x: TABLE_W - WALL_T - 26, y: WALL_T + 10, w: 70, h: WALL_T, angle: 0.6 }, // top-right bevel
+];
+
+// Outlane guides: single straight rails from just inside the main side
+// walls down past the flipper pivots and past the table's bottom edge, so
+// there is no gap the ball can slip through between the wall and the
+// flipper. Each is one continuous body (not multiple joined segments) so
+// there's no seam to leak through. They start well outside the table
+// (x < 0 / x > TABLE_W) so they fully overlap the main side walls instead
+// of merely touching them.
+export const OUTLANE_GUIDES: WallSeg[] = [
+  { x1: -30, y1: 470, x2: LEFT_FLIPPER.pivot.x - 26, y2: TABLE_H + 60, thickness: WALL_T },
+  { x1: TABLE_W + 30, y1: 470, x2: RIGHT_FLIPPER.pivot.x + 26, y2: TABLE_H + 60, thickness: WALL_T },
+];
