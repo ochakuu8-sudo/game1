@@ -489,6 +489,7 @@ export class Game {
       },
       buildingStats: () => ({ active: this.buildings.filter((b) => !b.destroyed).length, total: this.buildings.length }),
       forceSpawnAll: () => { for (const b of this.buildings) { b.spawn(1); this.world.setBuildingActive(b.body, true); } },
+      buildingInfo: (i: number) => { const b = this.buildings[i]; return b ? { hp: b.hp, destroyed: b.destroyed, visible: b.container.visible, alpha: b.container.alpha, scale: b.container.scale.x } : null; },
       stepVelHistory: () => { const h = this.debugStepVel; this.debugStepVel = []; return h; },
       forceMultiball: () => this.triggerMultiball(),
       forceGameOver: () => this.gameOver(),

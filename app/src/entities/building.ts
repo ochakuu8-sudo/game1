@@ -109,6 +109,15 @@ export class Building {
   }
 
   spawn(level: number) {
+    // Clear any leftover dormant countdown - without this, a building
+    // spawned while one was still ticking (e.g. picked as a starter again
+    // on a restart, after previously being scheduled to appear later) has
+    // update() keep hitting its early-return branch for that stale timer
+    // forever, which silently skips the hitFlash/collapse-animation code
+    // below entirely - a destroyed building would register hp 0 correctly
+    // but its sprite would just sit there fully visible, never shrinking
+    // away or freeing up for its own rebuild.
+    this.pendingSpawnTimer = null;
     this.level = level;
     // A freshly-spawned level-1 lot starts at 1 HP - a single hit down.
     // Bigger footprints (a 2x2 block vs a 1x1) take more hits to clear, and
@@ -177,6 +186,11 @@ export class Building {
       const collapseT = Math.min(1, (REBUILD_TIME - this.rebuildTimer) / 0.5);
       this.container.scale.set(Math.max(0.05, 1 - collapseT));
       this.container.alpha = 1 - collapseT * 0.9;
+      // Once the shrink is done, hide it outright instead of leaving a
+      // faint 10%-alpha speck sitting in the lot for the rest of the
+      // rebuild wait - a cleared building should read as gone, not as a
+      // lingering 0-HP ghost.
+      if (collapseT >= 1) this.container.visible = false;
       if (this.rebuildTimer <= 0) {
         this.spawn(this.level + 1);
         return "rebuilt";
