@@ -63,6 +63,7 @@ export class Game {
   private debugFlipperCollisions = 0;
   private debugLastBoost: unknown = null;
   private debugStepVel: Array<{ x: number; y: number; px: number; py: number }> = [];
+  private lastFlipperKickAt = new Map<Matter.Body, number>();
 
   constructor(app: Application) {
     this.app = app;
@@ -182,30 +183,49 @@ export class Game {
       } else if (other.label === "flipper") {
         this.debugFlipperCollisions++;
         const flipper = other === this.world.leftFlipper.body ? this.world.leftFlipper : this.world.rightFlipper;
-        // Gate on being within a short window of the *press*, not on
-        // angularVelocity and not on a cooldown since the last kick.
-        // Gating on angularVelocity alone seemed right (only reward an
+        // Gate on EITHER being within a short window of the *press*, OR a
+        // long per-ball cooldown since its last kick - not on
+        // angularVelocity, and not on a *short* cooldown alone.
+        //
+        // Angular-velocity gating alone seemed right (only reward an
         // actively swinging flipper) but broke the single most common
         // real move - catching the ball at rest on a lowered flipper and
         // then flipping it - because the ball is typically already
         // touching the blade continuously before the press even starts,
         // so the one collisionStart Matter fires for that contact often
         // lands after the ~60ms swing has already finished (angularVelocity
-        // back to 0). A per-ball cooldown since the *last kick* fixed that
-        // but broke on a slower failure mode: a ball can settle into a
-        // back-and-forth against the blade/hinge-guard junction that keeps
-        // losing and regaining contact every several hundred ms - slower
-        // than the cooldown, so every single cycle re-armed and got a
-        // fresh full kick, forever (confirmed via the debug lastBoost hook
-        // showing the identical boost re-firing every ~700ms indefinitely).
-        // Gating on time since the press instead means only contacts in
-        // the first ~1/3 second after a press ever get kicked, covering
-        // both a fresh mid-swing hit and a ball that was already resting
-        // there - but a flipper that's simply been sitting raised for a
-        // while gives nothing no matter how many times the ball wobbles
-        // against it, which is what actually stops the loop.
+        // back to 0).
+        //
+        // A short (200ms) per-ball cooldown fixed that but broke on a
+        // slower failure mode: a ball can settle into a back-and-forth
+        // against the blade/hinge-guard junction that keeps losing and
+        // regaining contact every several hundred ms - slower than the
+        // cooldown, so every single cycle re-armed and got a fresh full
+        // kick, forever (confirmed via the debug lastBoost hook showing
+        // the identical boost re-firing every ~700ms indefinitely).
+        //
+        // A press-window-only gate (no cooldown at all) fixed *that*, but
+        // took away a legitimate move: holding a flipper up in advance to
+        // block/save an incoming ball. Once stepsSinceHeldStart ran past
+        // the window, a ball arriving later got no kick at all - just a
+        // soft restitution-only deflection - which read as the flipper
+        // "not responding".
+        //
+        // Combining both: the press window covers a fresh catch-and-flip
+        // with a full-strength kick every time, and the long cooldown
+        // (well past the ~700ms trap period above, so it can't refuel that
+        // loop, but far shorter than any real waiting-to-block pause)
+        // covers a ball arriving at an already-raised flipper - one solid
+        // kick, then it won't fire again for 1.5s even if the same ball
+        // keeps grazing it.
         const CATCH_WINDOW_STEPS = 60; // ~500ms at 120Hz
-        if (flipper.held && flipper.stepsSinceHeldStart <= CATCH_WINDOW_STEPS) {
+        const BLOCK_COOLDOWN_MS = 1500;
+        const now = this.world.engine.timing.timestamp;
+        const lastKick = this.lastFlipperKickAt.get(ball) ?? -Infinity;
+        const withinCatchWindow = flipper.stepsSinceHeldStart <= CATCH_WINDOW_STEPS;
+        const pastBlockCooldown = now - lastKick > BLOCK_COOLDOWN_MS;
+        if (flipper.held && (withinCatchWindow || pastBlockCooldown)) {
+          this.lastFlipperKickAt.set(ball, now);
           // The flipper itself carries no velocity (see physics/flipper.ts),
           // so all of its "kick" comes from this explicit boost.
           //
@@ -491,6 +511,7 @@ export class Game {
       buildingInfo: (i: number) => { const b = this.buildings[i]; return b ? { hp: b.hp, destroyed: b.destroyed, visible: b.container.visible, alpha: b.container.alpha, scale: b.container.scale.x } : null; },
       stepVelHistory: () => { const h = this.debugStepVel; this.debugStepVel = []; return h; },
       forceMultiball: () => this.triggerMultiball(),
+      serveBall: () => this.serveBall(),
       forceGameOver: () => this.gameOver(),
       state: () => this.state,
       score: () => this.score,
