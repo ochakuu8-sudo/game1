@@ -139,13 +139,13 @@ export const OUTER_WALLS: WallRect[] = [
 // fresh every step rather than basing it on the body's own (possibly
 // solver-perturbed) position, so persistent contact with a static body
 // can no longer drag its pivot off target.
-// y1 raised from 470 to 565 (closer to the pivot's y=660) so each rail's
-// own slope is shallower too (roughly 49deg -> 30deg from horizontal) -
-// less steep alongside the flatter flipper rest angle above. The plain
+// y1 at 530 (between the original 470 and the too-flat 565) puts each
+// rail's own slope at roughly 38deg from horizontal - a bit more incline
+// than 30deg while staying well short of the original 49deg. The plain
 // side wall covers the stretch above where the rail now starts.
 export const OUTLANE_GUIDES: WallSeg[] = [
-  { x1: -30, y1: 565, x2: LEFT_FLIPPER.pivot.x, y2: LEFT_FLIPPER.pivot.y, thickness: WALL_T },
-  { x1: TABLE_W + 30, y1: 565, x2: RIGHT_FLIPPER.pivot.x, y2: RIGHT_FLIPPER.pivot.y, thickness: WALL_T },
+  { x1: -30, y1: 530, x2: LEFT_FLIPPER.pivot.x, y2: LEFT_FLIPPER.pivot.y, thickness: WALL_T },
+  { x1: TABLE_W + 30, y1: 530, x2: RIGHT_FLIPPER.pivot.x, y2: RIGHT_FLIPPER.pivot.y, thickness: WALL_T },
 ];
 
 // A small round static "cap" bridging the rail and the flipper's hinge.
@@ -157,7 +157,11 @@ export interface HingeGuard {
   radius: number;
 }
 
+// Smaller than before (radius 25 -> 17, offset 15 -> 10) for a less
+// bulgy seam - still just enough to keep the pivot itself inside the
+// circle (offset < radius), which is what actually prevents the concave
+// notch a smaller-but-not-overlapping guard would reopen.
 export const FLIPPER_HINGE_GUARDS: HingeGuard[] = [
-  { x: LEFT_FLIPPER.pivot.x - 15, y: LEFT_FLIPPER.pivot.y, radius: 25 },
-  { x: RIGHT_FLIPPER.pivot.x + 15, y: RIGHT_FLIPPER.pivot.y, radius: 25 },
+  { x: LEFT_FLIPPER.pivot.x - 10, y: LEFT_FLIPPER.pivot.y, radius: 17 },
+  { x: RIGHT_FLIPPER.pivot.x + 10, y: RIGHT_FLIPPER.pivot.y, radius: 17 },
 ];
