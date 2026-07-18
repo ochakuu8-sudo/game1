@@ -26,21 +26,20 @@ export class Flipper {
    * flipper - matching how a real flipper's kick depends on how fast it's
    * actually moving when it makes contact. */
   angularVelocity = 0;
-  /** Physics steps since `held` last went false -> true; Infinity while
-   * not held. Used to give a kick only to a contact that happens shortly
-   * after a press (whether the ball was already resting on the blade
-   * before the press, or makes fresh contact during the swing), not to
-   * every re-contact for as long as the button stays down. A ball can
-   * settle into a slow back-and-forth against the blade/hinge-guard
-   * junction that keeps losing and regaining contact every few hundred ms
-   * - each of those is a "fresh" collisionStart as far as Matter's
-   * concerned, so gating on a short cooldown since the *last kick*
-   * (an earlier approach) still let every single one of those re-arm and
-   * re-kick, forever. Gating on time since the *press* instead means only
-   * the first handful of contacts right after a press ever get kicked; a
-   * flipper that's simply been sitting there raised for a while gives
-   * nothing no matter how many times the ball wobbles against it. */
-  stepsSinceHeldStart = Infinity;
+  /** Balls already kicked during the current press. A kick is a discrete
+   * action tied to *the press*, like a real flip - not a continuous force
+   * re-applied for as long as the button is down. Matter fires
+   * collisionStart just as readily for a ball settling/wobbling in
+   * ongoing contact as for a genuinely new arrival (a ball can lose and
+   * regain contact with the blade many times a second while just resting
+   * against it), so no amount of *time-based* gating on that event can
+   * reliably tell those apart - every threshold tried either let a
+   * resting ball get re-kicked indefinitely, or starved a legitimate late
+   * arrival of its kick. Tracking "have I already kicked this ball since
+   * the button went down" sidesteps the question entirely: cleared on
+   * every fresh press (see step()), so each ball gets exactly one kick
+   * per press, however many times collisionStart fires for it. */
+  kickedThisPress = new Set<Matter.Body>();
 
   constructor(layout: FlipperLayout) {
     this.layout = layout;
@@ -90,9 +89,7 @@ export class Flipper {
 
   /** Advance one fixed physics step. Call once per Engine.update(). */
   step() {
-    if (this.held && !this.wasHeld) this.stepsSinceHeldStart = 0;
-    else if (this.held) this.stepsSinceHeldStart++;
-    else this.stepsSinceHeldStart = Infinity;
+    if (this.held && !this.wasHeld) this.kickedThisPress.clear();
     this.wasHeld = this.held;
 
     const target = this.held ? this.layout.activeAngle : this.layout.restAngle;
