@@ -488,6 +488,7 @@ export class Game {
         this.handleBuildingHit(b.body, this.world.balls[0] ?? b.body);
       },
       buildingStats: () => ({ active: this.buildings.filter((b) => !b.destroyed).length, total: this.buildings.length }),
+      forceSpawnAll: () => { for (const b of this.buildings) { b.spawn(1); this.world.setBuildingActive(b.body, true); } },
       stepVelHistory: () => { const h = this.debugStepVel; this.debugStepVel = []; return h; },
       forceMultiball: () => this.triggerMultiball(),
       forceGameOver: () => this.gameOver(),

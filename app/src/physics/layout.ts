@@ -47,10 +47,8 @@ export const GRID_BOTTOM = 440;
 export const GRID_CELL_W = (GRID_RIGHT - GRID_LEFT) / GRID_COLS;
 export const GRID_CELL_H = (GRID_BOTTOM - GRID_TOP) / GRID_ROWS;
 // Gap left between a building's actual (collidable/drawn) footprint and its
-// cell(s)' edges, so adjacent buildings never touch - this is what forms
-// the "streets" the ball travels down, on top of any whole cells left
-// empty in the layout below.
-const GRID_INSET = 5;
+// cell(s)' edges - 0 so the grid packs edge to edge with no street gaps.
+const GRID_INSET = 0;
 
 export interface BuildingSlot {
   col: number;
