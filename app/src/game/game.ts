@@ -61,7 +61,6 @@ export class Game {
   private buildingsDestroyedTotal = 0;
   private accumulator = 0;
   private debugFlipperCollisions = 0;
-  private debugLastBoost: unknown = null;
   private debugStepVel: Array<{ x: number; y: number; px: number; py: number }> = [];
 
   constructor(app: Application) {
@@ -180,66 +179,13 @@ export class Game {
       if (other.label === "building") {
         this.handleBuildingHit(other, ball);
       } else if (other.label === "flipper") {
+        // No scripted kick here - the flipper reports its own real
+        // instantaneous velocity to Matter every step (see
+        // physics/flipper.ts), so the engine's native collision response
+        // already transfers realistic momentum to the ball on its own,
+        // the same way an actual moving flipper arm would. This counter
+        // is kept only for the debug/test hooks below.
         this.debugFlipperCollisions++;
-        const flipper = other === this.world.leftFlipper.body ? this.world.leftFlipper : this.world.rightFlipper;
-        // A kick is a discrete action tied to the press, not a continuous
-        // force - so each ball gets exactly one per press, tracked
-        // directly on the flipper itself (see Flipper.kickedThisPress),
-        // rather than trying to infer "was this a genuine new arrival"
-        // from collisionStart timing. That event fires just as often for
-        // a ball resting/wobbling in ongoing contact as for a real fresh
-        // hit, so no time-based threshold on it can tell the two apart.
-        if (flipper.held && !flipper.kickedThisPress.has(ball)) {
-          flipper.kickedThisPress.add(ball);
-          // The flipper itself carries no velocity (see physics/flipper.ts),
-          // so all of its "kick" comes from this explicit boost.
-          //
-          // Direction: tangent to the flipper's OWN current angle (not the
-          // pivot->ball vector). Deriving it from the ball's position is
-          // numerically unstable near the hinge - a small radius means any
-          // perpendicular offset (the ball sitting slightly off the blade's
-          // centerline, which it always is a little, being round) swings
-          // the angle wildly, which used to send close-to-hinge hits off in
-          // near-random directions. The flipper's own angle has no such
-          // issue.
-          const angle = flipper.currentAngle;
-          const tx = -Math.sin(angle) * flipper.sweepSign;
-          const ty = Math.cos(angle) * flipper.sweepSign;
-
-          // Magnitude: real v = ω × r, same as an actual rigid flipper -
-          // how far out along the blade the contact is (projected onto the
-          // blade's own direction; a hit right at the hinge has almost no
-          // leverage) times how fast the flipper is *actually rotating
-          // right now*. That second factor is what was missing before: the
-          // kick was a flat number regardless of whether the flipper was
-          // mid-snap or sitting there already raised, so it didn't feel
-          // connected to the flipper's own motion. Catching the ball right
-          // as it snaps up now gives a noticeably harder hit than resting
-          // it on a flipper that's already up and stopped.
-          const relX = ball.position.x - flipper.layout.pivot.x;
-          const relY = ball.position.y - flipper.layout.pivot.y;
-          const radiusAlongBlade = Math.max(0, Math.min(flipper.layout.length, relX * Math.cos(angle) + relY * Math.sin(angle)));
-          const rotationalSpeed = Math.abs(flipper.angularVelocity) * radiusAlongBlade;
-
-          // SET (not add to) the ball's velocity. Adding used to leave the
-          // result dominated by whatever momentum the ball already had -
-          // gravity and recent bounces routinely gave it more downward
-          // speed than a kick's added upward component could overcome, so
-          // it kept heading down/sideways right through an
-          // apparently-successful flip. Setting it outright makes the
-          // flipper always decisively redirect the ball, which is how
-          // most arcade-style pinball implementations (not just literal
-          // rigid-body transfer) handle this. MIN_KICK is just a floor on
-          // this boost so a hit near the hinge - where radiusAlongBlade is
-          // tiny, or where the flipper's already stopped by the time this
-          // fires - still gets a decent kick instead of an unnoticeable one.
-          const MIN_KICK = 5.5;
-          const KICK_GAIN = 2.2; // tuned for game feel, not physically derived
-          const boost = Math.max(MIN_KICK, rotationalSpeed * KICK_GAIN) * this.powerups.flipperPowerMultiplier;
-          const newVel = { x: tx * boost, y: ty * boost };
-          Matter.Body.setVelocity(ball, newVel);
-          this.debugLastBoost = { angle, tx, ty, radiusAlongBlade, angularVelocity: flipper.angularVelocity, boost, resultVel: { ...newVel } };
-        }
       }
     }
   }
@@ -405,6 +351,8 @@ export class Game {
 
     this.world.leftFlipper.setHeld(this.input.left);
     this.world.rightFlipper.setHeld(this.input.right);
+    this.world.leftFlipper.speedMultiplier = this.powerups.flipperPowerMultiplier;
+    this.world.rightFlipper.speedMultiplier = this.powerups.flipperPowerMultiplier;
 
     this.accumulator += dtMs;
     let steps = 0;
@@ -476,6 +424,7 @@ export class Game {
       buildingInfo: (i: number) => { const b = this.buildings[i]; return b ? { hp: b.hp, destroyed: b.destroyed, visible: b.container.visible, alpha: b.container.alpha, scale: b.container.scale.x } : null; },
       stepVelHistory: () => { const h = this.debugStepVel; this.debugStepVel = []; return h; },
       forceMultiball: () => this.triggerMultiball(),
+      setFlipperStacks: (n: number) => { this.powerups.stacks.FLIPPER = n; },
       serveBall: () => this.serveBall(),
       forceGameOver: () => this.gameOver(),
       state: () => this.state,
@@ -495,7 +444,6 @@ export class Game {
       flipperCollisions: () => this.debugFlipperCollisions,
       flipperAngles: () => ({ left: this.world.leftFlipper.currentAngle, right: this.world.rightFlipper.currentAngle }),
       flipperHeld: () => ({ left: this.world.leftFlipper.held, right: this.world.rightFlipper.held, inputLeft: this.input.left, inputRight: this.input.right }),
-      lastBoost: () => this.debugLastBoost,
       flipperDrift: () => {
         const check = (f: typeof this.world.leftFlipper) => {
           const { pivot, length } = f.layout;

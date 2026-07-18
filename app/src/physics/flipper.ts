@@ -13,38 +13,15 @@ export class Flipper {
   layout: FlipperLayout;
   currentAngle: number;
   held = false;
-  /** +1 if activating rotates the angle up (clockwise in screen/y-down
-   * terms), -1 if down - i.e. the sign of the flipper's angular velocity
-   * while held. Used to derive the tangential (swing-direction) kick
-   * instead of a naive push straight away from the pivot. */
-  readonly sweepSign: number;
-  /** Radians turned *this step* (i.e. angular velocity in "per physics
-   * step" units, which conveniently is exactly the unit Matter's own
-   * body.velocity is in given a constant step size - no further
-   * conversion needed). Used so a ball caught mid-snap gets flung much
-   * harder than one merely resting on an already-raised, stationary
-   * flipper - matching how a real flipper's kick depends on how fast it's
-   * actually moving when it makes contact. */
-  angularVelocity = 0;
-  /** Balls already kicked during the current press. A kick is a discrete
-   * action tied to *the press*, like a real flip - not a continuous force
-   * re-applied for as long as the button is down. Matter fires
-   * collisionStart just as readily for a ball settling/wobbling in
-   * ongoing contact as for a genuinely new arrival (a ball can lose and
-   * regain contact with the blade many times a second while just resting
-   * against it), so no amount of *time-based* gating on that event can
-   * reliably tell those apart - every threshold tried either let a
-   * resting ball get re-kicked indefinitely, or starved a legitimate late
-   * arrival of its kick. Tracking "have I already kicked this ball since
-   * the button went down" sidesteps the question entirely: cleared on
-   * every fresh press (see step()), so each ball gets exactly one kick
-   * per press, however many times collisionStart fires for it. */
-  kickedThisPress = new Set<Matter.Body>();
+  /** Scales the active swing speed while held (the FLIPPER powerup) - a
+   * literally faster-swinging flipper, which (now that kicks come from
+   * real collision physics, not a scripted boost) hits the ball harder on
+   * its own, the same way a real stronger solenoid would. */
+  speedMultiplier = 1;
 
   constructor(layout: FlipperLayout) {
     this.layout = layout;
     this.currentAngle = layout.restAngle;
-    this.sweepSign = Math.sign(layout.activeAngle - layout.restAngle);
 
     const { pivot, length, width, restAngle } = layout;
     const cx = pivot.x + Math.cos(restAngle) * (length / 2);
@@ -63,25 +40,22 @@ export class Flipper {
       restitution: 0.35,
       density: 0.02,
     });
-    // Static, not just infinite-inertia: this body's position/angle are
-    // always externally overwritten in step() below, never driven by
-    // forces, which is exactly what Matter's static bodies are for. An
-    // earlier version left it non-static with only inertia forced to
-    // Infinity, which blocks the solver's *rotational* position
-    // correction but not its *linear* one - with finite mass, any overlap
-    // correction was still split between ball and flipper by inverse
-    // mass, and since the flipper's share got overwritten right back to
-    // its pivot-computed position on the very next step anyway, that
-    // correction silently piled onto the ball instead: no velocity change
-    // (so invisible in any velocity-based check), just a tiny position
-    // creep every step that read as the ball juddering in place. isStatic
-    // gives the flipper infinite mass too, so 100% of any correction goes
-    // to the ball, the physically consistent outcome for a body the ball
-    // can never actually push.
+    // Static: position/angle are always externally set in step() below,
+    // never driven by forces, which is exactly what Matter's static
+    // bodies are for. Being static gives it infinite mass/inertia, so the
+    // collision solver never moves *it* - but critically, Engine.js skips
+    // its own Body.update (the position/velocity integration step)
+    // entirely for static bodies, meaning body.velocity/angularVelocity
+    // are otherwise-inert fields we fully control that never get
+    // overwritten by the physics loop. The collision *resolver* still
+    // reads them when computing impulses regardless of the static flag
+    // (see collision/Resolver.js) - so setting them to the flipper's real
+    // instantaneous motion each step (done in step() below) makes Matter's
+    // own native collision response transfer realistic momentum to the
+    // ball, the same way a real moving flipper arm would, with no scripted
+    // "kick" needed at all.
     Matter.Body.setStatic(this.body, true);
   }
-
-  private wasHeld = false;
 
   setHeld(held: boolean) {
     this.held = held;
@@ -89,34 +63,40 @@ export class Flipper {
 
   /** Advance one fixed physics step. Call once per Engine.update(). */
   step() {
-    if (this.held && !this.wasHeld) this.kickedThisPress.clear();
-    this.wasHeld = this.held;
-
     const target = this.held ? this.layout.activeAngle : this.layout.restAngle;
-    const maxStep = this.held ? MAX_ANGULAR_STEP : RETURN_ANGULAR_STEP;
+    const maxStep = this.held ? MAX_ANGULAR_STEP * this.speedMultiplier : RETURN_ANGULAR_STEP;
 
     let diff = target - this.currentAngle;
     if (Math.abs(diff) > maxStep) {
       diff = Math.sign(diff) * maxStep;
     }
     this.currentAngle += diff;
-    this.angularVelocity = diff;
 
     // Pin the body to the exact position/angle a rigid arm of this length
     // would have at currentAngle, computed fresh from the pivot every step
     // - NOT by rotating relative to the body's current (possibly
-    // collision-perturbed) position. Now that the body is static (see
-    // constructor) the solver won't perturb its position at all, but
-    // recomputing from scratch is still the more robust approach - there's
-    // nothing for any future change to this body's config to compound.
+    // collision-perturbed) position, which caused unbounded drift in an
+    // earlier version. Recomputing from scratch each step makes that
+    // impossible - there's nothing to compound.
     const { pivot, length } = this.layout;
+    const prevX = this.body.position.x;
+    const prevY = this.body.position.y;
     const cx = pivot.x + Math.cos(this.currentAngle) * (length / 2);
     const cy = pivot.y + Math.sin(this.currentAngle) * (length / 2);
     // Omitting the 3rd (updateVelocity) arg leaves it undefined/falsy, same
     // as passing false - @types/matter-js doesn't declare that parameter.
     Matter.Body.setPosition(this.body, { x: cx, y: cy });
     Matter.Body.setAngle(this.body, this.currentAngle);
-    Matter.Body.setVelocity(this.body, { x: 0, y: 0 });
-    Matter.Body.setAngularVelocity(this.body, 0);
+    // The body's velocity, for collision-response purposes (see the static
+    // note above): this step's actual displacement/rotation, in exactly
+    // the "per step" units Matter's own Verlet integration uses internally
+    // (position delta, no separate time division needed) - not zeroed.
+    // This is what lets a ball genuinely get flung harder the faster the
+    // flipper is actually swinging when it makes contact, and get nothing
+    // extra from a flipper that's just sitting there raised and
+    // stationary, purely through normal physics rather than any bespoke
+    // "was this contact within some window" bookkeeping.
+    Matter.Body.setVelocity(this.body, { x: cx - prevX, y: cy - prevY });
+    Matter.Body.setAngularVelocity(this.body, diff);
   }
 }

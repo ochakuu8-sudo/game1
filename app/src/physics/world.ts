@@ -98,23 +98,19 @@ export class PinballWorld {
 
   spawnBall(x = TABLE_W / 2, y = 60): Matter.Body {
     const ball = Bodies.circle(x, y, BALL_RADIUS, {
-      // Matter.js always uses the *higher* of the two colliding bodies'
-      // restitution for a pair (see collision/Pair.js), so this value alone
-      // governs every ball collision regardless of what the other body
-      // (flipper, wall, building) is set to. It also has no concept of a
-      // resting/rolling contact distinct from an impact: every discrete
-      // step that finds the ball touching a surface re-applies `(1 +
-      // restitution) * normalVelocity` (Resolver.js), so a ball merely
-      // resting or rolling on an incline - where gravity keeps nudging it
-      // back into the surface every step - gets a fresh little rebound
-      // each time instead of settling, which reads as a continuous judder.
-      // Keeping this low (rather than 0, which would feel completely dead
-      // off walls) leaves normal bounces recognisable while making
-      // resting/rolling contact - on the flipper or anywhere else - stay
-      // smooth. The deliberate "bounce" moments (flipper kicks, building
-      // hits) are explicit velocity sets elsewhere and don't depend on this
-      // at all.
-      restitution: 0.12,
+      // A normal, fairly lively pinball-ball value. This used to be pinned
+      // much lower (0.12) as a workaround: the flipper was a fully inert
+      // static body (zeroed velocity every step) with a scripted "kick" on
+      // top, and any bounce off it or the walls kept re-triggering that
+      // low-restitution-with-explicit-boost combination in ways that read
+      // as judder. Now that the flipper reports its own real instantaneous
+      // velocity (see physics/flipper.ts) and there's no separate kick
+      // system to misfire, restitution is free to be a normal value again
+      // - resting/rolling contact settles cleanly regardless (verified:
+      // stays at an exact standstill for 7+s after landing on a stopped,
+      // held flipper), since that settling was never really about this
+      // number in the first place.
+      restitution: 0.5,
       friction: 0.02,
       frictionAir: 0.0008,
       density: 0.04,
