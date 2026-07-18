@@ -63,7 +63,6 @@ export class Game {
   private debugFlipperCollisions = 0;
   private debugLastBoost: unknown = null;
   private debugStepVel: Array<{ x: number; y: number; px: number; py: number }> = [];
-  private lastFlipperKickAt = new Map<Matter.Body, number>();
 
   constructor(app: Application) {
     this.app = app;
@@ -183,30 +182,30 @@ export class Game {
       } else if (other.label === "flipper") {
         this.debugFlipperCollisions++;
         const flipper = other === this.world.leftFlipper.body ? this.world.leftFlipper : this.world.rightFlipper;
-        // Gate on both "held" AND a short per-ball cooldown since the last
-        // kick, not on angularVelocity. Gating on angularVelocity alone
-        // seemed right (only reward an *actively swinging* flipper) but it
-        // broke the single most common real move - catching the ball at
-        // rest on a lowered flipper and then flipping it - because the
-        // ball is typically already touching the blade continuously before
-        // the press even starts. Matter only fires collisionStart once for
-        // a pair that never separates, so that single event often lands
-        // *after* the ~60ms swing has already finished (angularVelocity
-        // back to 0), and gating on motion threw the kick away entirely.
-        // The real bug was never "the flipper wasn't moving" - it was the
-        // kick re-firing on every single re-trigger with no memory of the
-        // previous one, so a ball settling against an already-raised
-        // flipper got launched again each time it fell back into contact,
-        // forever. A short cooldown keyed per-ball fixes that directly:
-        // the first touch (whenever it lands, moving or not) still gets a
-        // full kick, but a rapid bounce-and-recontact loop only gets
-        // energy added once, so restitution/friction can actually let it
-        // settle instead of being re-launched every cycle.
-        const KICK_COOLDOWN_MS = 200;
-        const now = this.world.engine.timing.timestamp;
-        const lastKick = this.lastFlipperKickAt.get(ball) ?? -Infinity;
-        if (flipper.held && now - lastKick > KICK_COOLDOWN_MS) {
-          this.lastFlipperKickAt.set(ball, now);
+        // Gate on being within a short window of the *press*, not on
+        // angularVelocity and not on a cooldown since the last kick.
+        // Gating on angularVelocity alone seemed right (only reward an
+        // actively swinging flipper) but broke the single most common
+        // real move - catching the ball at rest on a lowered flipper and
+        // then flipping it - because the ball is typically already
+        // touching the blade continuously before the press even starts,
+        // so the one collisionStart Matter fires for that contact often
+        // lands after the ~60ms swing has already finished (angularVelocity
+        // back to 0). A per-ball cooldown since the *last kick* fixed that
+        // but broke on a slower failure mode: a ball can settle into a
+        // back-and-forth against the blade/hinge-guard junction that keeps
+        // losing and regaining contact every several hundred ms - slower
+        // than the cooldown, so every single cycle re-armed and got a
+        // fresh full kick, forever (confirmed via the debug lastBoost hook
+        // showing the identical boost re-firing every ~700ms indefinitely).
+        // Gating on time since the press instead means only contacts in
+        // the first ~1/3 second after a press ever get kicked, covering
+        // both a fresh mid-swing hit and a ball that was already resting
+        // there - but a flipper that's simply been sitting raised for a
+        // while gives nothing no matter how many times the ball wobbles
+        // against it, which is what actually stops the loop.
+        const CATCH_WINDOW_STEPS = 60; // ~500ms at 120Hz
+        if (flipper.held && flipper.stepsSinceHeldStart <= CATCH_WINDOW_STEPS) {
           // The flipper itself carries no velocity (see physics/flipper.ts),
           // so all of its "kick" comes from this explicit boost.
           //

@@ -26,6 +26,21 @@ export class Flipper {
    * flipper - matching how a real flipper's kick depends on how fast it's
    * actually moving when it makes contact. */
   angularVelocity = 0;
+  /** Physics steps since `held` last went false -> true; Infinity while
+   * not held. Used to give a kick only to a contact that happens shortly
+   * after a press (whether the ball was already resting on the blade
+   * before the press, or makes fresh contact during the swing), not to
+   * every re-contact for as long as the button stays down. A ball can
+   * settle into a slow back-and-forth against the blade/hinge-guard
+   * junction that keeps losing and regaining contact every few hundred ms
+   * - each of those is a "fresh" collisionStart as far as Matter's
+   * concerned, so gating on a short cooldown since the *last kick*
+   * (an earlier approach) still let every single one of those re-arm and
+   * re-kick, forever. Gating on time since the *press* instead means only
+   * the first handful of contacts right after a press ever get kicked; a
+   * flipper that's simply been sitting there raised for a while gives
+   * nothing no matter how many times the ball wobbles against it. */
+  stepsSinceHeldStart = Infinity;
 
   constructor(layout: FlipperLayout) {
     this.layout = layout;
@@ -49,9 +64,25 @@ export class Flipper {
       restitution: 0.35,
       density: 0.02,
     });
-    Matter.Body.setStatic(this.body, false);
-    Matter.Body.setInertia(this.body, Infinity);
+    // Static, not just infinite-inertia: this body's position/angle are
+    // always externally overwritten in step() below, never driven by
+    // forces, which is exactly what Matter's static bodies are for. An
+    // earlier version left it non-static with only inertia forced to
+    // Infinity, which blocks the solver's *rotational* position
+    // correction but not its *linear* one - with finite mass, any overlap
+    // correction was still split between ball and flipper by inverse
+    // mass, and since the flipper's share got overwritten right back to
+    // its pivot-computed position on the very next step anyway, that
+    // correction silently piled onto the ball instead: no velocity change
+    // (so invisible in any velocity-based check), just a tiny position
+    // creep every step that read as the ball juddering in place. isStatic
+    // gives the flipper infinite mass too, so 100% of any correction goes
+    // to the ball, the physically consistent outcome for a body the ball
+    // can never actually push.
+    Matter.Body.setStatic(this.body, true);
   }
+
+  private wasHeld = false;
 
   setHeld(held: boolean) {
     this.held = held;
@@ -59,6 +90,11 @@ export class Flipper {
 
   /** Advance one fixed physics step. Call once per Engine.update(). */
   step() {
+    if (this.held && !this.wasHeld) this.stepsSinceHeldStart = 0;
+    else if (this.held) this.stepsSinceHeldStart++;
+    else this.stepsSinceHeldStart = Infinity;
+    this.wasHeld = this.held;
+
     const target = this.held ? this.layout.activeAngle : this.layout.restAngle;
     const maxStep = this.held ? MAX_ANGULAR_STEP : RETURN_ANGULAR_STEP;
 
@@ -72,14 +108,10 @@ export class Flipper {
     // Pin the body to the exact position/angle a rigid arm of this length
     // would have at currentAngle, computed fresh from the pivot every step
     // - NOT by rotating relative to the body's current (possibly
-    // collision-perturbed) position. Matter's solver can nudge a resting
-    // body's position directly to resolve overlap even with velocity at
-    // zero and infinite inertia (which only blocks rotational correction,
-    // not linear); basing the next step on that live position would carry
-    // the nudge forward and, under sustained contact, compound it every
-    // step (verified: unbounded drift within a few seconds of the ball
-    // resting against a held flipper). Recomputing from scratch each step
-    // makes that impossible - there's nothing to compound.
+    // collision-perturbed) position. Now that the body is static (see
+    // constructor) the solver won't perturb its position at all, but
+    // recomputing from scratch is still the more robust approach - there's
+    // nothing for any future change to this body's config to compound.
     const { pivot, length } = this.layout;
     const cx = pivot.x + Math.cos(this.currentAngle) * (length / 2);
     const cy = pivot.y + Math.sin(this.currentAngle) * (length / 2);

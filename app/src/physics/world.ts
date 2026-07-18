@@ -59,7 +59,16 @@ export class PinballWorld {
 
   private buildStaticTable() {
     const walls: Matter.Body[] = [];
-    const opts: Matter.IChamferableBodyDefinition = { isStatic: true, label: "wall", restitution: 0.4 };
+    // Matter always uses the *higher* of a pair's two restitution values
+    // (see the ball's own restitution comment in spawnBall below), so this
+    // value alone governs how bouncy the ball is against every wall here -
+    // the outer walls, outlane rails, AND the flipper hinge guards, which
+    // is exactly the surface a ball settling near a flipper spends the
+    // most time grazing. Lowering the ball's restitution alone didn't fix
+    // resting/rolling judder against these because 0.4 kept winning the
+    // max() every time; kept low here too so a ball resting or rolling
+    // along any wall - not just the flipper itself - actually settles.
+    const opts: Matter.IChamferableBodyDefinition = { isStatic: true, label: "wall", restitution: 0.12 };
 
     for (const w of OUTER_WALLS) {
       walls.push(Bodies.rectangle(w.x, w.y, w.w, w.h, { ...opts, angle: w.angle ?? 0 }));
