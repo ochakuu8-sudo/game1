@@ -35,10 +35,10 @@ export class InputManager {
   }
 
   private onPointerDown = (e: PointerEvent) => {
-    const rect = this.target.getBoundingClientRect();
-    const relX = (e.clientX - rect.left) / rect.width;
-    if (relX < 0.5) this.touchLeftPointers.add(e.pointerId);
-    else this.touchRightPointers.add(e.pointerId);
+    // A tap anywhere on the screen fires both flippers at once, rather
+    // than being split left/right by tap position.
+    this.touchLeftPointers.add(e.pointerId);
+    this.touchRightPointers.add(e.pointerId);
     for (const cb of this.tapCallbacks) cb();
   };
 
