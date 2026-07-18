@@ -16,10 +16,14 @@ export interface FlipperLayout {
   side: "left" | "right";
 }
 
+// Rest angle shallower than before (35 -> 20 deg) so the flipper droops
+// less steeply and sits closer to the outlane rail's own (also flattened,
+// see OUTLANE_GUIDES) slope; active angle shifted by the same amount so
+// the total swing stays 70 deg.
 export const LEFT_FLIPPER: FlipperLayout = {
   pivot: { x: TABLE_W * 0.32, y: TABLE_H - 100 },
-  restAngle: deg(35),
-  activeAngle: deg(-35),
+  restAngle: deg(20),
+  activeAngle: deg(-50),
   length: 70,
   width: 20,
   side: "left",
@@ -27,8 +31,8 @@ export const LEFT_FLIPPER: FlipperLayout = {
 
 export const RIGHT_FLIPPER: FlipperLayout = {
   pivot: { x: TABLE_W * 0.68, y: TABLE_H - 100 },
-  restAngle: deg(145),
-  activeAngle: deg(215),
+  restAngle: deg(160),
+  activeAngle: deg(230),
   length: 70,
   width: 20,
   side: "right",
@@ -135,9 +139,13 @@ export const OUTER_WALLS: WallRect[] = [
 // fresh every step rather than basing it on the body's own (possibly
 // solver-perturbed) position, so persistent contact with a static body
 // can no longer drag its pivot off target.
+// y1 raised from 470 to 565 (closer to the pivot's y=660) so each rail's
+// own slope is shallower too (roughly 49deg -> 30deg from horizontal) -
+// less steep alongside the flatter flipper rest angle above. The plain
+// side wall covers the stretch above where the rail now starts.
 export const OUTLANE_GUIDES: WallSeg[] = [
-  { x1: -30, y1: 470, x2: LEFT_FLIPPER.pivot.x, y2: LEFT_FLIPPER.pivot.y, thickness: WALL_T },
-  { x1: TABLE_W + 30, y1: 470, x2: RIGHT_FLIPPER.pivot.x, y2: RIGHT_FLIPPER.pivot.y, thickness: WALL_T },
+  { x1: -30, y1: 565, x2: LEFT_FLIPPER.pivot.x, y2: LEFT_FLIPPER.pivot.y, thickness: WALL_T },
+  { x1: TABLE_W + 30, y1: 565, x2: RIGHT_FLIPPER.pivot.x, y2: RIGHT_FLIPPER.pivot.y, thickness: WALL_T },
 ];
 
 // A small round static "cap" bridging the rail and the flipper's hinge.
