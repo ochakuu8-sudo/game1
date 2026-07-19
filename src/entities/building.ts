@@ -3,7 +3,7 @@ import type Matter from "matter-js";
 import type { Atlas } from "../core/atlas";
 import type { BuildingSlot } from "../physics/layout";
 
-const REBUILD_TIME = 5.5;
+const COLLAPSE_TIME = 0.5;
 const HIT_FLASH_TIME = 0.12;
 
 export class Building {
@@ -18,7 +18,7 @@ export class Building {
   hp = 0;
   maxHp = 0;
   destroyed = false;
-  rebuildTimer = 0;
+  collapseT = 0;
   hitFlash = 0;
   level = 0;
 
@@ -48,12 +48,13 @@ export class Building {
     this.spawn(3);
   }
 
+  /** (Re)spawns this building at the given difficulty level, e.g. at floor start. */
   spawn(level: number) {
     this.level = level;
-    this.maxHp = Math.min(4 + level, 11);
+    this.maxHp = Math.min(3 + level, 16);
     this.hp = this.maxHp;
     this.destroyed = false;
-    this.rebuildTimer = 0;
+    this.collapseT = 0;
     this.container.visible = true;
     this.container.scale.set(1);
     this.container.alpha = 1;
@@ -77,33 +78,29 @@ export class Building {
     this.refreshDigits();
     if (this.hp <= 0) {
       this.destroyed = true;
-      this.rebuildTimer = REBUILD_TIME;
+      this.collapseT = 0;
       return true;
     }
     return false;
   }
 
-  update(dt: number): "rebuilt" | null {
+  update(dt: number) {
     if (this.hitFlash > 0) {
       this.hitFlash -= dt;
       const f = Math.max(0, this.hitFlash / HIT_FLASH_TIME);
-      this.sprite.tint = f > 0 ? 0xffffff : 0xffffff;
-      this.sprite.alpha = this.destroyed ? this.sprite.alpha : 1;
-      this.container.scale.set(1 + f * 0.08);
+      if (!this.destroyed) this.container.scale.set(1 + f * 0.08);
     } else if (!this.destroyed) {
       this.container.scale.set(1);
     }
 
-    if (this.destroyed) {
-      this.rebuildTimer -= dt;
-      const collapseT = Math.min(1, (REBUILD_TIME - this.rebuildTimer) / 0.5);
-      this.container.scale.set(Math.max(0.05, 1 - collapseT));
-      this.container.alpha = 1 - collapseT * 0.9;
-      if (this.rebuildTimer <= 0) {
-        this.spawn(this.level + 1);
-        return "rebuilt";
-      }
+    // Once destroyed the building stays collapsed (rubble) until the game
+    // explicitly calls spawn() again for the next floor - there is no
+    // automatic rebuild timer anymore.
+    if (this.destroyed && this.collapseT < COLLAPSE_TIME) {
+      this.collapseT = Math.min(COLLAPSE_TIME, this.collapseT + dt);
+      const t = this.collapseT / COLLAPSE_TIME;
+      this.container.scale.set(Math.max(0.05, 1 - t));
+      this.container.alpha = 1 - t * 0.9;
     }
-    return null;
   }
 }

@@ -23,6 +23,10 @@ const bannerStyle = new TextStyle({
   fontSize: 34,
   fill: 0xffe066,
   stroke: { color: 0x4a2a00, width: 7 },
+  align: "center",
+  wordWrap: true,
+  wordWrapWidth: TABLE_W - 20,
+  breakWords: true,
 });
 
 const titleStyle = new TextStyle({
@@ -47,10 +51,57 @@ const subStyle = new TextStyle({
   lineHeight: 26,
 });
 
+const cardTitleStyle = new TextStyle({
+  fontFamily: "Arial, sans-serif",
+  fontWeight: "900",
+  fontSize: 20,
+  fill: 0xffe066,
+  stroke: { color: 0x2a1000, width: 5 },
+});
+
+const cardDescStyle = new TextStyle({
+  fontFamily: "Arial, sans-serif",
+  fontWeight: "600",
+  fontSize: 14,
+  fill: 0xffffff,
+  wordWrap: true,
+  wordWrapWidth: TABLE_W - 100,
+  breakWords: true,
+  lineHeight: 19,
+});
+
+const choiceHeaderStyle = new TextStyle({
+  fontFamily: "Arial, sans-serif",
+  fontWeight: "900",
+  fontSize: 26,
+  fill: 0xffffff,
+  stroke: { color: 0x0a0a12, width: 6 },
+  align: "center",
+});
+
+export interface ChoiceItem {
+  label: string;
+  desc: string;
+}
+
+interface ChoiceRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const CARD_W = TABLE_W - 60;
+const CARD_H = 108;
+const CARD_GAP = 16;
+const CARD_START_Y = TABLE_H * 0.28;
+const MAX_CARDS = 3;
+
 export class HUD {
   container: Container;
   private scoreText: Text;
   private ballsText: Text;
+  private buildingsText: Text;
   private comboBarBg: Graphics;
   private comboBarFill: Graphics;
   private comboText: Text;
@@ -61,6 +112,13 @@ export class HUD {
   gameOverScreen: Container;
   private finalScoreText!: Text;
   private launchHint!: Text;
+
+  private choiceScreen: Container;
+  private choiceHeader: Text;
+  private choiceCardBgs: Graphics[] = [];
+  private choiceCardTitles: Text[] = [];
+  private choiceCardDescs: Text[] = [];
+  private choiceRects: ChoiceRect[] = [];
 
   constructor() {
     this.container = new Container();
@@ -77,10 +135,14 @@ export class HUD {
     this.ballsText.position.set(TABLE_W - 10, 8);
     this.container.addChild(this.ballsText);
 
+    this.buildingsText = new Text({ text: "FLOOR 1  建物 6/6", style: { ...smallStyle, fontSize: 11 } });
+    this.buildingsText.position.set(10, 30);
+    this.container.addChild(this.buildingsText);
+
     this.comboBarBg = new Graphics();
     this.comboBarFill = new Graphics();
-    this.comboBarBg.position.set(10, 30);
-    this.comboBarFill.position.set(10, 30);
+    this.comboBarBg.position.set(TABLE_W - 190, 46);
+    this.comboBarFill.position.set(TABLE_W - 190, 46);
     this.container.addChild(this.comboBarBg, this.comboBarFill);
 
     this.comboText = new Text({ text: "MULTIBALL 0/8", style: { ...smallStyle, fontSize: 11 } });
@@ -102,8 +164,12 @@ export class HUD {
 
     this.titleScreen = this.buildTitleScreen();
     this.gameOverScreen = this.buildGameOverScreen();
-    this.container.addChild(this.titleScreen, this.gameOverScreen);
+    const choice = this.buildChoiceScreen();
+    this.choiceScreen = choice.container;
+    this.choiceHeader = choice.header;
+    this.container.addChild(this.titleScreen, this.gameOverScreen, this.choiceScreen);
     this.gameOverScreen.visible = false;
+    this.choiceScreen.visible = false;
   }
 
   private buildTitleScreen(): Container {
@@ -113,15 +179,15 @@ export class HUD {
 
     const title = new Text({ text: "KAIJU\nPINBALL", style: titleStyle });
     title.anchor.set(0.5);
-    title.position.set(TABLE_W / 2, TABLE_H * 0.32);
+    title.position.set(TABLE_W / 2, TABLE_H * 0.26);
     c.addChild(title);
 
     const sub = new Text({
-      text: "建物を壊して数字を0に。\n逃げる人間を踏み潰して\nマルチボールを狙え！\n\nタップで開始\n画面左右タップでフリッパー操作",
+      text: "全ての建物を持ち球が尽きる前に破壊せよ。\n倒れた建物から逃げる人間を踏み潰すとマルチボール。\nフロアをクリアするたびに強化を1つ選べる。\n\nタップで開始\n画面左右タップでフリッパー操作",
       style: subStyle,
     });
     sub.anchor.set(0.5);
-    sub.position.set(TABLE_W / 2, TABLE_H * 0.55);
+    sub.position.set(TABLE_W / 2, TABLE_H * 0.48);
     c.addChild(sub);
 
     const prompt = new Text({ text: "TAP TO START", style: { ...bannerStyle, fontSize: 24 } });
@@ -143,20 +209,55 @@ export class HUD {
 
     const title = new Text({ text: "GAME OVER", style: titleStyle });
     title.anchor.set(0.5);
-    title.position.set(TABLE_W / 2, TABLE_H * 0.36);
+    title.position.set(TABLE_W / 2, TABLE_H * 0.34);
     c.addChild(title);
 
     this.finalScoreText = new Text({ text: "SCORE 0", style: { ...bannerStyle, fontSize: 28 } });
     this.finalScoreText.anchor.set(0.5);
-    this.finalScoreText.position.set(TABLE_W / 2, TABLE_H * 0.48);
+    this.finalScoreText.position.set(TABLE_W / 2, TABLE_H * 0.46);
     c.addChild(this.finalScoreText);
 
     const prompt = new Text({ text: "TAP TO RETRY", style: { ...subStyle, fontSize: 20 } });
     prompt.anchor.set(0.5);
-    prompt.position.set(TABLE_W / 2, TABLE_H * 0.6);
+    prompt.position.set(TABLE_W / 2, TABLE_H * 0.58);
     c.addChild(prompt);
 
     return c;
+  }
+
+  private buildChoiceScreen(): { container: Container; header: Text } {
+    const c = new Container();
+    const bg = new Graphics().rect(0, 0, TABLE_W, TABLE_H).fill({ color: 0x05050a, alpha: 0.9 });
+    c.addChild(bg);
+
+    const header = new Text({ text: "", style: choiceHeaderStyle });
+    header.anchor.set(0.5, 0);
+    header.position.set(TABLE_W / 2, CARD_START_Y - 56);
+    c.addChild(header);
+
+    for (let i = 0; i < MAX_CARDS; i++) {
+      const y = CARD_START_Y + i * (CARD_H + CARD_GAP);
+      const x = (TABLE_W - CARD_W) / 2;
+
+      const cardBg = new Graphics();
+      cardBg.position.set(x, y);
+      c.addChild(cardBg);
+      this.choiceCardBgs.push(cardBg);
+
+      const cardTitle = new Text({ text: "", style: cardTitleStyle });
+      cardTitle.position.set(x + 18, y + 14);
+      c.addChild(cardTitle);
+      this.choiceCardTitles.push(cardTitle);
+
+      const cardDesc = new Text({ text: "", style: cardDescStyle });
+      cardDesc.position.set(x + 18, y + 44);
+      c.addChild(cardDesc);
+      this.choiceCardDescs.push(cardDesc);
+
+      this.choiceRects.push({ x, y, w: CARD_W, h: CARD_H });
+    }
+
+    return { container: c, header };
   }
 
   showTitle() {
@@ -167,13 +268,49 @@ export class HUD {
     this.titleScreen.visible = false;
   }
 
-  showGameOver(score: number) {
-    this.finalScoreText.text = `SCORE ${score.toLocaleString()}`;
+  showGameOver(score: number, floor: number) {
+    this.finalScoreText.text = `SCORE ${score.toLocaleString()}\nFLOOR ${floor} で全滅`;
     this.gameOverScreen.visible = true;
   }
 
   hideGameOver() {
     this.gameOverScreen.visible = false;
+  }
+
+  /** Shows up to MAX_CARDS selectable cards; returns nothing, selection is via hitTestChoice(). */
+  showChoices(header: string, items: ChoiceItem[]) {
+    this.choiceHeader.text = header;
+    for (let i = 0; i < MAX_CARDS; i++) {
+      const active = i < items.length;
+      this.choiceCardBgs[i].visible = active;
+      this.choiceCardTitles[i].visible = active;
+      this.choiceCardDescs[i].visible = active;
+      if (!active) continue;
+      const item = items[i];
+      this.choiceCardBgs[i]
+        .clear()
+        .roundRect(0, 0, CARD_W, CARD_H, 12)
+        .fill({ color: 0x1c2233, alpha: 0.95 })
+        .stroke({ width: 2, color: 0xffe066, alpha: 0.8 });
+      this.choiceCardTitles[i].text = item.label;
+      this.choiceCardDescs[i].text = item.desc;
+    }
+    this.choiceScreen.visible = true;
+  }
+
+  hideChoices() {
+    this.choiceScreen.visible = false;
+  }
+
+  /** Returns the index of the choice card at (x, y) in table-space, or null. */
+  hitTestChoice(x: number, y: number): number | null {
+    if (!this.choiceScreen.visible) return null;
+    for (let i = 0; i < this.choiceRects.length; i++) {
+      if (!this.choiceCardBgs[i].visible) continue;
+      const r = this.choiceRects[i];
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return i;
+    }
+    return null;
   }
 
   setLaunchHint(visible: boolean) {
@@ -188,6 +325,10 @@ export class HUD {
     this.ballsText.text = active > 1 ? `BALL x${reserve}  (${active} IN PLAY)` : `BALL x${reserve}`;
   }
 
+  setBuildingsRemaining(remaining: number, total: number, floor: number, isBoss: boolean) {
+    this.buildingsText.text = `FLOOR ${floor}${isBoss ? " (BOSS)" : ""}  建物 ${remaining}/${total}`;
+  }
+
   setCombo(current: number, threshold: number) {
     const w = 190;
     const t = Math.min(1, current / threshold);
@@ -195,6 +336,11 @@ export class HUD {
     this.comboBarFill.clear();
     if (t > 0) this.comboBarFill.roundRect(0, 0, Math.max(8, w * t), 8, 4).fill(0xff5a3c);
     this.comboText.text = `MULTIBALL ${current}/${threshold}`;
+  }
+
+  clearBanner() {
+    this.bannerTimer = 0;
+    this.bannerText.alpha = 0;
   }
 
   showBanner(text: string, duration = 1.3) {

@@ -1,9 +1,12 @@
+import { TABLE_W, TABLE_H } from "../physics/layout";
+
 export class InputManager {
   private touchLeftPointers = new Set<number>();
   private touchRightPointers = new Set<number>();
   private keyLeft = false;
   private keyRight = false;
   private tapCallbacks: Array<() => void> = [];
+  private tapPosCallbacks: Array<(x: number, y: number) => void> = [];
 
   constructor(private target: HTMLElement) {
     target.style.touchAction = "none";
@@ -34,12 +37,20 @@ export class InputManager {
     this.tapCallbacks.push(cb);
   }
 
+  /** Fires on any pointer press with the tap position in table-space coordinates. */
+  onTapPos(cb: (x: number, y: number) => void) {
+    this.tapPosCallbacks.push(cb);
+  }
+
   private onPointerDown = (e: PointerEvent) => {
     const rect = this.target.getBoundingClientRect();
     const relX = (e.clientX - rect.left) / rect.width;
+    const relY = (e.clientY - rect.top) / rect.height;
     if (relX < 0.5) this.touchLeftPointers.add(e.pointerId);
     else this.touchRightPointers.add(e.pointerId);
-    for (const cb of this.tapCallbacks) cb();
+    // Pointer taps carry a position (for card selection); keyboard taps
+    // below go through tapCallbacks only, since they have no position.
+    for (const cb of this.tapPosCallbacks) cb(relX * TABLE_W, relY * TABLE_H);
   };
 
   private onPointerUp = (e: PointerEvent) => {

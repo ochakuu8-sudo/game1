@@ -84,6 +84,22 @@ export class HumanSwarm {
     }
   }
 
+  /** Pops every alive human within radius of (x, y), e.g. for a chain-reaction relic. */
+  popInRadius(x: number, y: number, radius: number, onPop: (x: number, y: number) => void) {
+    const radiusSq = radius * radius;
+    for (const slot of this.slots) {
+      if (!slot.alive) continue;
+      const dx = slot.x - x;
+      const dy = slot.y - y;
+      if (dx * dx + dy * dy > radiusSq) continue;
+      slot.alive = false;
+      slot.particle.alpha = 0;
+      slot.particle.x = -9999;
+      this.aliveCount--;
+      onPop(slot.x, slot.y);
+    }
+  }
+
   /** Returns world-space positions of humans popped this frame, for FX callbacks. */
   update(dt: number, ballPositions: { x: number; y: number }[], catchRadius: number, onPop: (x: number, y: number) => void) {
     const catchRadiusSq = catchRadius * catchRadius;

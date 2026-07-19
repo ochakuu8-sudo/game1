@@ -6,11 +6,11 @@ import { PinballWorld } from "../physics/world";
 import { Building } from "../entities/building";
 import { HumanSwarm } from "../entities/human";
 import { ParticleFX } from "../fx/particles";
-import { PowerUpManager } from "./powerups";
+import { PowerUpManager, CLASS_POOL, type KaijuClass, type KaijuClassInfo, type PowerUpChoice } from "./powerups";
 import { HUD } from "./hud";
 import { TABLE_W, TABLE_H, BUILDING_SLOTS, DRAIN_Y, BALL_RADIUS, HUMAN_RADIUS } from "../physics/layout";
 
-type GameState = "title" | "playing" | "gameover";
+type GameState = "title" | "classSelect" | "playing" | "floorClear" | "gameover";
 
 const STEP_MS = 1000 / 60;
 const MAX_STEPS_PER_FRAME = 5;
@@ -18,7 +18,7 @@ const INITIAL_BALLS = 4;
 const MULTIBALL_START_THRESHOLD = 8;
 const MULTIBALL_GROWTH = 6;
 const MULTIBALL_BALL_CAP = 6;
-const POWERUP_EVERY_N_BUILDINGS = 3;
+const BOSS_FLOOR_INTERVAL = 3;
 
 export class Game {
   private app: Application;
@@ -44,6 +44,11 @@ export class Game {
   private multiballThreshold = MULTIBALL_START_THRESHOLD;
   private buildingsDestroyedTotal = 0;
   private accumulator = 0;
+
+  private floor = 1;
+  private buildingsRemaining = 0;
+  private bossFloorActive = false;
+  private pendingChoices: PowerUpChoice[] = [];
 
   constructor(app: Application) {
     this.app = app;
@@ -90,6 +95,7 @@ export class Game {
 
     this.input = new InputManager(app.canvas as HTMLCanvasElement);
     this.input.onTap(() => this.handleTap());
+    this.input.onTapPos((x, y) => this.handleTap(x, y));
 
     Matter.Events.on(this.world.engine, "collisionStart", (evt) => this.onCollisionStart(evt));
 
@@ -167,31 +173,40 @@ export class Game {
       const humanCount = Math.min(3 + Math.floor(this.buildingsDestroyedTotal / 3), 8);
       this.humans.spawnGroup(buildingBody.position.x, buildingBody.position.y, humanCount);
       this.buildingsDestroyedTotal++;
-      if (this.buildingsDestroyedTotal % POWERUP_EVERY_N_BUILDINGS === 0) {
-        this.awardPowerup();
+      this.buildingsRemaining--;
+
+      if (Math.random() < this.powerups.salvageChance) {
+        this.ballsReserve++;
+        this.hud.showBanner("SALVAGE! +1 BALL", 1.0);
+      }
+
+      this.hud.setBuildingsRemaining(this.buildingsRemaining, this.buildings.length, this.floor, this.bossFloorActive);
+      this.hud.setBalls(this.ballsReserve, this.world.balls.length);
+
+      if (this.buildingsRemaining <= 0) {
+        this.onFloorClear();
       }
     } else {
       this.addScore(10);
     }
   }
 
-  private awardPowerup() {
-    const choice = this.powerups.grantRandom();
-    if (choice.type === "EXTRA_BALL") {
-      this.ballsReserve++;
-      this.hud.setBalls(this.ballsReserve, this.world.balls.length);
-    }
-    this.hud.showBanner(choice.label);
-  }
-
-  private onHumanPop = (x: number, y: number) => {
+  private popHuman(x: number, y: number, scoreValue: number) {
     this.fx.humanPop(x, y);
-    this.addScore(25);
+    this.addScore(scoreValue);
     this.humanKills++;
-    if (this.humanKills >= this.multiballThreshold) {
+    if (!this.bossFloorActive && this.humanKills >= this.multiballThreshold) {
       this.triggerMultiball();
     }
     this.hud.setCombo(this.humanKills, this.multiballThreshold);
+  }
+
+  private onHumanPop = (x: number, y: number) => {
+    this.popHuman(x, y, 25);
+    const chainR = this.powerups.chainRadius;
+    if (chainR > 0) {
+      this.humans.popInRadius(x, y, chainR, (cx, cy) => this.popHuman(cx, cy, 15));
+    }
   };
 
   private triggerMultiball() {
@@ -220,14 +235,93 @@ export class Game {
     this.hud.setScore(this.score);
   }
 
-  private handleTap() {
-    if (this.state === "title") {
-      this.startGame();
-    } else if (this.state === "gameover") {
-      this.startGame();
+  /** Unified tap handler: pointer taps pass a table-space position, keyboard taps don't. */
+  private handleTap(x?: number, y?: number) {
+    if (this.state === "title" || this.state === "gameover") {
+      this.state = "classSelect";
+      this.hud.hideTitle();
+      this.hud.hideGameOver();
+      this.hud.clearBanner();
+      this.hud.showChoices(
+        "怪獣を選べ",
+        CLASS_POOL.map((c) => ({ label: c.label, desc: c.desc })),
+      );
+    } else if (this.state === "classSelect") {
+      if (x === undefined || y === undefined) return;
+      const idx = this.hud.hitTestChoice(x, y);
+      if (idx !== null) this.selectClass(CLASS_POOL[idx]);
+    } else if (this.state === "floorClear") {
+      if (x === undefined || y === undefined) return;
+      const idx = this.hud.hitTestChoice(x, y);
+      if (idx !== null) this.selectRelic(this.pendingChoices[idx]);
     } else if (this.state === "playing" && this.world.balls.length === 0 && this.ballsReserve > 0) {
       this.serveBall();
     }
+  }
+
+  private selectClass(info: KaijuClassInfo) {
+    this.hud.hideChoices();
+    this.startRun(info.type);
+  }
+
+  private startRun(cls: KaijuClass) {
+    for (const body of [...this.world.balls]) this.removeBallEntity(body);
+    this.humans.reset();
+    this.powerups = new PowerUpManager();
+    this.powerups.applyClass(cls);
+
+    this.score = 0;
+    this.ballsReserve = INITIAL_BALLS;
+    this.humanKills = 0;
+    this.multiballThreshold = MULTIBALL_START_THRESHOLD;
+    this.buildingsDestroyedTotal = 0;
+    this.floor = 1;
+
+    this.hud.setScore(0);
+    this.hud.setCombo(0, this.multiballThreshold);
+
+    this.state = "playing";
+    this.beginFloor();
+    this.serveBall();
+  }
+
+  private beginFloor() {
+    this.bossFloorActive = this.floor % BOSS_FLOOR_INTERVAL === 0;
+    const baseLevel = this.floor + 2;
+    const level = this.bossFloorActive ? baseLevel + 3 : baseLevel;
+    for (const b of this.buildings) b.spawn(level);
+    this.buildingsRemaining = this.buildings.length;
+    this.hud.setBuildingsRemaining(this.buildingsRemaining, this.buildings.length, this.floor, this.bossFloorActive);
+    this.hud.showBanner(
+      this.bossFloorActive ? `FLOOR ${this.floor}\n司令部強襲！マルチボール封印` : `FLOOR ${this.floor}`,
+      1.8,
+    );
+  }
+
+  private onFloorClear() {
+    this.state = "floorClear";
+    this.ballsReserve += 1;
+    this.addScore(300 * this.floor);
+    this.hud.setBalls(this.ballsReserve, this.world.balls.length);
+    this.hud.clearBanner();
+    this.pendingChoices = this.powerups.offerChoices(3);
+    this.hud.showChoices(
+      `FLOOR ${this.floor} CLEAR!`,
+      this.pendingChoices.map((c) => ({ label: c.label, desc: c.desc })),
+    );
+  }
+
+  private selectRelic(choice: PowerUpChoice) {
+    this.powerups.apply(choice);
+    if (choice.type === "EXTRA_BALL") {
+      this.ballsReserve++;
+      this.hud.setBalls(this.ballsReserve, this.world.balls.length);
+    }
+    this.hud.hideChoices();
+    this.hud.showBanner(choice.label, 1.0);
+    this.floor++;
+    this.state = "playing";
+    this.beginFloor();
   }
 
   private serveBall() {
@@ -238,31 +332,11 @@ export class Game {
     this.hud.setBalls(this.ballsReserve, this.world.balls.length);
   }
 
-  private startGame() {
-    for (const body of [...this.world.balls]) this.removeBallEntity(body);
-    for (const b of this.buildings) b.spawn(3);
-    this.humans.reset();
-    this.powerups = new PowerUpManager();
-
-    this.score = 0;
-    this.ballsReserve = INITIAL_BALLS;
-    this.humanKills = 0;
-    this.multiballThreshold = MULTIBALL_START_THRESHOLD;
-    this.buildingsDestroyedTotal = 0;
-
-    this.hud.hideTitle();
-    this.hud.hideGameOver();
-    this.hud.setScore(0);
-    this.hud.setCombo(0, this.multiballThreshold);
-
-    this.state = "playing";
-    this.serveBall();
-  }
-
   private gameOver() {
     this.state = "gameover";
     this.hud.setLaunchHint(false);
-    this.hud.showGameOver(this.score);
+    this.hud.clearBanner();
+    this.hud.showGameOver(this.score, this.floor);
   }
 
   private removeBallEntity(body: Matter.Body) {
@@ -316,6 +390,10 @@ export class Game {
       if (body.position.y > DRAIN_Y) this.removeBallEntity(body);
     }
 
+    // A same-frame floor clear can flip state away from "playing" above;
+    // don't let a stale 0-ball reading trigger game over on that frame.
+    if (this.state !== "playing") return;
+
     if (this.world.balls.length === 0) {
       if (this.ballsReserve > 0) {
         this.hud.setLaunchHint(true);
@@ -342,6 +420,7 @@ export class Game {
       forceGameOver: () => this.gameOver(),
       state: () => this.state,
       score: () => this.score,
+      floor: () => this.floor,
       humanAliveCount: () => this.humans.aliveCount,
       humanDebug: () => this.humans.debugSlots(),
       ballCount: () => this.world.balls.length,
