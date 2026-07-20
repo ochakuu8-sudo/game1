@@ -2,6 +2,7 @@ import { Application, Container, Graphics, Sprite } from "pixi.js";
 import Matter from "matter-js";
 import { buildAtlas, type Atlas } from "../core/atlas";
 import { InputManager } from "../core/input";
+import { sfx } from "../core/audio";
 import { PinballWorld } from "../physics/world";
 import { Building } from "../entities/building";
 import { HumanSwarm } from "../entities/human";
@@ -111,7 +112,10 @@ export class Game {
     this.root.addChild(this.powerupSelect.container);
 
     this.input = new InputManager(app.canvas as HTMLCanvasElement);
-    this.input.onTap(() => this.handleTap());
+    this.input.onTap(() => {
+      sfx.unlock();
+      this.handleTap();
+    });
 
     Matter.Events.on(this.world.engine, "collisionStart", (evt) => this.onCollisionStart(evt));
 
@@ -190,6 +194,8 @@ export class Game {
         // the same way an actual moving flipper arm would. This counter
         // is kept only for the debug/test hooks below.
         this.debugFlipperCollisions++;
+        const flipper = other === this.world.leftFlipper.body ? this.world.leftFlipper : this.world.rightFlipper;
+        sfx.flipperHit(flipper.held);
       }
     }
   }
@@ -211,6 +217,7 @@ export class Game {
     const destroyed = building.hit();
 
     if (destroyed) {
+      sfx.buildingDestroy();
       this.world.setBuildingActive(buildingBody, false);
       this.addScore(150);
       this.fx.buildingCollapse(buildingBody.position.x, buildingBody.position.y);
@@ -221,6 +228,7 @@ export class Game {
         this.awardPowerup();
       }
     } else {
+      sfx.buildingHit();
       this.addScore(10);
     }
   }
@@ -237,6 +245,7 @@ export class Game {
   }
 
   private onPowerupChosen(choice: PowerUpChoice) {
+    sfx.powerupPick();
     this.powerups.applyChoice(choice.type);
     if (choice.type === "EXTRA_BALL") {
       this.ballsReserve++;
@@ -247,6 +256,7 @@ export class Game {
   }
 
   private onHumanPop = (x: number, y: number) => {
+    sfx.humanPop();
     this.fx.humanPop(x, y);
     this.addScore(25);
     this.humanKills++;
@@ -257,6 +267,7 @@ export class Game {
   };
 
   private triggerMultiball() {
+    sfx.multiball();
     this.multiballThreshold += MULTIBALL_GROWTH;
     this.humanKills = 0;
     this.addScore(100);
@@ -293,6 +304,7 @@ export class Game {
   }
 
   private serveBall() {
+    sfx.launch();
     this.ballsReserve--;
     const body = this.world.spawnBall(TABLE_W / 2, 60);
     this.attachBallSprite(body);
@@ -346,6 +358,7 @@ export class Game {
   }
 
   private gameOver() {
+    sfx.gameOver();
     this.state = "gameover";
     this.hud.setLaunchHint(false);
     this.hud.showGameOver(this.score);
@@ -410,7 +423,10 @@ export class Game {
     this.flipperSprites.right.rotation = this.world.rightFlipper.currentAngle;
 
     for (const body of [...this.world.balls]) {
-      if (body.position.y > DRAIN_Y) this.removeBallEntity(body);
+      if (body.position.y > DRAIN_Y) {
+        sfx.drain();
+        this.removeBallEntity(body);
+      }
     }
 
     if (this.world.balls.length === 0) {
