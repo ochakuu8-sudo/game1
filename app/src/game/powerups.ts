@@ -3,14 +3,16 @@ export type PowerUpType = "FLIPPER" | "MAGNET" | "MULTIPLIER" | "EXTRA_BALL" | "
 export interface PowerUpChoice {
   type: PowerUpType;
   label: string;
+  description: string;
+  color: number;
 }
 
 const POOL: PowerUpChoice[] = [
-  { type: "FLIPPER", label: "フリッパー強化" },
-  { type: "MAGNET", label: "キャッチ範囲UP" },
-  { type: "MULTIPLIER", label: "スコア倍率UP" },
-  { type: "EXTRA_BALL", label: "エクストラボール" },
-  { type: "KICK", label: "キック力UP" },
+  { type: "FLIPPER", label: "フリッパー強化", description: "打ち返しが強くなる", color: 0xff5a3c },
+  { type: "MAGNET", label: "キャッチ範囲UP", description: "人間を捕まえる範囲が広がる", color: 0xb2e0ff },
+  { type: "MULTIPLIER", label: "スコア倍率UP", description: "獲得スコアが増える", color: 0xffe066 },
+  { type: "EXTRA_BALL", label: "エクストラボール", description: "ボールが1個増える", color: 0xc9ffb2 },
+  { type: "KICK", label: "キック力UP", description: "ビル衝突の跳ね返りが強くなる", color: 0xffb2d0 },
 ];
 
 const MAX_STACKS = 6;
@@ -41,12 +43,15 @@ export class PowerUpManager {
     return 1 + this.stacks.FLIPPER * 0.12;
   }
 
-  /** Picks a random buff to grant, weighted away from already-maxed stacks. */
-  grantRandom(): PowerUpChoice {
-    const candidates = POOL.filter((p) => this.stacks[p.type] < MAX_STACKS);
-    const pool = candidates.length > 0 ? candidates : POOL;
-    const choice = pool[(Math.random() * pool.length) | 0];
-    this.stacks[choice.type]++;
-    return choice;
+  /** Offers up to `count` distinct not-yet-maxed choices for the player to pick from. */
+  grantChoices(count = 3): PowerUpChoice[] {
+    const available = POOL.filter((p) => this.stacks[p.type] < MAX_STACKS);
+    const shuffled = [...available].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
+  }
+
+  /** Applies the player's chosen buff, respecting the per-type stack cap. */
+  applyChoice(type: PowerUpType) {
+    if (this.stacks[type] < MAX_STACKS) this.stacks[type]++;
   }
 }
