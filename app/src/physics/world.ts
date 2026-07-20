@@ -28,7 +28,7 @@ export class PinballWorld {
 
   constructor() {
     this.engine = Engine.create();
-    this.engine.gravity.y = 1.0;
+    this.engine.gravity.y = 0.8;
     // Extra solver iterations for more reliable resolution against the
     // fast-snapping flipper bodies (default is 6/4).
     this.engine.positionIterations = 12;
@@ -110,9 +110,9 @@ export class PinballWorld {
       // stays at an exact standstill for 7+s after landing on a stopped,
       // held flipper), since that settling was never really about this
       // number in the first place.
-      restitution: 0.5,
+      restitution: 0.42,
       friction: 0.02,
-      frictionAir: 0.0008,
+      frictionAir: 0.0012,
       density: 0.04,
       label: "ball",
     });

@@ -201,7 +201,7 @@ export class Game {
     const dx = ball.position.x - buildingBody.position.x;
     const dy = ball.position.y - buildingBody.position.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const kick = 5.5 * this.powerups.kickForceMultiplier;
+    const kick = 4.2 * this.powerups.kickForceMultiplier;
     Matter.Body.setVelocity(ball, {
       x: ball.velocity.x + (dx / dist) * kick,
       y: ball.velocity.y + (dy / dist) * kick,
