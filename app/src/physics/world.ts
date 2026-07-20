@@ -18,6 +18,12 @@ export const CATEGORY_BALL = 0x0002;
 export const CATEGORY_WORLD = 0x0001;
 export const CATEGORY_BUILDING = 0x0004;
 
+// A normal roll/fall/bounce never gets near this (typically under ~12).
+// Only a hard flipper slam or a lucky chain of kicks spikes past it, so
+// this trims just those jarring bursts instead of slowing the game down
+// across the board.
+const MAX_BALL_SPEED = 15;
+
 export class PinballWorld {
   engine: Matter.Engine;
   world: Matter.World;
@@ -140,5 +146,14 @@ export class PinballWorld {
     this.leftFlipper.step();
     this.rightFlipper.step();
     Engine.update(this.engine, dtMs);
+
+    for (const ball of this.balls) {
+      const { x, y } = ball.velocity;
+      const speed = Math.hypot(x, y);
+      if (speed > MAX_BALL_SPEED) {
+        const scale = MAX_BALL_SPEED / speed;
+        Matter.Body.setVelocity(ball, { x: x * scale, y: y * scale });
+      }
+    }
   }
 }
