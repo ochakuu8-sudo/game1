@@ -6,11 +6,12 @@ import { PinballWorld } from "../physics/world";
 import { Building } from "../entities/building";
 import { HumanSwarm } from "../entities/human";
 import { ParticleFX } from "../fx/particles";
-import { PowerUpManager } from "./powerups";
+import { PowerUpManager, type PowerUpChoice } from "./powerups";
+import { PowerUpSelect } from "./powerupSelect";
 import { HUD } from "./hud";
 import { TABLE_W, TABLE_H, BUILDING_SLOTS, DRAIN_Y, BALL_RADIUS, HUMAN_RADIUS } from "../physics/layout";
 
-type GameState = "title" | "playing" | "gameover";
+type GameState = "title" | "playing" | "gameover" | "powerup";
 
 const STEP_MS = 1000 / 60;
 const MAX_STEPS_PER_FRAME = 5;
@@ -29,6 +30,7 @@ export class Game {
   private humans: HumanSwarm;
   private fx: ParticleFX;
   private powerups: PowerUpManager;
+  private powerupSelect: PowerUpSelect;
 
   private root: Container;
   private ballLayer: Container;
@@ -52,6 +54,7 @@ export class Game {
     this.humans = new HumanSwarm(this.atlas);
     this.fx = new ParticleFX(this.atlas);
     this.powerups = new PowerUpManager();
+    this.powerupSelect = new PowerUpSelect(this.atlas);
     this.hud = new HUD();
 
     this.root = new Container();
@@ -87,6 +90,7 @@ export class Game {
     this.flipperSprites.right.position.set(this.world.rightFlipper.layout.pivot.x, this.world.rightFlipper.layout.pivot.y);
 
     this.root.addChild(this.hud.container);
+    this.root.addChild(this.powerupSelect.container);
 
     this.input = new InputManager(app.canvas as HTMLCanvasElement);
     this.input.onTap(() => this.handleTap());
@@ -176,12 +180,24 @@ export class Game {
   }
 
   private awardPowerup() {
-    const choice = this.powerups.grantRandom();
+    const choices = this.powerups.grantChoices(3);
+    if (choices.length === 0) {
+      // Every buff is already maxed out - fall back to a flat score bonus.
+      this.addScore(300);
+      return;
+    }
+    this.state = "powerup";
+    this.powerupSelect.show(choices, (choice) => this.onPowerupChosen(choice));
+  }
+
+  private onPowerupChosen(choice: PowerUpChoice) {
+    this.powerups.applyChoice(choice.type);
     if (choice.type === "EXTRA_BALL") {
       this.ballsReserve++;
       this.hud.setBalls(this.ballsReserve, this.world.balls.length);
     }
     this.hud.showBanner(choice.label);
+    this.state = "playing";
   }
 
   private onHumanPop = (x: number, y: number) => {
