@@ -24,6 +24,11 @@ type GameState = "title" | "playing" | "gameover" | "powerup";
 // the ball tunnel straight through the flipper.
 const STEP_MS = 1000 / 120;
 const MAX_STEPS_PER_FRAME = 10;
+// Stretches real time into simulated time so the whole game plays out in
+// slow motion - trajectories, bounce heights, and flipper swings are
+// unaffected (same physics constants, same STEP_MS), they just take
+// longer in wall-clock time to unfold, making fast motion easier to track.
+const TIME_SCALE = 0.6;
 const INITIAL_BALLS = 4;
 const MULTIBALL_START_THRESHOLD = 8;
 const MULTIBALL_GROWTH = 6;
@@ -361,7 +366,8 @@ export class Game {
   }
 
   private tick(dtMs: number) {
-    this.hud.update(dtMs / 1000);
+    const scaledDtMs = dtMs * TIME_SCALE;
+    this.hud.update(scaledDtMs / 1000);
 
     if (this.state !== "playing") return;
 
@@ -370,7 +376,7 @@ export class Game {
     this.world.leftFlipper.speedMultiplier = this.powerups.flipperPowerMultiplier;
     this.world.rightFlipper.speedMultiplier = this.powerups.flipperPowerMultiplier;
 
-    this.accumulator += dtMs;
+    this.accumulator += scaledDtMs;
     let steps = 0;
     while (this.accumulator >= STEP_MS && steps < MAX_STEPS_PER_FRAME) {
       this.world.step(STEP_MS);
@@ -386,7 +392,7 @@ export class Game {
     }
     if (steps === MAX_STEPS_PER_FRAME) this.accumulator = 0;
 
-    const dt = dtMs / 1000;
+    const dt = scaledDtMs / 1000;
 
     const catchRadius = BALL_RADIUS + HUMAN_RADIUS + 10 + this.powerups.catchRadiusBonus;
     const ballPositions = this.world.balls.map((b) => ({ x: b.position.x, y: b.position.y }));
