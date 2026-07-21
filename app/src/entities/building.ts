@@ -1,20 +1,19 @@
 import { Container, Sprite } from "pixi.js";
 import type Matter from "matter-js";
 import { buildingSizeKey, type Atlas } from "../core/atlas";
-import { PALETTE } from "../core/palette";
 import { buildingRect, type BuildingSlot } from "../physics/layout";
 
 const REBUILD_TIME = 5.5;
 const HIT_FLASH_TIME = 0.22;
 
-// Retro cartridge facade tints - kept to a small, warm/cool-alternating set
-// (gold and pink are reserved for UI/FX accents) so a fully-packed grid of
-// these still reads as a calm, deliberate tilemap rather than a noisy
+// Muted, real-material house colours (terracotta brick, cream stone,
+// blue-grey board siding, brown wood) instead of bright cartoon hues, so a
+// fully-packed grid reads as a calm miniature-model town rather than a
 // rainbow. Picked deterministically from each lot's grid position (see
 // `spawn` below) instead of at random, so neighbouring lots settle into a
-// clean repeating pattern like an actual 8-bit background layer, and a
-// rebuilt lot keeps its same city-block colour instead of re-rolling.
-const TINTS = [PALETTE.red, PALETTE.blue, PALETTE.orange, PALETTE.purple, PALETTE.mint];
+// clean repeating pattern like an actual tilemap, and a rebuilt lot keeps
+// its same house colour instead of re-rolling.
+const TINTS = [0xb86b4d, 0xccbf9e, 0x94a6b8, 0xa68561];
 
 export class Building {
   container: Container;

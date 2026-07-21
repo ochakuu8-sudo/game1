@@ -216,53 +216,62 @@ export function buildAtlas(renderer: Renderer): Atlas {
     buildingSizes.set(buildingSizeKey(r.width, r.height), { w: r.width, h: r.height });
   }
 
-  // Blocky pixel-art cottage facade - a stepped/pyramid roof, tinted
-  // walls, a door, and two little windows that double as the house's
-  // "eyes" (so a `dizzy` variant - just the windows flashing an accent
-  // colour - still gives entities/building.ts a hit reaction to flash,
-  // like a classic cartoon "OW!"). Every feature is a flat g.rect()
-  // block. Colliders/positions are untouched - only the drawing changed.
+  // Blocky pixel-art house facade, styled after a real reference game's
+  // technique (muted material-colour walls, a tiled roof *band* rather
+  // than a drawn triangle, and roof/door drawn as neutral grays so the
+  // shared per-instance tint - see entities/building.ts - naturally
+  // produces a *darker shade of that same wall colour* instead of a
+  // separately-chosen bright hue, the same way a real building's trim
+  // reads as "the wall colour, but shaded"). A `dizzy` variant just
+  // flashes the window glass an accent colour for the hit reaction.
+  // Every feature is a flat g.rect() block. Colliders/positions are
+  // untouched - only the drawing changed.
   const drawBuildingFacade = (g: Graphics, w: number, h: number, dizzy: boolean) => {
     const wall = 0xffffff; // tinted per-instance, see entities/building.ts
-    const roof = PALETTE.ink;
-    const roofRidge = 0x4a2418;
-    const door = 0x4a2418;
-    const doorKnob = PALETTE.gold;
+    const roofGray = 0x707070; // ~44% multiply -> a shaded version of the wall tint
+    const roofGrayLight = 0x8c8c8c;
+    const roofGrayDark = 0x4a4a4a;
+    const doorGray = 0x555555;
     const windowColor = dizzy ? PALETTE.pink : 0xdcf3ff;
+    const porchLight = PALETTE.gold;
 
-    // Stepped triangular roof - a small pixel-art "pyramid" of shrinking
-    // bars instead of a smooth diagonal.
-    const roofH = h * 0.4;
+    // Tiled roof band along the top edge - a bright ridge cap, a few
+    // vertical tile grooves, and a small chimney - instead of a drawn
+    // triangle (which is easy to get backwards at this pixel scale).
+    const roofW = w + 3;
+    const roofH = h * 0.24;
     const roofTop = -h / 2;
-    const steps = 4;
-    for (let i = 0; i < steps; i++) {
-      const stepW = w * (1 - i / (steps + 1));
-      const stepH = roofH / steps;
-      g.rect(-stepW / 2, roofTop + i * stepH, stepW, stepH + 0.6).fill(i === 0 ? roofRidge : roof);
+    g.rect(-roofW / 2, roofTop, roofW, roofH).fill(roofGray);
+    g.rect(-roofW / 2, roofTop, roofW, roofH * 0.3).fill(roofGrayLight);
+    const grooves = 5;
+    for (let i = 0; i < grooves; i++) {
+      const gx = -roofW / 2 + (roofW / grooves) * (i + 0.5);
+      g.rect(gx - 0.6, roofTop, 1.2, roofH).fill(roofGrayDark);
     }
+    g.rect(w * 0.2, roofTop - 4, 3, 5).fill(roofGrayDark);
 
     // Walls below the roofline.
     const wallTop = roofTop + roofH;
     const wallH = h / 2 - wallTop;
     g.rect(-w / 2, wallTop, w, wallH).fill(wall);
-    g.rect(-w / 2, wallTop, w, wallH).stroke({ width: 2, color: PALETTE.ink, alpha: 0.35 });
+    g.rect(-w / 2, wallTop, w, wallH).stroke({ width: 2, color: PALETTE.ink, alpha: 0.3 });
 
-    // Two little windows, high on the wall, doubling as the house's eyes.
-    const winSize = Math.min(w, h) * 0.16;
+    // Two little windows.
+    const winSize = Math.min(w, h) * 0.15;
     const winY = wallTop + wallH * 0.32;
-    const winSpacing = w * 0.22;
+    const winSpacing = w * 0.24;
     for (const wx of [-winSpacing, winSpacing]) {
       g.rect(wx - winSize / 2, winY - winSize / 2, winSize, winSize).fill(windowColor);
-      g.rect(wx - winSize / 2, winY - winSize / 2, winSize, winSize).stroke({ width: 1, color: PALETTE.ink });
+      g.rect(wx - winSize / 2, winY - winSize / 2, winSize, winSize).stroke({ width: 1, color: PALETTE.ink, alpha: 0.5 });
     }
 
-    // A little front door, bottom-centre, with a knob.
-    const doorW = w * 0.26;
-    const doorH = wallH * 0.58;
-    g.rect(-doorW / 2, h / 2 - doorH, doorW, doorH).fill(door);
-    g.rect(doorW * 0.14, h / 2 - doorH * 0.48, doorW * 0.18, doorW * 0.18).fill(doorKnob);
+    // A front door with a little porch light.
+    const doorW = w * 0.24;
+    const doorH = wallH * 0.55;
+    g.rect(-doorW / 2, h / 2 - doorH, doorW, doorH).fill(doorGray);
+    g.rect(-doorW * 0.55, h / 2 - doorH * 0.55, 1.6, 1.6).fill(porchLight);
 
-    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.25 });
+    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.2 });
   };
 
   // Packed into their own strip (like the flipper) since some spans (e.g.
