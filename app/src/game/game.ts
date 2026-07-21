@@ -11,7 +11,7 @@ import { ParticleFX } from "../fx/particles";
 import { PowerUpManager, type PowerUpChoice } from "./powerups";
 import { PowerUpSelect } from "./powerupSelect";
 import { BuildingSelect } from "./buildingSelect";
-import { BUILDING_TYPES, buildingStatLines, pickBuildingChoices, tileWeightedCity, type BuildingType } from "../entities/buildingTypes";
+import { BUILDING_TYPES, buildingStatLines, layoutBuildingPool, pickBuildingChoices, type BuildingType } from "../entities/buildingTypes";
 import { HUD } from "./hud";
 import { buildTableVisuals } from "../physics/tableVisuals";
 import {
@@ -58,9 +58,10 @@ export class Game {
   private powerups: PowerUpManager;
   private powerupSelect: PowerUpSelect;
   private buildingSelect: BuildingSelect;
-  /** Every building type picked so far, as a running multiset (see
-   * entities/buildingTypes.ts's tileWeightedCity) - picking a type again
-   * doesn't replace anything, it adds another weighted "vote" for it. */
+  /** Every building type picked so far, as a running list (see
+   * entities/buildingTypes.ts's layoutBuildingPool) - each pick becomes
+   * exactly one independent lot on the board, so picking the same type
+   * twice runs two of its generation cycles in parallel. */
   private buildingPool: BuildingType[] = [];
 
   private root: Container;
@@ -300,12 +301,13 @@ export class Game {
     }
   }
 
-  /** Regenerates the whole city grid from the accumulated pool of every
-   * type picked so far, weighted by how many times each was picked (see
-   * entities/buildingTypes.ts's tileWeightedCity) - the mix keeps growing
-   * richer stage over stage instead of being replaced by the latest pick.
-   * Old lots are fully torn down (containers + physics bodies) rather than
-   * resized in place since the whole layout is retiled from scratch. */
+  /** Regenerates the whole city from the accumulated pool of every type
+   * picked so far - each pick places exactly one independent lot (see
+   * entities/buildingTypes.ts's layoutBuildingPool), so the city grows one
+   * lot per pick instead of being replaced by the latest one. Old lots are
+   * fully torn down (containers + physics bodies) and re-placed fresh each
+   * time rather than resized in place, since the whole layout re-scans the
+   * grid from scratch. */
   private rebuildCity() {
     for (const b of this.buildings) {
       this.buildingByBody.delete(b.body);
@@ -313,7 +315,7 @@ export class Game {
     }
     this.buildings = [];
 
-    const lots = tileWeightedCity(this.buildingPool);
+    const lots = layoutBuildingPool(this.buildingPool);
     const bodies = this.world.setBuildingLayout(lots.map((lot) => lot.slot));
     lots.forEach((lot, i) => {
       const body = bodies[i];

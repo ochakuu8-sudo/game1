@@ -3,13 +3,14 @@ import { GRID_COLS, GRID_ROWS, type BuildingSlot } from "../physics/layout";
 /**
  * A "blueprint" the city generates lots from. The player picks one of
  * these via a card (see game/buildingSelect.ts) at the start of every
- * stage, and it's added to `Game.buildingPool` - a running multiset of
- * every type picked so far (see Game.rebuildCity). Picking the same type
- * again doesn't replace anything, it just adds another entry to the pool,
- * making that type more likely to come up when the grid is retiled (see
- * `tileWeightedCity` below). Each type also gets its own fixed-size facade
- * artwork (see core/atlas.ts's per-type draw functions) instead of a
- * shared shape.
+ * stage, and it's added to `Game.buildingPool` - a running list of every
+ * type picked so far (see Game.rebuildCity). Each pick becomes exactly one
+ * independent lot on the board with its own destroy/cooldown/rebuild
+ * cycle (see `layoutBuildingPool` below) - picking the same type twice
+ * doesn't make one lot "more likely", it gives that type two separate
+ * lots generating in parallel. Each type also gets its own fixed-size
+ * facade artwork (see core/atlas.ts's per-type draw functions) instead of
+ * a shared shape.
  */
 export interface BuildingType {
   id: string;
@@ -114,7 +115,8 @@ export const BUILDING_TYPES: BuildingType[] = [
 
 /** Offers `count` distinct random building types to choose from - not
  * filtered against what's already in the pool, since picking a type
- * that's already there (to weight it up further) is the whole point. */
+ * that's already there (to run a second independent lot of it) is the
+ * whole point. */
 export function pickBuildingChoices(count = 3): BuildingType[] {
   const shuffled = [...BUILDING_TYPES].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
@@ -134,15 +136,20 @@ export interface CityLot {
   type: BuildingType;
 }
 
-/** Tiles the grid from a weighted pool of building types - `pool` is a
- * running multiset (see Game.buildingPool), so a type picked twice has
- * two entries and is twice as likely to win a cell as one picked once,
- * without ever crowding out types picked earlier. Scans the grid cell by
- * cell; at each still-free cell it weighted-randomly picks among whichever
- * pool entries actually fit there (footprint inside the grid bounds, every
- * cell it would cover still free), and leaves the cell as bare street if
- * nothing in the pool fits. */
-export function tileWeightedCity(pool: BuildingType[]): CityLot[] {
+/** Places exactly one lot per entry in `pool` (see Game.buildingPool) -
+ * every pick is its own independent generation cycle, not extra weight in
+ * a shared lottery, so picking the same type N times means N of that
+ * type's lots ticking down their own destroy/cooldown/rebuild timers in
+ * parallel. Placement order is shuffled each call (this runs again from
+ * scratch on every new pick - see Game.rebuildCity) purely so the layout
+ * doesn't always pack in pick order; it doesn't affect how many lots each
+ * type gets. Each entry does a first-fit scan for a free spot for its own
+ * footprint, leaving the rest of the grid as bare street - the city is
+ * meant to visibly grow lot by lot as more cards get picked, rather than
+ * always filling the whole board. If the grid is already full an entry is
+ * simply skipped for this rebuild (extremely unlikely at normal pool
+ * sizes against a 12x13 grid). */
+export function layoutBuildingPool(pool: BuildingType[]): CityLot[] {
   if (pool.length === 0) return [];
   const occupied: boolean[][] = Array.from({ length: GRID_ROWS }, () => Array<boolean>(GRID_COLS).fill(false));
   const lots: CityLot[] = [];
@@ -157,18 +164,19 @@ export function tileWeightedCity(pool: BuildingType[]): CityLot[] {
     return true;
   };
 
-  for (let row = 0; row < GRID_ROWS; row++) {
-    for (let col = 0; col < GRID_COLS; col++) {
-      if (occupied[row][col]) continue;
-      const candidates = pool.filter((t) => fits(col, row, t));
-      if (candidates.length === 0) continue;
-      const type = candidates[Math.floor(Math.random() * candidates.length)];
-      for (let r = row; r < row + type.spanRows; r++) {
-        for (let c = col; c < col + type.spanCols; c++) {
-          occupied[r][c] = true;
+  const order = [...pool].sort(() => Math.random() - 0.5);
+  for (const type of order) {
+    let placed = false;
+    for (let row = 0; !placed && row + type.spanRows <= GRID_ROWS; row++) {
+      for (let col = 0; col + type.spanCols <= GRID_COLS; col++) {
+        if (!fits(col, row, type)) continue;
+        for (let r = row; r < row + type.spanRows; r++) {
+          for (let c = col; c < col + type.spanCols; c++) occupied[r][c] = true;
         }
+        lots.push({ slot: { col, row, spanCols: type.spanCols, spanRows: type.spanRows }, type });
+        placed = true;
+        break;
       }
-      lots.push({ slot: { col, row, spanCols: type.spanCols, spanRows: type.spanRows }, type });
     }
   }
   return lots;
