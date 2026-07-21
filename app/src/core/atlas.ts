@@ -216,48 +216,53 @@ export function buildAtlas(renderer: Renderer): Atlas {
     buildingSizes.set(buildingSizeKey(r.width, r.height), { w: r.width, h: r.height });
   }
 
-  // Blocky pixel-art facade - wall, windows, and face are all flat
-  // g.rect() blocks. A `dizzy` variant (accent-colour eyes, gap-toothed
-  // mouth) is baked alongside the normal one so entities/building.ts can
-  // flash it briefly on a hit, like a classic cartoon "OW!" reaction.
-  // Colliders/positions are untouched - only the drawing changed.
+  // Blocky pixel-art cottage facade - a stepped/pyramid roof, tinted
+  // walls, a door, and two little windows that double as the house's
+  // "eyes" (so a `dizzy` variant - just the windows flashing an accent
+  // colour - still gives entities/building.ts a hit reaction to flash,
+  // like a classic cartoon "OW!"). Every feature is a flat g.rect()
+  // block. Colliders/positions are untouched - only the drawing changed.
   const drawBuildingFacade = (g: Graphics, w: number, h: number, dizzy: boolean) => {
     const wall = 0xffffff; // tinted per-instance, see entities/building.ts
-    const window = 0xdcf3ff;
-    const trim = PALETTE.ink;
-    const eye = dizzy ? PALETTE.pink : PALETTE.ink;
-    const mouth = PALETTE.ink;
+    const roof = PALETTE.ink;
+    const roofRidge = 0x4a2418;
+    const door = 0x4a2418;
+    const doorKnob = PALETTE.gold;
+    const windowColor = dizzy ? PALETTE.pink : 0xdcf3ff;
 
-    g.rect(-w / 2, -h / 2, w, h).fill(wall);
-    g.rect(-w / 2, -h / 2, w, h * 0.06).fill(trim);
-
-    const winSize = Math.min(w, h) * 0.12;
-    for (const wy of [-h * 0.32, -h * 0.14]) {
-      for (const wx of [-w * 0.3, w * 0.3]) {
-        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).fill(window);
-      }
+    // Stepped triangular roof - a small pixel-art "pyramid" of shrinking
+    // bars instead of a smooth diagonal.
+    const roofH = h * 0.4;
+    const roofTop = -h / 2;
+    const steps = 4;
+    for (let i = 0; i < steps; i++) {
+      const stepW = w * (1 - i / (steps + 1));
+      const stepH = roofH / steps;
+      g.rect(-stepW / 2, roofTop + i * stepH, stepW, stepH + 0.6).fill(i === 0 ? roofRidge : roof);
     }
 
-    const eyeSize = Math.min(w, h) * 0.13;
-    const eyeY = h * 0.05;
-    const eyeSpacing = w * 0.2;
-    g.rect(-eyeSpacing - eyeSize / 2, eyeY - eyeSize / 2, eyeSize, eyeSize).fill(eye);
-    g.rect(eyeSpacing - eyeSize / 2, eyeY - eyeSize / 2, eyeSize, eyeSize).fill(eye);
+    // Walls below the roofline.
+    const wallTop = roofTop + roofH;
+    const wallH = h / 2 - wallTop;
+    g.rect(-w / 2, wallTop, w, wallH).fill(wall);
+    g.rect(-w / 2, wallTop, w, wallH).stroke({ width: 2, color: PALETTE.ink, alpha: 0.35 });
 
-    const mouthY = eyeY + eyeSize * 1.6;
-    const mouthH = eyeSize * 0.7;
-    if (dizzy) {
-      const mouthW = eyeSize * 3.2;
-      const seg = mouthW / 5;
-      for (let i = 0; i < 5; i += 2) {
-        g.rect(-mouthW / 2 + i * seg, mouthY - mouthH / 2, seg, mouthH).fill(mouth);
-      }
-    } else {
-      const mouthW = eyeSize * 2.4;
-      g.rect(-mouthW / 2, mouthY - mouthH / 2, mouthW, mouthH).fill(mouth);
+    // Two little windows, high on the wall, doubling as the house's eyes.
+    const winSize = Math.min(w, h) * 0.16;
+    const winY = wallTop + wallH * 0.32;
+    const winSpacing = w * 0.22;
+    for (const wx of [-winSpacing, winSpacing]) {
+      g.rect(wx - winSize / 2, winY - winSize / 2, winSize, winSize).fill(windowColor);
+      g.rect(wx - winSize / 2, winY - winSize / 2, winSize, winSize).stroke({ width: 1, color: PALETTE.ink });
     }
 
-    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.35 });
+    // A little front door, bottom-centre, with a knob.
+    const doorW = w * 0.26;
+    const doorH = wallH * 0.58;
+    g.rect(-doorW / 2, h / 2 - doorH, doorW, doorH).fill(door);
+    g.rect(doorW * 0.14, h / 2 - doorH * 0.48, doorW * 0.18, doorW * 0.18).fill(doorKnob);
+
+    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.25 });
   };
 
   // Packed into their own strip (like the flipper) since some spans (e.g.
@@ -288,34 +293,29 @@ export function buildAtlas(renderer: Renderer): Atlas {
 
   // --- Retro pixel-art panicking pedestrian: every part (head, hair,
   // torso, arms, legs) is a flat g.rect() block. Two silhouettes
-  // (arms/legs swapped via `phase`) are alternated by the swarm for a
+  // (legs swapped via `phase`) are alternated by the swarm for a
   // bouncy "running in a panic" cycle - hit radius and physics are
-  // untouched, only the drawing changed. ---
+  // untouched, only the drawing changed. Drawn tiny and simple on
+  // purpose - from kaiju/table scale a person should read as a scurrying
+  // little bean, not a detailed character; the near-white body colour is
+  // what entities/human.ts's per-instance tint recolours. ---
   const drawHuman = (g: Graphics, phase: number) => {
-    const skin = 0xffd2ad;
-    const hair = 0x3a2a20;
-    const shirt = PALETTE.paper;
+    const body = PALETTE.paper;
     const dark = PALETTE.ink;
-    const limb = PALETTE.ink;
 
-    g.rect(-5, 10.5, 10, 2).fill({ color: PALETTE.ink, alpha: 0.25 });
+    // tiny rounded bean-shaped body
+    g.rect(-2.6, -4, 5.2, 7.5).fill(body);
+    g.rect(-1.6, -5, 3.2, 1.5).fill(body);
+    g.rect(-1.6, 3, 3.2, 1.5).fill(body);
+    g.rect(-2.6, -4, 5.2, 7.5).stroke({ width: 1, color: dark, alpha: 0.5 });
 
-    g.rect(-4 - phase * 2.5, 6.5, 2.4, 5).fill(limb);
-    g.rect(1.6 + phase * 2.5, 6.5, 2.4, 5).fill(limb);
+    // two little legs, kicked out oppositely each frame
+    g.rect(-2 - phase, 3.2, 1.5, 2.6).fill(dark);
+    g.rect(0.5 + phase, 3.2, 1.5, 2.6).fill(dark);
 
-    g.rect(-3.6, 2, 7.2, 6).fill(shirt);
-    g.rect(-3.6, 2, 7.2, 6).stroke({ width: 1, color: limb });
-
-    g.rect(-7.5, -8 + phase, 3, 8).fill(skin);
-    g.rect(4.5, -8 - phase, 3, 8).fill(skin);
-
-    g.rect(-5.5, -12.5, 11, 9).fill(skin);
-    g.rect(-6, -13, 12, 3.5).fill(hair);
-
-    g.rect(-3.6, -8.5, 2.2, 2.2).fill(dark);
-    g.rect(1.4, -8.5, 2.2, 2.2).fill(dark);
-
-    g.rect(-1.6, -4.5, 3.2, 3).fill(0x8a4b38);
+    // tiny dot eyes
+    g.rect(-1.3, -1.8, 1.2, 1.2).fill(dark);
+    g.rect(0.1, -1.8, 1.2, 1.2).fill(dark);
   };
   place("human", (g) => drawHuman(g, -1), 32);
   place("humanRun", (g) => drawHuman(g, 1), 32);
