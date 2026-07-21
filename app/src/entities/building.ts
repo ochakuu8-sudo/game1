@@ -1,19 +1,10 @@
 import { Container, Sprite } from "pixi.js";
 import type Matter from "matter-js";
-import { buildingSizeKey, type Atlas } from "../core/atlas";
+import type { Atlas } from "../core/atlas";
 import { buildingRect, type BuildingSlot } from "../physics/layout";
 import type { BuildingType } from "./buildingTypes";
 
 const HIT_FLASH_TIME = 0.22;
-
-// Muted, real-material house colours (terracotta brick, cream stone,
-// blue-grey board siding, brown wood) instead of bright cartoon hues, so a
-// fully-packed grid reads as a calm miniature-model town rather than a
-// rainbow. Picked deterministically from each lot's grid position (see
-// `spawn` below) instead of at random, so neighbouring lots settle into a
-// clean repeating pattern like an actual tilemap, and a rebuilt lot keeps
-// its same house colour instead of re-rolling.
-const TINTS = [0xb86b4d, 0xccbf9e, 0x94a6b8, 0xa68561];
 
 export class Building {
   container: Container;
@@ -24,9 +15,11 @@ export class Building {
   private digitOnes: Sprite;
   private digitSpacing: number;
   private atlas: Atlas;
-  private baseTint: number;
   private cellCount: number;
-  private getType: () => BuildingType;
+  /** The building type this whole city generation was built as - fixed for
+   * this instance's lifetime; a different pick rebuilds the entire grid
+   * with fresh Building instances instead (see Game.rebuildCity). */
+  readonly type: BuildingType;
   /** Duration `rebuildTimer` was set to at the last destruction - used to
    * compute the collapse animation's progress independent of how long
    * this particular type's cooldown actually is. */
@@ -40,9 +33,6 @@ export class Building {
   rebuildTimer = 0;
   hitFlash = 0;
   level = 0;
-  /** The building type this lot was last (re)built as - see
-   * entities/buildingTypes.ts and game/buildingSelect.ts. */
-  type: BuildingType;
   /** Counts down to this building's very first appearance. Non-null only
    * before it has ever spawned - a separate concept from `rebuildTimer`
    * (which recovers a *destroyed* building) since a not-yet-built lot can
@@ -50,19 +40,16 @@ export class Building {
    * window that timer's math assumes. */
   private pendingSpawnTimer: number | null = null;
 
-  constructor(atlas: Atlas, slot: BuildingSlot, body: Matter.Body, getType: () => BuildingType) {
+  constructor(atlas: Atlas, slot: BuildingSlot, body: Matter.Body, type: BuildingType) {
     this.atlas = atlas;
     this.slot = slot;
     this.body = body;
-    this.getType = getType;
-    this.type = getType();
+    this.type = type;
     this.cellCount = slot.spanCols * slot.spanRows;
 
     const rect = buildingRect(slot);
-    this.baseTint = TINTS[(slot.col + slot.row) % TINTS.length];
-    const key = buildingSizeKey(rect.width, rect.height);
-    this.normalTexture = atlas.buildings[key];
-    this.dizzyTexture = atlas.buildingsDizzy[key];
+    this.normalTexture = atlas.buildings[type.id];
+    this.dizzyTexture = atlas.buildingsDizzy[type.id];
 
     this.container = new Container();
     this.container.position.set(rect.x, rect.y);
@@ -76,7 +63,6 @@ export class Building {
 
     this.sprite = new Sprite(this.normalTexture);
     this.sprite.anchor.set(0.5);
-    this.sprite.tint = this.baseTint;
     this.container.addChild(this.sprite);
 
     // Scale the HP digits with the building's own footprint, capped small
@@ -134,29 +120,16 @@ export class Building {
     // away or freeing up for its own rebuild.
     this.pendingSpawnTimer = null;
     this.level = level;
-    // Always (re)reads the currently-chosen building type (see
-    // game/buildingSelect.ts) - a lot that was, say, a "flat" when it was
-    // destroyed can come back as a "mansion" if the player picked one in
-    // the meantime, matching "future lots use whatever's picked now".
-    this.type = this.getType();
     // A freshly-spawned level-1 lot starts near its type's base HP - a
-    // handful of hits down. Bigger virtual lots (higher cellUnits), higher
-    // rebuild levels, and an actually-bigger physical footprint (a 2x1/1x2/
-    // 2x2 lot from physics/layout.ts's mixed tiling) all make it tougher.
-    this.maxHp = Math.max(
-      1,
-      Math.min(
-        this.type.hpBase + (level - 1) * this.type.hpPerLevel + (this.type.cellUnits - 1) * 2 + (this.cellCount - 1) * 2,
-        20,
-      ),
-    );
+    // handful of hits down. Higher rebuild levels and a bigger physical
+    // footprint both make it tougher.
+    this.maxHp = Math.max(1, Math.min(this.type.hpBase + (level - 1) * this.type.hpPerLevel + (this.cellCount - 1) * 2, 20));
     this.hp = this.maxHp;
     this.destroyed = false;
     this.rebuildTimer = 0;
     this.container.visible = true;
     this.container.scale.set(1);
     this.container.alpha = 1;
-    this.sprite.tint = this.baseTint;
     this.sprite.texture = this.normalTexture;
     this.refreshDigits();
   }

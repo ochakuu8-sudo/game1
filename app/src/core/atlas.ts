@@ -1,5 +1,6 @@
 import { Container, Graphics, Rectangle, RenderTexture, Texture, type Renderer } from "pixi.js";
-import { BUILDING_SLOTS, buildingRect } from "../physics/layout";
+import { buildingRect } from "../physics/layout";
+import { BUILDING_TYPES } from "../entities/buildingTypes";
 import { PALETTE } from "./palette";
 
 /**
@@ -16,25 +17,18 @@ import { PALETTE } from "./palette";
  * Famicom-style "arranged rectangles" dot-art look baked directly at the
  * atlas's native resolution.
  */
-/** Groups a building's footprint into a texture key - buildings share a
- * texture whenever they're the same pixel size (regardless of which grid
- * slot they came from), so the atlas only bakes one facade per distinct
- * size actually used in physics/layout.ts's BUILDING_SLOTS. */
-export function buildingSizeKey(width: number, height: number): string {
-  return `${Math.round(width)}x${Math.round(height)}`;
-}
-
 export interface Atlas {
   ball: Texture;
   flipper: Texture;
-  /** Keyed by buildingSizeKey(width, height) - one facade texture per
-   * distinct building footprint size used in the current layout. */
+  /** Keyed by BuildingType.id (see entities/buildingTypes.ts) - each type
+   * has its own facade artwork/size baked once at its fixed footprint. */
   buildings: Record<string, Texture>;
-  /** Same keys as `buildings` - a "dizzy" variant flashed briefly on a hit
-   * for a cartoon reaction. */
+  /** Same keys as `buildings` - a "dizzy" variant (windows flash an accent
+   * colour) flashed briefly on a hit. */
   buildingsDizzy: Record<string, Texture>;
-  /** Generic fixed-size house icon for the building-type picker card UI. */
-  houseIcon: Texture;
+  /** Same keys as `buildings` - a small fixed-size icon of each type's own
+   * facade, for the building-type picker card UI. */
+  buildingIcons: Record<string, Texture>;
   human: Texture;
   humanRun: Texture;
   debris: Texture;
@@ -207,116 +201,251 @@ export function buildAtlas(renderer: Renderer): Atlas {
     frames.flipper = new Rectangle(0, ROWS * CELL, FLIPPER_W, FLIPPER_H);
   }
 
-  // --- Buildings: one facade texture per distinct footprint size actually
-  // used by the grid layout (physics/layout.ts). Drawn in white with
-  // near-white windows so each building instance can be recoloured with a
-  // per-Sprite tint (see entities/building.ts) while keeping the windows
-  // reading as a lighter "glass" highlight under any tint.
-  const buildingSizes = new Map<string, { w: number; h: number }>();
-  for (const slot of BUILDING_SLOTS) {
-    const r = buildingRect(slot);
-    buildingSizes.set(buildingSizeKey(r.width, r.height), { w: r.width, h: r.height });
-  }
+  // --- Buildings: every BuildingType (entities/buildingTypes.ts) gets its
+  // own facade drawing at its own fixed footprint/colour, instead of one
+  // shared shape recoloured per instance - a bungalow looks like a
+  // bungalow, a tower looks like a tower. All still flat g.rect() blocks;
+  // `shade()` derives roof/trim/door tones from each type's own base
+  // colour so the whole facade reads as one material, not a random accent.
+  const shade = (color: number, factor: number): number => {
+    const r = Math.round(((color >> 16) & 0xff) * factor);
+    const gr = Math.round(((color >> 8) & 0xff) * factor);
+    const b = Math.round((color & 0xff) * factor);
+    return (r << 16) | (gr << 8) | b;
+  };
 
-  // Blocky pixel-art house facade, styled after a real reference game's
-  // technique (muted material-colour walls, a tiled roof *band* rather
-  // than a drawn triangle, and roof/door drawn as neutral grays so the
-  // shared per-instance tint - see entities/building.ts - naturally
-  // produces a *darker shade of that same wall colour* instead of a
-  // separately-chosen bright hue, the same way a real building's trim
-  // reads as "the wall colour, but shaded"). A `dizzy` variant just
-  // flashes the window glass an accent colour for the hit reaction.
-  // Every feature is a flat g.rect() block. Colliders/positions are
-  // untouched - only the drawing changed.
-  const drawBuildingFacade = (g: Graphics, w: number, h: number, dizzy: boolean) => {
-    const wall = 0xffffff; // tinted per-instance, see entities/building.ts
-    const roofGray = 0x707070; // ~44% multiply -> a shaded version of the wall tint
-    const roofGrayLight = 0x8c8c8c;
-    const roofGrayDark = 0x4a4a4a;
-    const doorGray = 0x555555;
-    const windowColor = dizzy ? PALETTE.pink : 0xdcf3ff;
-    const porchLight = PALETTE.gold;
+  type FacadeDrawer = (g: Graphics, w: number, h: number, dizzy: boolean, color: number) => void;
 
-    // Tiled roof band along the top edge - a bright ridge cap, a few
-    // vertical tile grooves, and a small chimney - instead of a drawn
-    // triangle (which is easy to get backwards at this pixel scale).
-    const roofW = w + 3;
-    const roofH = h * 0.24;
+  // 平屋 - low single-storey bungalow: shallow roof, one wide window.
+  const drawFlat: FacadeDrawer = (g, w, h, dizzy, color) => {
+    const roofC = shade(color, 0.45);
+    const roofLight = shade(color, 0.62);
+    const doorC = shade(color, 0.3);
+    const winC = dizzy ? PALETTE.pink : 0xdcf3ff;
+
+    const roofH = h * 0.16;
     const roofTop = -h / 2;
-    g.rect(-roofW / 2, roofTop, roofW, roofH).fill(roofGray);
-    g.rect(-roofW / 2, roofTop, roofW, roofH * 0.3).fill(roofGrayLight);
-    // Groove count scales with width so wider multi-cell roofs (see
-    // physics/layout.ts's mixed 1x1/2x1/1x2/2x2 lot tiling) don't look
-    // sparse.
-    const grooves = Math.max(4, Math.round(roofW / 12));
-    for (let i = 0; i < grooves; i++) {
-      const gx = -roofW / 2 + (roofW / grooves) * (i + 0.5);
-      g.rect(gx - 0.6, roofTop, 1.2, roofH).fill(roofGrayDark);
-    }
-    g.rect(w * 0.2, roofTop - 4, 3, 5).fill(roofGrayDark);
+    const roofW = w + 4;
+    g.rect(-roofW / 2, roofTop, roofW, roofH).fill(roofC);
+    g.rect(-roofW / 2, roofTop, roofW, roofH * 0.35).fill(roofLight);
 
-    // Walls below the roofline.
     const wallTop = roofTop + roofH;
     const wallH = h / 2 - wallTop;
-    g.rect(-w / 2, wallTop, w, wallH).fill(wall);
+    g.rect(-w / 2, wallTop, w, wallH).fill(color);
     g.rect(-w / 2, wallTop, w, wallH).stroke({ width: 2, color: PALETTE.ink, alpha: 0.3 });
 
-    // A grid of little windows - column/row counts scale with the wall's
-    // own size so a wide 2x1 or tall 1x2 multi-cell lot (see
-    // physics/layout.ts) reads as properly bigger, not just stretched.
-    const winSize = Math.max(2.4, Math.min(w, h) * 0.13);
-    const winCols = Math.max(2, Math.round(w / (winSize * 3.4)));
-    const winRows = Math.max(1, Math.round(wallH / (winSize * 3.8)));
+    const winW = w * 0.4;
+    const winH = wallH * 0.32;
+    const winY = wallTop + wallH * 0.3;
+    g.rect(-winW / 2, winY - winH / 2, winW, winH).fill(winC);
+    g.rect(-winW / 2, winY - winH / 2, winW, winH).stroke({ width: 1, color: PALETTE.ink, alpha: 0.5 });
+
+    const doorW = w * 0.26;
+    const doorH = wallH * 0.55;
+    g.rect(-doorW / 2, h / 2 - doorH, doorW, doorH).fill(doorC);
+
+    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.25 });
+  };
+
+  // 一軒家 - classic two-storey house with a proper pointed gable roof
+  // (narrow at the peak, full width at the eaves) and a little chimney.
+  const drawStandard: FacadeDrawer = (g, w, h, dizzy, color) => {
+    const roofC = shade(color, 0.4);
+    const doorC = shade(color, 0.28);
+    const winC = dizzy ? PALETTE.pink : 0xdcf3ff;
+
+    const roofH = h * 0.3;
+    const roofTop = -h / 2;
+    const steps = 5;
+    for (let i = 0; i < steps; i++) {
+      const stepW = (w * (i + 1)) / steps; // narrow at i=0 (peak) -> full width at i=steps-1 (eaves)
+      const stepH = roofH / steps;
+      g.rect(-stepW / 2, roofTop + i * stepH, stepW, stepH + 0.6).fill(roofC);
+    }
+    g.rect(w * 0.22, roofTop - 4, 3, 5).fill(shade(color, 0.3));
+
+    const wallTop = roofTop + roofH;
+    const wallH = h / 2 - wallTop;
+    g.rect(-w / 2, wallTop, w, wallH).fill(color);
+    g.rect(-w / 2, wallTop, w, wallH).stroke({ width: 2, color: PALETTE.ink, alpha: 0.3 });
+
+    const winSize = Math.min(w, h) * 0.13;
+    for (const wy of [wallTop + wallH * 0.28, wallTop + wallH * 0.6]) {
+      for (const wx of [-w * 0.24, w * 0.24]) {
+        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).fill(winC);
+        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).stroke({ width: 1, color: PALETTE.ink, alpha: 0.5 });
+      }
+    }
+
+    const doorW = w * 0.22;
+    const doorH = wallH * 0.32;
+    g.rect(-doorW / 2, h / 2 - doorH, doorW, doorH).fill(doorC);
+
+    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.25 });
+  };
+
+  // アパート - flat-roofed block with many small windows in a dense grid.
+  const drawApartment: FacadeDrawer = (g, w, h, dizzy, color) => {
+    const roofC = shade(color, 0.4);
+    const doorC = shade(color, 0.25);
+    const winC = dizzy ? PALETTE.pink : 0xbfe0f5;
+
+    const roofH = h * 0.05;
+    const roofTop = -h / 2;
+    g.rect(-w / 2 - 2, roofTop, w + 4, roofH).fill(roofC);
+
+    const wallTop = roofTop + roofH;
+    const wallH = h / 2 - wallTop;
+    g.rect(-w / 2, wallTop, w, wallH).fill(color);
+    g.rect(-w / 2, wallTop, w, wallH).stroke({ width: 2, color: PALETTE.ink, alpha: 0.3 });
+
+    const winSize = Math.max(2.2, Math.min(w, h) * 0.09);
+    const winCols = Math.max(2, Math.round(w / (winSize * 2.6)));
+    const winRows = Math.max(3, Math.round(wallH / (winSize * 2.6)));
     const colStep = w / (winCols + 1);
     const rowStep = wallH / (winRows + 1);
     for (let ri = 1; ri <= winRows; ri++) {
       for (let ci = 1; ci <= winCols; ci++) {
         const wx = -w / 2 + colStep * ci;
         const wy = wallTop + rowStep * ri;
-        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).fill(windowColor);
-        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).stroke({ width: 1, color: PALETTE.ink, alpha: 0.5 });
+        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).fill(winC);
       }
     }
 
-    // A front door with a little porch light.
-    const doorW = w * 0.24;
-    const doorH = wallH * 0.55;
-    g.rect(-doorW / 2, h / 2 - doorH, doorW, doorH).fill(doorGray);
-    g.rect(-doorW * 0.55, h / 2 - doorH * 0.55, 1.6, 1.6).fill(porchLight);
+    const doorW = w * 0.3;
+    const doorH = wallH * 0.1;
+    g.rect(-doorW / 2, h / 2 - doorH, doorW, doorH).fill(doorC);
 
-    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.2 });
+    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.25 });
+  };
+
+  // 豪邸 - grand estate: wide gable roof, two chimneys, symmetric window
+  // columns, a double door, and a low hedge/fence line along the base.
+  const drawMansion: FacadeDrawer = (g, w, h, dizzy, color) => {
+    const roofC = shade(color, 0.35);
+    const roofTrim = shade(color, 0.55);
+    const doorC = shade(color, 0.25);
+    const winC = dizzy ? PALETTE.pink : 0xdcf3ff;
+
+    const roofH = h * 0.26;
+    const roofTop = -h / 2;
+    const steps = 6;
+    for (let i = 0; i < steps; i++) {
+      const stepW = (w * (i + 1)) / steps;
+      const stepH = roofH / steps;
+      g.rect(-stepW / 2, roofTop + i * stepH, stepW, stepH + 0.6).fill(i === steps - 1 ? roofTrim : roofC);
+    }
+    g.rect(-w * 0.3 - 2, roofTop - 5, 4, 6).fill(shade(color, 0.3));
+    g.rect(w * 0.3 - 2, roofTop - 5, 4, 6).fill(shade(color, 0.3));
+
+    const wallTop = roofTop + roofH;
+    const wallH = h / 2 - wallTop;
+    g.rect(-w / 2, wallTop, w, wallH).fill(color);
+    g.rect(-w / 2, wallTop, w, wallH).stroke({ width: 2, color: PALETTE.ink, alpha: 0.3 });
+
+    const winSize = Math.min(w, h) * 0.075;
+    for (const wy of [wallTop + wallH * 0.22, wallTop + wallH * 0.48]) {
+      for (const wx of [-w * 0.34, -w * 0.12, w * 0.12, w * 0.34]) {
+        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).fill(winC);
+        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).stroke({ width: 1, color: PALETTE.ink, alpha: 0.4 });
+      }
+    }
+
+    const doorW = w * 0.14;
+    const doorH = wallH * 0.3;
+    g.rect(-doorW - 1, h / 2 - doorH, doorW, doorH).fill(doorC);
+    g.rect(1, h / 2 - doorH, doorW, doorH).fill(doorC);
+    g.rect(-w / 2 - 2, h / 2 - 2, w + 4, 3).fill(shade(color, 0.5));
+
+    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.25 });
+  };
+
+  // タワマン - modern high-rise: near-flat roof, a rooftop tank/antenna,
+  // and a dense glass curtain-wall window grid.
+  const drawTower: FacadeDrawer = (g, w, h, dizzy, color) => {
+    const roofC = shade(color, 0.4);
+    const frameC = shade(color, 0.3);
+    const winC = dizzy ? PALETTE.pink : 0xbfe8f5;
+
+    const roofH = h * 0.025;
+    const roofTop = -h / 2;
+    g.rect(-w / 2 - 2, roofTop, w + 4, roofH).fill(roofC);
+    g.rect(-w * 0.2 - 3, roofTop - 6, 6, 6).fill(shade(color, 0.35));
+    g.rect(w * 0.15, roofTop - 10, 1.5, 10).fill(PALETTE.ink);
+
+    const wallTop = roofTop + roofH;
+    const wallH = h / 2 - wallTop;
+    g.rect(-w / 2, wallTop, w, wallH).fill(color);
+    g.rect(-w / 2, wallTop, w, wallH).stroke({ width: 2, color: PALETTE.ink, alpha: 0.3 });
+
+    const winSize = Math.max(2, Math.min(w, h) * 0.07);
+    const winCols = Math.max(3, Math.round(w / (winSize * 2.4)));
+    const winRows = Math.max(5, Math.round(wallH / (winSize * 2.2)));
+    const colStep = w / (winCols + 1);
+    const rowStep = wallH / (winRows + 1);
+    for (let ri = 1; ri <= winRows; ri++) {
+      for (let ci = 1; ci <= winCols; ci++) {
+        const wx = -w / 2 + colStep * ci;
+        const wy = wallTop + rowStep * ri;
+        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).fill(winC);
+      }
+    }
+
+    const doorW = w * 0.28;
+    const doorH = wallH * 0.03;
+    g.rect(-doorW / 2, h / 2 - doorH - 2, doorW, doorH).fill(frameC);
+
+    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.25 });
+  };
+
+  const FACADE_DRAWERS: Record<string, FacadeDrawer> = {
+    flat: drawFlat,
+    standard: drawStandard,
+    apartment: drawApartment,
+    mansion: drawMansion,
+    tower: drawTower,
   };
 
   // Packed into their own strip (like the flipper) since some spans (e.g.
-  // 2x2) are far larger than one CELL and would bleed into neighbours.
-  // Normal and dizzy variants sit side by side per size.
+  // 2x3) are far larger than one CELL and would bleed into neighbours.
+  // Normal and dizzy variants sit side by side per type, plus a small
+  // fixed-size icon for the picker card.
   const buildingStripY = ROWS * CELL + FLIPPER_H;
   let buildingStripX = 0;
   let buildingStripH = 0;
   const buildingFrames: Record<string, Rectangle> = {};
   const dizzyFrames: Record<string, Rectangle> = {};
-  for (const [key, { w, h }] of buildingSizes) {
+  const iconFrames: Record<string, Rectangle> = {};
+  for (const type of BUILDING_TYPES) {
+    const rect = buildingRect({ col: 0, row: 0, spanCols: type.spanCols, spanRows: type.spanRows });
+    const { width: w, height: h } = rect;
+    const draw = FACADE_DRAWERS[type.id] ?? drawStandard;
+
     const g = new Graphics();
-    drawBuildingFacade(g, w, h, false);
+    draw(g, w, h, false, type.color);
     g.position.set(buildingStripX + w / 2, buildingStripY + h / 2);
     staging.addChild(g);
-    buildingFrames[key] = new Rectangle(buildingStripX, buildingStripY, w, h);
+    buildingFrames[type.id] = new Rectangle(buildingStripX, buildingStripY, w, h);
     buildingStripX += w + 8;
 
     const gd = new Graphics();
-    drawBuildingFacade(gd, w, h, true);
+    draw(gd, w, h, true, type.color);
     gd.position.set(buildingStripX + w / 2, buildingStripY + h / 2);
     staging.addChild(gd);
-    dizzyFrames[key] = new Rectangle(buildingStripX, buildingStripY, w, h);
+    dizzyFrames[type.id] = new Rectangle(buildingStripX, buildingStripY, w, h);
     buildingStripX += w + 8;
 
     buildingStripH = Math.max(buildingStripH, h);
-  }
 
-  // A generic, fixed-size house icon (same facade drawing, just re-run at
-  // icon scale) for the building-type picker card UI - see
-  // game/buildingSelect.ts.
-  place("houseIcon", (g) => drawBuildingFacade(g, 44, 44, false), 48);
+    const gi = new Graphics();
+    draw(gi, 44, 44, false, type.color);
+    gi.position.set(buildingStripX + 22, buildingStripY + 22);
+    staging.addChild(gi);
+    iconFrames[type.id] = new Rectangle(buildingStripX, buildingStripY, 44, 44);
+    buildingStripX += 44 + 8;
+
+    buildingStripH = Math.max(buildingStripH, 44);
+  }
 
   // --- Retro pixel-art panicking pedestrian: every part (head, hair,
   // torso, arms, legs) is a flat g.rect() block. Two silhouettes
@@ -432,13 +561,17 @@ export function buildAtlas(renderer: Renderer): Atlas {
   for (const [key, frame] of Object.entries(dizzyFrames)) {
     buildingsDizzy[key] = sliceRect(frame);
   }
+  const buildingIcons: Record<string, Texture> = {};
+  for (const [key, frame] of Object.entries(iconFrames)) {
+    buildingIcons[key] = sliceRect(frame);
+  }
 
   return {
     ball: slice("ball"),
     flipper: slice("flipper"),
     buildings,
     buildingsDizzy,
-    houseIcon: slice("houseIcon"),
+    buildingIcons,
     human: slice("human"),
     humanRun: slice("humanRun"),
     debris: slice("debris"),

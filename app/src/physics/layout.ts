@@ -83,69 +83,22 @@ export function buildingRect(slot: BuildingSlot): BuildingRect {
   };
 }
 
-// The whole grid is tiled edge to edge (GRID_INSET above is what forms the
-// streets) with a mix of lot sizes - mostly single 1x1 houses, with some
-// wider (2x1) and taller (1x2) lots, and a few big 2x2 blocks - instead of
-// every cell being a uniform 1x1, so the skyline actually varies. Scanned
-// row-major, greedily placing a randomly-weighted shape at each still-empty
-// cell (falling back to 1x1 if the picked shape doesn't fit before the grid
-// edge or into already-placed neighbours); a plain LCG stands in for
-// Math.random() so this only needs to run once at module load with no
-// external dependency.
-function buildBuildingSlots(): BuildingSlot[] {
-  const taken: boolean[][] = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(false));
+// The grid is tiled edge to edge (GRID_INSET above is what forms the
+// streets) with a single *uniform* lot size at a time - the currently
+// chosen building type's spanCols/spanRows (see entities/buildingTypes.ts
+// and Game.rebuildCity) - stepping across the grid in that shape's own
+// increments. Any leftover strip that doesn't divide evenly (e.g. a 2x3
+// type against a 13-row grid) is simply left as empty street along the
+// right/bottom edge rather than forcing a partial lot.
+export function tileUniformGrid(spanCols: number, spanRows: number): BuildingSlot[] {
   const slots: BuildingSlot[] = [];
-
-  let seed = 20260721;
-  const rand = () => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return (seed % 10000) / 10000;
-  };
-
-  const SHAPES: Array<{ cols: number; rows: number; weight: number }> = [
-    { cols: 1, rows: 1, weight: 60 },
-    { cols: 2, rows: 1, weight: 15 },
-    { cols: 1, rows: 2, weight: 15 },
-    { cols: 2, rows: 2, weight: 10 },
-  ];
-  const totalWeight = SHAPES.reduce((sum, s) => sum + s.weight, 0);
-  const pickShape = () => {
-    let r = rand() * totalWeight;
-    for (const s of SHAPES) {
-      if (r < s.weight) return s;
-      r -= s.weight;
-    }
-    return SHAPES[0];
-  };
-
-  const fits = (row: number, col: number, cols: number, rows: number) => {
-    if (col + cols > GRID_COLS || row + rows > GRID_ROWS) return false;
-    for (let r = row; r < row + rows; r++) {
-      for (let c = col; c < col + cols; c++) {
-        if (taken[r][c]) return false;
-      }
-    }
-    return true;
-  };
-
-  for (let row = 0; row < GRID_ROWS; row++) {
-    for (let col = 0; col < GRID_COLS; col++) {
-      if (taken[row][col]) continue;
-      let shape = pickShape();
-      if (!fits(row, col, shape.cols, shape.rows)) shape = { cols: 1, rows: 1, weight: 0 };
-      for (let r = row; r < row + shape.rows; r++) {
-        for (let c = col; c < col + shape.cols; c++) {
-          taken[r][c] = true;
-        }
-      }
-      slots.push({ col, row, spanCols: shape.cols, spanRows: shape.rows });
+  for (let row = 0; row + spanRows <= GRID_ROWS; row += spanRows) {
+    for (let col = 0; col + spanCols <= GRID_COLS; col += spanCols) {
+      slots.push({ col, row, spanCols, spanRows });
     }
   }
-
   return slots;
 }
-
-export const BUILDING_SLOTS: BuildingSlot[] = buildBuildingSlots();
 
 export const DRAIN_Y = TABLE_H + 40;
 export const BALL_RADIUS = 13;

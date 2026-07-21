@@ -6,6 +6,6 @@ import { CardSelect } from "./cardSelect";
  * game/cardSelect.ts and entities/buildingTypes.ts. */
 export class BuildingSelect extends CardSelect<BuildingType> {
   constructor(atlas: Atlas) {
-    super(atlas.houseIcon, "次の建物を選べ！");
+    super("次の建物を選べ！", (type) => atlas.buildingIcons[type.id]);
   }
 }

@@ -11,11 +11,11 @@ import { ParticleFX } from "../fx/particles";
 import { PowerUpManager, type PowerUpChoice } from "./powerups";
 import { PowerUpSelect } from "./powerupSelect";
 import { BuildingSelect } from "./buildingSelect";
-import { BUILDING_TYPES, DEFAULT_BUILDING_TYPE, pickBuildingChoices, type BuildingType } from "../entities/buildingTypes";
+import { BUILDING_TYPES, DEFAULT_BUILDING_TYPE, buildingStatLines, pickBuildingChoices, type BuildingType } from "../entities/buildingTypes";
 import { HUD } from "./hud";
 import { buildTableVisuals } from "../physics/tableVisuals";
 import {
-  TABLE_W, TABLE_H, BUILDING_SLOTS, DRAIN_Y, BALL_RADIUS, HUMAN_RADIUS,
+  TABLE_W, TABLE_H, DRAIN_Y, BALL_RADIUS, HUMAN_RADIUS, tileUniformGrid,
   GRID_COLS, GRID_ROWS, GRID_LEFT, GRID_TOP, GRID_RIGHT, GRID_BOTTOM,
 } from "../physics/layout";
 
@@ -62,6 +62,7 @@ export class Game {
 
   private root: Container;
   private ballLayer: Container;
+  private buildingLayer: Container;
   private flipperSprites: { left: Sprite; right: Sprite };
   private buildings: Building[] = [];
   private buildingByBody = new Map<Matter.Body, Building>();
@@ -96,16 +97,11 @@ export class Game {
     this.root.addChild(this.buildCityBackdrop());
     this.root.addChild(buildTableVisuals());
 
-    const buildingLayer = new Container();
-    this.root.addChild(buildingLayer);
-    BUILDING_SLOTS.forEach((slot, i) => {
-      const body = this.world.buildingBodies[i];
-      const b = new Building(this.atlas, slot, body, () => this.currentBuildingType);
-      this.buildings.push(b);
-      this.buildingByBody.set(body, b);
-      buildingLayer.addChild(b.container);
-    });
-    this.scheduleBuildingSpawns();
+    this.buildingLayer = new Container();
+    this.root.addChild(this.buildingLayer);
+    // The grid starts empty - it's only populated once the player picks a
+    // building type for the first time (see beginStage/onBuildingChosen),
+    // since every lot's size depends on that pick.
 
     this.root.addChild(this.humans.container);
 
@@ -285,7 +281,7 @@ export class Game {
    * mid-stage clear) it's left exactly where it was and simply resumes,
    * otherwise (game start) a fresh one is served once a card is picked. */
   private beginStage() {
-    const choices = pickBuildingChoices(3);
+    const choices = pickBuildingChoices(3).map((type) => ({ ...type, stats: buildingStatLines(type) }));
     this.state = "building";
     this.buildingSelect.show(choices, (type) => this.onBuildingChosen(type));
   }
@@ -293,11 +289,36 @@ export class Game {
   private onBuildingChosen(type: BuildingType) {
     sfx.powerupPick();
     this.currentBuildingType = type;
+    this.rebuildCity(type);
     this.hud.showBanner(`次の建物: ${type.label}`);
     this.state = "playing";
     if (this.world.balls.length === 0 && this.ballsReserve > 0) {
       this.serveBall();
     }
+  }
+
+  /** Regenerates the whole city grid to the chosen type's own fixed lot
+   * size - only that type appears on the board until the next pick.
+   * Old lots are fully torn down (containers + physics bodies) rather than
+   * resized in place since both the lot count and the collider footprint
+   * generally change between types. */
+  private rebuildCity(type: BuildingType) {
+    for (const b of this.buildings) {
+      this.buildingByBody.delete(b.body);
+      b.container.destroy({ children: true });
+    }
+    this.buildings = [];
+
+    const slots = tileUniformGrid(type.spanCols, type.spanRows);
+    const bodies = this.world.setBuildingLayout(slots);
+    slots.forEach((slot, i) => {
+      const body = bodies[i];
+      const b = new Building(this.atlas, slot, body, type);
+      this.buildings.push(b);
+      this.buildingByBody.set(body, b);
+      this.buildingLayer.addChild(b.container);
+    });
+    this.scheduleBuildingSpawns();
   }
 
   /** Hit the current stage's score quota - advance to the next (tougher)
@@ -394,7 +415,6 @@ export class Game {
 
   private startGame() {
     for (const body of [...this.world.balls]) this.removeBallEntity(body);
-    this.scheduleBuildingSpawns();
     this.humans.reset();
     this.powerups = new PowerUpManager();
     this.currentBuildingType = DEFAULT_BUILDING_TYPE;
@@ -529,7 +549,10 @@ export class Game {
       currentBuildingType: () => this.currentBuildingType.id,
       forceBuildingType: (id: string) => {
         const t = BUILDING_TYPES.find((t) => t.id === id);
-        if (t) this.currentBuildingType = t;
+        if (!t) return;
+        this.buildingSelect.container.visible = false;
+        this.powerupSelect.container.visible = false;
+        this.onBuildingChosen(t);
       },
       forceBuildingChoice: () => this.beginStage(),
       stage: () => this.stage,

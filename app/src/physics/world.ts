@@ -1,7 +1,6 @@
 import Matter from "matter-js";
 import {
   TABLE_W,
-  BUILDING_SLOTS,
   buildingRect,
   BALL_RADIUS,
   LEFT_FLIPPER,
@@ -9,6 +8,7 @@ import {
   OUTER_WALLS,
   OUTLANE_GUIDES,
   FLIPPER_HINGE_GUARDS,
+  type BuildingSlot,
 } from "./layout";
 import { Flipper } from "./flipper";
 
@@ -46,21 +46,29 @@ export class PinballWorld {
     this.leftFlipper = new Flipper(LEFT_FLIPPER);
     this.rightFlipper = new Flipper(RIGHT_FLIPPER);
     World.add(this.world, [this.leftFlipper.body, this.rightFlipper.body]);
+  }
 
-    // Bodies are created up front (Building instances index into this array
-    // 1:1), but not added to the world yet - most lots start dormant and are
-    // added later via setBuildingActive() when the game schedules their
-    // first spawn (see Game.scheduleBuildingSpawns).
-    for (const slot of BUILDING_SLOTS) {
+  /** (Re)builds the set of building colliders from scratch, matching
+   * `slots` 1:1 (Building instances index into the returned array the same
+   * way) - called once per stage since the whole city's lot size/count
+   * changes with the chosen building type (see Game.rebuildCity). Bodies
+   * are created but not added to the world yet - most lots start dormant
+   * and are added later via setBuildingActive() when the game schedules
+   * their first spawn. */
+  setBuildingLayout(slots: BuildingSlot[]): Matter.Body[] {
+    for (const body of this.buildingBodies) {
+      World.remove(this.world, body);
+    }
+    this.buildingBodies = slots.map((slot) => {
       const r = buildingRect(slot);
-      const body = Bodies.rectangle(r.x, r.y, r.width, r.height, {
+      return Bodies.rectangle(r.x, r.y, r.width, r.height, {
         isStatic: true,
         label: "building",
         restitution: 0.7,
         chamfer: { radius: r.cornerRadius },
       });
-      this.buildingBodies.push(body);
-    }
+    });
+    return this.buildingBodies;
   }
 
   private buildStaticTable() {
