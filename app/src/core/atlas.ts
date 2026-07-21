@@ -130,51 +130,58 @@ export function buildAtlas(renderer: Renderer): Atlas {
     buildingSizes.set(buildingSizeKey(r.width, r.height), { w: r.width, h: r.height });
   }
 
-  // Round "porthole" windows and a friendly cartoon face on every building -
-  // a `dizzy` variant (X eyes, wobbly mouth) is baked alongside the normal
-  // one so entities/building.ts can flash it briefly on a hit, like a
-  // classic cartoon "OW!" reaction.
+  // Retro "arranged rectangles" pixel-art facade - every feature (wall,
+  // windows, face) is a flat g.rect() block, no circles/arcs/rounded
+  // corners, for a blocky dot-art look. A `dizzy` variant (accent-colour
+  // eyes, gap-toothed mouth) is baked alongside the normal one so
+  // entities/building.ts can flash it briefly on a hit, like a classic
+  // cartoon "OW!" reaction. Colliders/positions are untouched - this only
+  // changes what gets drawn into the shared texture.
   const drawBuildingFacade = (g: Graphics, w: number, h: number, dizzy: boolean) => {
-    const r = Math.min(16, w / 4, h / 4);
-    g.roundRect(-w / 2, -h / 2, w, h, r).fill(0xffffff);
+    const wall = 0xffffff; // tinted per-instance, see entities/building.ts
+    const window = 0xdcf3ff;
+    const trim = 0x2b2b2b;
+    const eye = dizzy ? 0xff6f91 : 0x2b2b2b;
+    const mouth = 0x2b2b2b;
 
-    const winR = Math.max(2.5, Math.min(6, w * 0.09, h * 0.09));
-    const cols = Math.max(1, Math.floor(w / (winR * 4.2)));
-    const rows = Math.max(1, Math.floor((h * 0.55) / (winR * 4.2)));
-    const spanW = cols * winR * 4.2;
-    const spanH = rows * winR * 4.2;
-    const top = -h * 0.42;
-    for (let i = 0; i < cols; i++) {
-      for (let j = 0; j < rows; j++) {
-        const x = -spanW / 2 + winR * 2.1 + i * winR * 4.2;
-        const y = top + winR * 2.1 + j * winR * 4.2;
-        g.circle(x, y, winR).fill(0xdcf3ff);
+    g.rect(-w / 2, -h / 2, w, h).fill(wall);
+
+    // Roofline trim strip along the top edge.
+    g.rect(-w / 2, -h / 2, w, h * 0.06).fill(trim);
+
+    // Two rows of square "pixel" windows, gapped in the middle column so
+    // the face beneath has room to read clearly.
+    const winSize = Math.min(w, h) * 0.12;
+    for (const wy of [-h * 0.32, -h * 0.14]) {
+      for (const wx of [-w * 0.3, w * 0.3]) {
+        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).fill(window);
       }
     }
 
-    const eyeY = -h * 0.06;
-    const eyeR = Math.max(3, Math.min(8, w * 0.11));
-    const spacing = Math.min(w * 0.24, eyeR * 2.6);
-    const mouthY = eyeY + eyeR * 2.1;
+    // Chunky square-eyed pixel face.
+    const eyeSize = Math.min(w, h) * 0.13;
+    const eyeY = h * 0.05;
+    const eyeSpacing = w * 0.2;
+    g.rect(-eyeSpacing - eyeSize / 2, eyeY - eyeSize / 2, eyeSize, eyeSize).fill(eye);
+    g.rect(eyeSpacing - eyeSize / 2, eyeY - eyeSize / 2, eyeSize, eyeSize).fill(eye);
+
+    const mouthY = eyeY + eyeSize * 1.6;
+    const mouthH = eyeSize * 0.7;
     if (dizzy) {
-      const s = eyeR * 0.62;
-      for (const ex of [-spacing, spacing]) {
-        g.moveTo(ex - s, eyeY - s).lineTo(ex + s, eyeY + s);
-        g.moveTo(ex - s, eyeY + s).lineTo(ex + s, eyeY - s);
+      // Gap-toothed wobble: alternating short blocks instead of one bar.
+      const mouthW = eyeSize * 3.2;
+      const seg = mouthW / 5;
+      for (let i = 0; i < 5; i += 2) {
+        g.rect(-mouthW / 2 + i * seg, mouthY - mouthH / 2, seg, mouthH).fill(mouth);
       }
-      g.stroke({ width: Math.max(1.5, eyeR * 0.35), color: 0x2b2b2b });
-      g.circle(0, mouthY + 1, eyeR * 0.55).fill(0xffffff).stroke({ width: 1.5, color: 0x2b2b2b });
     } else {
-      g.circle(-spacing, eyeY, eyeR).fill(0xffffff);
-      g.circle(spacing, eyeY, eyeR).fill(0xffffff);
-      g.circle(-spacing + eyeR * 0.3, eyeY, eyeR * 0.55).fill(0x2b2b2b);
-      g.circle(spacing + eyeR * 0.3, eyeY, eyeR * 0.55).fill(0x2b2b2b);
-      g.arc(0, mouthY - eyeR * 0.4, eyeR * 0.9, 0.15, Math.PI - 0.15).stroke({
-        width: Math.max(1.5, eyeR * 0.3),
-        color: 0x2b2b2b,
-      });
+      const mouthW = eyeSize * 2.4;
+      g.rect(-mouthW / 2, mouthY - mouthH / 2, mouthW, mouthH).fill(mouth);
     }
-    g.roundRect(-w / 2, -h / 2, w, h, r).stroke({ width: 3, color: 0x000000, alpha: 0.22 });
+
+    // Flat rectangular outline (no rounded corners) to keep the silhouette
+    // blocky against the neighbouring tinted facades.
+    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: 0x1c2534, alpha: 0.35 });
   };
 
   // Packed into their own strip (like the flipper) since some spans (e.g.
@@ -203,26 +210,44 @@ export function buildAtlas(renderer: Renderer): Atlas {
     buildingStripH = Math.max(buildingStripH, h);
   }
 
-  // --- Chibi panicking pedestrian: big round head, tiny body, arms thrown
-  // up mid-scream. Two silhouettes (arms/legs swapped) are alternated by
-  // the swarm for a bouncy, readable "running in a panic" cycle. ---
+  // --- Retro pixel-art panicking pedestrian: every part (head, hair,
+  // torso, arms, legs) is a flat g.rect() block instead of circles/lines,
+  // for the same "arranged rectangles" dot-art look as the buildings.
+  // Two silhouettes (arms/legs swapped via `phase`) are alternated by the
+  // swarm for a bouncy, readable "running in a panic" cycle - hit radius
+  // and physics are untouched, only the drawing changed. ---
   const drawHuman = (g: Graphics, phase: number) => {
-    g.ellipse(0, 11, 9, 3).fill({ color: 0x101820, alpha: 0.25 });
+    const skin = 0xffd2ad;
+    const hair = 0x3a2a20;
+    const shirt = 0xffffff;
+    const dark = 0x2b2b2b;
+    const limb = 0x3a4a68;
+
+    // ground shadow
+    g.rect(-5, 10.5, 10, 2).fill({ color: 0x101820, alpha: 0.25 });
+
     // legs, kicked out oppositely each frame
-    g.moveTo(-1.5, 7).lineTo(-3.5 - phase * 3, 12).stroke({ width: 2.6, color: 0x3a4a68 });
-    g.moveTo(1.5, 7).lineTo(3.5 + phase * 3, 12).stroke({ width: 2.6, color: 0x3a4a68 });
-    // tiny round body
-    g.circle(0, 4, 4.5).fill(0xffffff).stroke({ width: 1, color: 0x3a4a68 });
+    g.rect(-4 - phase * 2.5, 6.5, 2.4, 5).fill(limb);
+    g.rect(1.6 + phase * 2.5, 6.5, 2.4, 5).fill(limb);
+
+    // torso block
+    g.rect(-3.6, 2, 7.2, 6).fill(shirt);
+    g.rect(-3.6, 2, 7.2, 6).stroke({ width: 1, color: limb });
+
     // arms thrown straight up in a panic
-    g.moveTo(-3, 2).lineTo(-7, -8 + phase).stroke({ width: 2.2, color: 0xffd2ad });
-    g.moveTo(3, 2).lineTo(7, -8 - phase).stroke({ width: 2.2, color: 0xffd2ad });
-    // big chibi head
-    g.circle(0, -5, 7.5).fill(0xffd2ad).stroke({ width: 1, color: 0xb98456 });
-    g.circle(-3, -10, 3).fill(0x3a2a20);
-    g.circle(3, -10, 3).fill(0x3a2a20);
-    g.circle(-2.6, -6, 1.2).fill(0x2b2b2b);
-    g.circle(2.6, -6, 1.2).fill(0x2b2b2b);
-    g.ellipse(0, -2, 1.8, 2.4).fill(0x8a4b38); // wide-open scream mouth
+    g.rect(-7.5, -8 + phase, 3, 8).fill(skin);
+    g.rect(4.5, -8 - phase, 3, 8).fill(skin);
+
+    // head block + hair cap
+    g.rect(-5.5, -12.5, 11, 9).fill(skin);
+    g.rect(-6, -13, 12, 3.5).fill(hair);
+
+    // square eyes
+    g.rect(-3.6, -8.5, 2.2, 2.2).fill(dark);
+    g.rect(1.4, -8.5, 2.2, 2.2).fill(dark);
+
+    // wide-open scream mouth
+    g.rect(-1.6, -4.5, 3.2, 3).fill(0x8a4b38);
   };
   place("human", (g) => drawHuman(g, -1), 32);
   place("humanRun", (g) => drawHuman(g, 1), 32);
