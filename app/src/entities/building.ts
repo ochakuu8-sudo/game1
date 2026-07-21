@@ -7,10 +7,14 @@ import { buildingRect, type BuildingSlot } from "../physics/layout";
 const REBUILD_TIME = 5.5;
 const HIT_FLASH_TIME = 0.22;
 
-// Retro cartridge facade tints - each building instance picks one so the
-// same handful of baked textures (one per footprint size) still reads as a
-// varied city block rather than identical copies.
-const TINTS = [PALETTE.red, PALETTE.orange, PALETTE.gold, PALETTE.green, PALETTE.blue, PALETTE.purple, PALETTE.pink];
+// Retro cartridge facade tints - kept to a small, warm/cool-alternating set
+// (gold and pink are reserved for UI/FX accents) so a fully-packed grid of
+// these still reads as a calm, deliberate tilemap rather than a noisy
+// rainbow. Picked deterministically from each lot's grid position (see
+// `spawn` below) instead of at random, so neighbouring lots settle into a
+// clean repeating pattern like an actual 8-bit background layer, and a
+// rebuilt lot keeps its same city-block colour instead of re-rolling.
+const TINTS = [PALETTE.red, PALETTE.blue, PALETTE.orange, PALETTE.purple, PALETTE.mint];
 
 export class Building {
   container: Container;
@@ -46,7 +50,7 @@ export class Building {
     this.cellCount = slot.spanCols * slot.spanRows;
 
     const rect = buildingRect(slot);
-    this.baseTint = TINTS[(Math.random() * TINTS.length) | 0];
+    this.baseTint = TINTS[(slot.col + slot.row) % TINTS.length];
     const key = buildingSizeKey(rect.width, rect.height);
     this.normalTexture = atlas.buildings[key];
     this.dizzyTexture = atlas.buildingsDizzy[key];
@@ -66,10 +70,10 @@ export class Building {
     this.sprite.tint = this.baseTint;
     this.container.addChild(this.sprite);
 
-    // Scale the HP digits with the building's own footprint (capped at the
-    // old fixed 0.42) rather than a flat size, so a small grid cell's label
-    // doesn't dwarf the building it's sitting on.
-    const digitScale = Math.min(0.42, Math.max(0.2, rect.width / 64));
+    // Scale the HP digits with the building's own footprint, capped small
+    // enough that the number reads clearly without its dark backing plate
+    // blotting out the whole tiny facade underneath (windows/face/tint).
+    const digitScale = Math.min(0.3, Math.max(0.16, rect.width / 90));
     this.digitSpacing = 13 * (digitScale / 0.42);
     // Centered on the facade itself (covering the face is fine) instead of
     // floating above it, so the HP reads as part of the building.
