@@ -11,11 +11,11 @@ import { ParticleFX } from "../fx/particles";
 import { PowerUpManager, type PowerUpChoice } from "./powerups";
 import { PowerUpSelect } from "./powerupSelect";
 import { BuildingSelect } from "./buildingSelect";
-import { BUILDING_TYPES, DEFAULT_BUILDING_TYPE, buildingStatLines, pickBuildingChoices, type BuildingType } from "../entities/buildingTypes";
+import { BUILDING_TYPES, buildingStatLines, pickBuildingChoices, tileWeightedCity, type BuildingType } from "../entities/buildingTypes";
 import { HUD } from "./hud";
 import { buildTableVisuals } from "../physics/tableVisuals";
 import {
-  TABLE_W, TABLE_H, DRAIN_Y, BALL_RADIUS, HUMAN_RADIUS, tileUniformGrid,
+  TABLE_W, TABLE_H, DRAIN_Y, BALL_RADIUS, HUMAN_RADIUS,
   GRID_COLS, GRID_ROWS, GRID_LEFT, GRID_TOP, GRID_RIGHT, GRID_BOTTOM,
 } from "../physics/layout";
 
@@ -58,7 +58,10 @@ export class Game {
   private powerups: PowerUpManager;
   private powerupSelect: PowerUpSelect;
   private buildingSelect: BuildingSelect;
-  private currentBuildingType: BuildingType = DEFAULT_BUILDING_TYPE;
+  /** Every building type picked so far, as a running multiset (see
+   * entities/buildingTypes.ts's tileWeightedCity) - picking a type again
+   * doesn't replace anything, it adds another weighted "vote" for it. */
+  private buildingPool: BuildingType[] = [];
 
   private root: Container;
   private ballLayer: Container;
@@ -288,8 +291,8 @@ export class Game {
 
   private onBuildingChosen(type: BuildingType) {
     sfx.powerupPick();
-    this.currentBuildingType = type;
-    this.rebuildCity(type);
+    this.buildingPool.push(type);
+    this.rebuildCity();
     this.hud.showBanner(`次の建物: ${type.label}`);
     this.state = "playing";
     if (this.world.balls.length === 0 && this.ballsReserve > 0) {
@@ -297,23 +300,24 @@ export class Game {
     }
   }
 
-  /** Regenerates the whole city grid to the chosen type's own fixed lot
-   * size - only that type appears on the board until the next pick.
+  /** Regenerates the whole city grid from the accumulated pool of every
+   * type picked so far, weighted by how many times each was picked (see
+   * entities/buildingTypes.ts's tileWeightedCity) - the mix keeps growing
+   * richer stage over stage instead of being replaced by the latest pick.
    * Old lots are fully torn down (containers + physics bodies) rather than
-   * resized in place since both the lot count and the collider footprint
-   * generally change between types. */
-  private rebuildCity(type: BuildingType) {
+   * resized in place since the whole layout is retiled from scratch. */
+  private rebuildCity() {
     for (const b of this.buildings) {
       this.buildingByBody.delete(b.body);
       b.container.destroy({ children: true });
     }
     this.buildings = [];
 
-    const slots = tileUniformGrid(type.spanCols, type.spanRows);
-    const bodies = this.world.setBuildingLayout(slots);
-    slots.forEach((slot, i) => {
+    const lots = tileWeightedCity(this.buildingPool);
+    const bodies = this.world.setBuildingLayout(lots.map((lot) => lot.slot));
+    lots.forEach((lot, i) => {
       const body = bodies[i];
-      const b = new Building(this.atlas, slot, body, type);
+      const b = new Building(this.atlas, lot.slot, body, lot.type);
       this.buildings.push(b);
       this.buildingByBody.set(body, b);
       this.buildingLayer.addChild(b.container);
@@ -417,7 +421,7 @@ export class Game {
     for (const body of [...this.world.balls]) this.removeBallEntity(body);
     this.humans.reset();
     this.powerups = new PowerUpManager();
-    this.currentBuildingType = DEFAULT_BUILDING_TYPE;
+    this.buildingPool = [];
 
     this.score = 0;
     this.stage = 1;
@@ -546,7 +550,7 @@ export class Game {
       stepVelHistory: () => { const h = this.debugStepVel; this.debugStepVel = []; return h; },
       forceMultiball: () => this.triggerMultiball(),
       setFlipperStacks: (n: number) => { this.powerups.stacks.FLIPPER = n; },
-      currentBuildingType: () => this.currentBuildingType.id,
+      buildingPool: () => this.buildingPool.map((t) => t.id),
       forceBuildingType: (id: string) => {
         const t = BUILDING_TYPES.find((t) => t.id === id);
         if (!t) return;

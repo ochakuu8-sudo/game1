@@ -83,23 +83,6 @@ export function buildingRect(slot: BuildingSlot): BuildingRect {
   };
 }
 
-// The grid is tiled edge to edge (GRID_INSET above is what forms the
-// streets) with a single *uniform* lot size at a time - the currently
-// chosen building type's spanCols/spanRows (see entities/buildingTypes.ts
-// and Game.rebuildCity) - stepping across the grid in that shape's own
-// increments. Any leftover strip that doesn't divide evenly (e.g. a 2x3
-// type against a 13-row grid) is simply left as empty street along the
-// right/bottom edge rather than forcing a partial lot.
-export function tileUniformGrid(spanCols: number, spanRows: number): BuildingSlot[] {
-  const slots: BuildingSlot[] = [];
-  for (let row = 0; row + spanRows <= GRID_ROWS; row += spanRows) {
-    for (let col = 0; col + spanCols <= GRID_COLS; col += spanCols) {
-      slots.push({ col, row, spanCols, spanRows });
-    }
-  }
-  return slots;
-}
-
 export const DRAIN_Y = TABLE_H + 40;
 export const BALL_RADIUS = 13;
 export const HUMAN_RADIUS = 6;
