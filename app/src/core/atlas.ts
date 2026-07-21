@@ -382,16 +382,15 @@ export function buildAtlas(renderer: Renderer): Atlas {
     48,
   );
 
-  // --- Digits 0-9 for HP labels - a classic 5x7 dot-matrix font on a
-  // small dark backing plate, instead of rendered Text, for a genuine
-  // "LED scoreboard" look. ---
+  // --- Digits 0-9 for HP labels - a classic 5x7 dot-matrix font, instead
+  // of rendered Text, with no backing plate so just the number itself
+  // sits on the house. ---
   const digitNames: string[] = [];
   for (let d = 0; d <= 9; d++) {
     const name = `digit${d}`;
     digitNames.push(name);
     const { x, y } = nextCell();
     const g = new Graphics();
-    g.rect(-21, -27, 42, 54).fill(PALETTE.ink);
     blit(g, DIGIT_GLYPHS[d], 7, PALETTE.paper, -17.5, -24.5);
     g.position.set(x + CELL / 2, y + CELL / 2);
     staging.addChild(g);
