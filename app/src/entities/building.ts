@@ -69,9 +69,10 @@ export class Building {
     // old fixed 0.42) rather than a flat size, so a small grid cell's label
     // doesn't dwarf the building it's sitting on.
     const digitScale = Math.min(0.42, Math.max(0.2, rect.width / 64));
-    const digitHalfH = 32 * digitScale;
     this.digitSpacing = 13 * (digitScale / 0.42);
-    const digitY = -rect.height / 2 - digitHalfH - 2;
+    // Centered on the facade itself (covering the face is fine) instead of
+    // floating above it, so the HP reads as part of the building.
+    const digitY = 0;
     this.digitTens = new Sprite(atlas.digits[0]);
     this.digitTens.anchor.set(0.5);
     this.digitTens.scale.set(digitScale);
