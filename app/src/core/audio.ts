@@ -114,6 +114,13 @@ class Sfx {
     notes.forEach((f, i) => this.tone(f, 0.18, "square", 0.22, { delay: i * 0.07 }));
   }
 
+  /** The stage's score quota is hit - a bigger fanfare than multiball's. */
+  stageClear() {
+    const notes = [392, 523.25, 659.25, 783.99, 1046.5]; // G4 C5 E5 G5 C6
+    notes.forEach((f, i) => this.tone(f, 0.22, "square", 0.24, { delay: i * 0.08 }));
+    this.noiseBurst(0.3, 0.15, { filterFreq: 4000, delay: notes.length * 0.08 });
+  }
+
   /** Player picks a power-up card. */
   powerupPick() {
     this.tone(660, 0.1, "sine", 0.2, { glide: { to: 880, time: 0.1 } });

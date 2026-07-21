@@ -40,6 +40,12 @@ const STARTER_BUILDING_MIN = 2;
 const STARTER_BUILDING_MAX = 3;
 const BUILDING_SPAWN_INTERVAL = 2.2;
 const BUILDING_SPAWN_JITTER = 1.1;
+// Score-attack stage quotas: stage N needs this many *total* points to
+// clear. Linear growth for now - tune these two once there's real playtest
+// data on how fast score actually climbs.
+const STAGE_QUOTA_BASE = 800;
+const STAGE_QUOTA_STEP = 700;
+const stageQuota = (stage: number) => STAGE_QUOTA_BASE + (stage - 1) * STAGE_QUOTA_STEP;
 
 export class Game {
   private app: Application;
@@ -63,6 +69,8 @@ export class Game {
 
   private state: GameState = "title";
   private score = 0;
+  private stage = 1;
+  private stageTarget = stageQuota(1);
   private ballsReserve = INITIAL_BALLS;
   private humanKills = 0;
   private multiballThreshold = MULTIBALL_START_THRESHOLD;
@@ -254,7 +262,6 @@ export class Game {
     if (choices.length === 0) {
       // Every buff is already maxed out - fall back to a flat score bonus.
       this.addScore(300);
-      this.awardBuildingChoice();
       return;
     }
     this.state = "powerup";
@@ -269,13 +276,15 @@ export class Game {
       this.hud.setBalls(this.ballsReserve, this.world.balls.length);
     }
     this.hud.showBanner(choice.label);
-    this.awardBuildingChoice();
+    this.state = "playing";
   }
 
-  /** Follows the power-up card with a second pick for which house type
-   * future lots build/rebuild as (see entities/buildingTypes.ts) - the
-   * two run on the same "every POWERUP_EVERY_N_BUILDINGS" cadence. */
-  private awardBuildingChoice() {
+  /** Offers a building-type pick at the start of every stage (including
+   * the very first) - see entities/buildingTypes.ts. Pauses play the same
+   * way the power-up card does; if a ball is already in flight (a
+   * mid-stage clear) it's left exactly where it was and simply resumes,
+   * otherwise (game start) a fresh one is served once a card is picked. */
+  private beginStage() {
     const choices = pickBuildingChoices(3);
     this.state = "building";
     this.buildingSelect.show(choices, (type) => this.onBuildingChosen(type));
@@ -286,6 +295,20 @@ export class Game {
     this.currentBuildingType = type;
     this.hud.showBanner(`次の建物: ${type.label}`);
     this.state = "playing";
+    if (this.world.balls.length === 0 && this.ballsReserve > 0) {
+      this.serveBall();
+    }
+  }
+
+  /** Hit the current stage's score quota - advance to the next (tougher)
+   * one and offer a fresh building-type pick before play resumes. */
+  private clearStage() {
+    sfx.stageClear();
+    this.stage++;
+    this.stageTarget = stageQuota(this.stage);
+    this.hud.setStage(this.stage, this.stageTarget);
+    this.hud.showBanner(`STAGE ${this.stage}`, 1.6);
+    this.beginStage();
   }
 
   private onHumanPop = (x: number, y: number) => {
@@ -377,6 +400,8 @@ export class Game {
     this.currentBuildingType = DEFAULT_BUILDING_TYPE;
 
     this.score = 0;
+    this.stage = 1;
+    this.stageTarget = stageQuota(1);
     this.ballsReserve = INITIAL_BALLS;
     this.humanKills = 0;
     this.multiballThreshold = MULTIBALL_START_THRESHOLD;
@@ -385,10 +410,10 @@ export class Game {
     this.hud.hideTitle();
     this.hud.hideGameOver();
     this.hud.setScore(0);
+    this.hud.setStage(this.stage, this.stageTarget);
     this.hud.setCombo(0, this.multiballThreshold);
 
-    this.state = "playing";
-    this.serveBall();
+    this.beginStage();
   }
 
   private gameOver() {
@@ -411,6 +436,16 @@ export class Game {
     this.hud.update(dtMs / 1000);
 
     if (this.state !== "playing") return;
+
+    // Checked once per "playing" frame (rather than inline where addScore
+    // is called) so it naturally waits its turn behind any other modal
+    // that's already up - once that resolves and state is back to
+    // "playing", the very next tick sees the already-over-target score and
+    // clears the stage then, no separate pending-flag bookkeeping needed.
+    if (this.score >= this.stageTarget) {
+      this.clearStage();
+      return;
+    }
 
     this.world.leftFlipper.setHeld(this.input.left);
     this.world.rightFlipper.setHeld(this.input.right);
@@ -496,7 +531,10 @@ export class Game {
         const t = BUILDING_TYPES.find((t) => t.id === id);
         if (t) this.currentBuildingType = t;
       },
-      forceBuildingChoice: () => this.awardBuildingChoice(),
+      forceBuildingChoice: () => this.beginStage(),
+      stage: () => this.stage,
+      stageTarget: () => this.stageTarget,
+      forceStageClear: () => this.clearStage(),
       serveBall: () => this.serveBall(),
       forceGameOver: () => this.gameOver(),
       state: () => this.state,

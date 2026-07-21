@@ -25,6 +25,7 @@ export class Building {
   private digitSpacing: number;
   private atlas: Atlas;
   private baseTint: number;
+  private cellCount: number;
   private getType: () => BuildingType;
   /** Duration `rebuildTimer` was set to at the last destruction - used to
    * compute the collapse animation's progress independent of how long
@@ -55,6 +56,7 @@ export class Building {
     this.body = body;
     this.getType = getType;
     this.type = getType();
+    this.cellCount = slot.spanCols * slot.spanRows;
 
     const rect = buildingRect(slot);
     this.baseTint = TINTS[(slot.col + slot.row) % TINTS.length];
@@ -138,11 +140,15 @@ export class Building {
     // the meantime, matching "future lots use whatever's picked now".
     this.type = this.getType();
     // A freshly-spawned level-1 lot starts near its type's base HP - a
-    // handful of hits down. Bigger virtual lots (higher cellUnits) and
-    // higher rebuild levels both make it tougher.
+    // handful of hits down. Bigger virtual lots (higher cellUnits), higher
+    // rebuild levels, and an actually-bigger physical footprint (a 2x1/1x2/
+    // 2x2 lot from physics/layout.ts's mixed tiling) all make it tougher.
     this.maxHp = Math.max(
       1,
-      Math.min(this.type.hpBase + (level - 1) * this.type.hpPerLevel + (this.type.cellUnits - 1) * 2, 20),
+      Math.min(
+        this.type.hpBase + (level - 1) * this.type.hpPerLevel + (this.type.cellUnits - 1) * 2 + (this.cellCount - 1) * 2,
+        20,
+      ),
     );
     this.hp = this.maxHp;
     this.destroyed = false;

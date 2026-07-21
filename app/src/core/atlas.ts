@@ -245,7 +245,10 @@ export function buildAtlas(renderer: Renderer): Atlas {
     const roofTop = -h / 2;
     g.rect(-roofW / 2, roofTop, roofW, roofH).fill(roofGray);
     g.rect(-roofW / 2, roofTop, roofW, roofH * 0.3).fill(roofGrayLight);
-    const grooves = 5;
+    // Groove count scales with width so wider multi-cell roofs (see
+    // physics/layout.ts's mixed 1x1/2x1/1x2/2x2 lot tiling) don't look
+    // sparse.
+    const grooves = Math.max(4, Math.round(roofW / 12));
     for (let i = 0; i < grooves; i++) {
       const gx = -roofW / 2 + (roofW / grooves) * (i + 0.5);
       g.rect(gx - 0.6, roofTop, 1.2, roofH).fill(roofGrayDark);
@@ -258,13 +261,21 @@ export function buildAtlas(renderer: Renderer): Atlas {
     g.rect(-w / 2, wallTop, w, wallH).fill(wall);
     g.rect(-w / 2, wallTop, w, wallH).stroke({ width: 2, color: PALETTE.ink, alpha: 0.3 });
 
-    // Two little windows.
-    const winSize = Math.min(w, h) * 0.15;
-    const winY = wallTop + wallH * 0.32;
-    const winSpacing = w * 0.24;
-    for (const wx of [-winSpacing, winSpacing]) {
-      g.rect(wx - winSize / 2, winY - winSize / 2, winSize, winSize).fill(windowColor);
-      g.rect(wx - winSize / 2, winY - winSize / 2, winSize, winSize).stroke({ width: 1, color: PALETTE.ink, alpha: 0.5 });
+    // A grid of little windows - column/row counts scale with the wall's
+    // own size so a wide 2x1 or tall 1x2 multi-cell lot (see
+    // physics/layout.ts) reads as properly bigger, not just stretched.
+    const winSize = Math.max(2.4, Math.min(w, h) * 0.13);
+    const winCols = Math.max(2, Math.round(w / (winSize * 3.4)));
+    const winRows = Math.max(1, Math.round(wallH / (winSize * 3.8)));
+    const colStep = w / (winCols + 1);
+    const rowStep = wallH / (winRows + 1);
+    for (let ri = 1; ri <= winRows; ri++) {
+      for (let ci = 1; ci <= winCols; ci++) {
+        const wx = -w / 2 + colStep * ci;
+        const wy = wallTop + rowStep * ri;
+        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).fill(windowColor);
+        g.rect(wx - winSize / 2, wy - winSize / 2, winSize, winSize).stroke({ width: 1, color: PALETTE.ink, alpha: 0.5 });
+      }
     }
 
     // A front door with a little porch light.

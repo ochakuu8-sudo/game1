@@ -59,6 +59,7 @@ const COMBO_SEGMENTS = 10;
 export class HUD {
   container: Container;
   private scoreText: Text;
+  private stageText: Text;
   private ballsText: Text;
   private comboBarBg: Graphics;
   private comboBarFill: Graphics;
@@ -75,14 +76,14 @@ export class HUD {
     this.container = new Container();
 
     const topBar = new Graphics()
-      .rect(0, 0, TABLE_W, 48)
+      .rect(0, 0, TABLE_W, 64)
       .fill({ color: PALETTE.ink, alpha: 0.92 })
-      .rect(0, 46, TABLE_W, 3)
+      .rect(0, 62, TABLE_W, 3)
       .fill(PALETTE.gold)
-      .rect(7, 5, 128, 35)
+      .rect(7, 5, 128, 54)
       .fill({ color: PALETTE.skyDeep, alpha: 0.9 })
       .stroke({ width: 2, color: PALETTE.blue })
-      .rect(TABLE_W - 132, 5, 125, 35)
+      .rect(TABLE_W - 132, 5, 125, 54)
       .fill({ color: PALETTE.skyDeep, alpha: 0.9 })
       .stroke({ width: 2, color: PALETTE.blue });
     this.container.addChild(topBar);
@@ -90,6 +91,10 @@ export class HUD {
     this.scoreText = new Text({ text: "0", style: scoreStyle });
     this.scoreText.position.set(10, 6);
     this.container.addChild(this.scoreText);
+
+    this.stageText = new Text({ text: "STAGE 1  ▸0", style: { ...smallStyle, fontSize: 11 } });
+    this.stageText.position.set(10, 34);
+    this.container.addChild(this.stageText);
 
     this.ballsText = new Text({ text: "BALL x3", style: smallStyle });
     this.ballsText.anchor.set(1, 0);
@@ -209,6 +214,10 @@ export class HUD {
 
   setScore(score: number) {
     this.scoreText.text = score.toLocaleString();
+  }
+
+  setStage(stage: number, target: number) {
+    this.stageText.text = `STAGE ${stage}  ▸${target.toLocaleString()}`;
   }
 
   setBalls(reserve: number, active: number) {
