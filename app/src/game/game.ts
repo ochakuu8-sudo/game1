@@ -3,6 +3,7 @@ import Matter from "matter-js";
 import { buildAtlas, type Atlas } from "../core/atlas";
 import { InputManager } from "../core/input";
 import { sfx } from "../core/audio";
+import { PALETTE } from "../core/palette";
 import { PinballWorld } from "../physics/world";
 import { Building } from "../entities/building";
 import { HumanSwarm } from "../entities/human";
@@ -130,47 +131,55 @@ export class Game {
   private buildCityBackdrop(): Container {
     const c = new Container();
     const g = new Graphics();
-    // A top-down candy-city playfield: pastel sky frames a cream-coloured
-    // town square, with lavender streets instead of dark asphalt - a
-    // cheerful, casual-game palette rather than a gritty nighttime city.
-    g.rect(0, 0, TABLE_W, TABLE_H).fill(0xbde6ff);
-    g.rect(12, 48, TABLE_W - 24, 430).roundRect(18, 54, TABLE_W - 36, 410, 12).fill(0xffe3a8);
-    g.roundRect(25, 53, TABLE_W - 50, 412, 8).fill(0xfff3d9).stroke({ width: 2, color: 0xffcf7a, alpha: 0.6 });
+    // A blocky Famicom-style top-down city: flat sky, a walled town square,
+    // and a pixel skyline silhouette along the horizon - every shape a
+    // g.rect() block, no gradients/circles/ellipses.
+    g.rect(0, 0, TABLE_W, TABLE_H).fill(PALETTE.sky);
+
+    // Town square block.
+    g.rect(12, 48, TABLE_W - 24, 430).fill(PALETTE.ink);
+    g.rect(18, 54, TABLE_W - 36, 410).fill(PALETTE.street);
+    g.rect(18, 54, TABLE_W - 36, 410).stroke({ width: 2, color: PALETTE.streetLine, alpha: 0.5 });
+
     // Narrow streets separate every lot in the fully-packed building grid.
     for (let col = 0; col <= GRID_COLS; col++) {
       const x = GRID_LEFT + ((GRID_RIGHT - GRID_LEFT) * col) / GRID_COLS;
-      g.rect(x - 4, 54, 8, 410).fill(0xd8cff2);
+      g.rect(x - 3, 54, 6, 410).fill(PALETTE.streetLine);
     }
     for (let row = 0; row <= GRID_ROWS; row++) {
       const y = GRID_TOP + ((GRID_BOTTOM - GRID_TOP) * row) / GRID_ROWS;
-      g.rect(26, y - 4, TABLE_W - 52, 8).fill(0xd8cff2);
+      g.rect(26, y - 3, TABLE_W - 52, 6).fill(PALETTE.streetLine);
     }
-    g.rect(26, 54, TABLE_W - 52, 2).fill({ color: 0xffffff, alpha: 0.6 });
 
-    // Cute little kaiju footprints tie the destructive ball path to the
-    // city - a soft brown smudge rather than a scorch mark.
-    for (const [x, y] of [[92, 510], [318, 570]] as const) {
-      g.ellipse(x, y, 20, 30).fill({ color: 0xb98b6a, alpha: 0.35 });
-      g.circle(x - 15, y - 22, 6).fill({ color: 0xb98b6a, alpha: 0.3 });
-      g.circle(x, y - 28, 6).fill({ color: 0xb98b6a, alpha: 0.3 });
-      g.circle(x + 15, y - 22, 6).fill({ color: 0xb98b6a, alpha: 0.3 });
-    }
-    // subtle lower-playfield paneling breaks up the large open sky area.
-    g.roundRect(44, 492, TABLE_W - 88, 145, 24).fill({ color: 0xffffff, alpha: 0.18 }).stroke({ width: 2, color: 0xffffff, alpha: 0.3 });
-
-    // A smiling sun peeking over the top edge and a couple of fluffy
-    // clouds drifting through the open sky below the town square.
-    const sunX = TABLE_W * 0.82;
-    g.circle(sunX, 6, 30).fill({ color: 0xfff2b0, alpha: 0.9 });
-    g.circle(sunX, 6, 44).fill({ color: 0xfff2b0, alpha: 0.3 });
-    const cloud = (cx: number, cy: number, scale: number) => {
-      g.ellipse(cx, cy, 24 * scale, 13 * scale).fill({ color: 0xffffff, alpha: 0.9 });
-      g.ellipse(cx - 16 * scale, cy + 4 * scale, 15 * scale, 10 * scale).fill({ color: 0xffffff, alpha: 0.9 });
-      g.ellipse(cx + 16 * scale, cy + 4 * scale, 15 * scale, 10 * scale).fill({ color: 0xffffff, alpha: 0.9 });
+    // Distant skyline silhouette along the horizon strip below the town
+    // square, like a classic 8-bit background layer, plus a blocky sun and
+    // a couple of blocky clouds in the open sky beneath it.
+    const horizonY = 500;
+    let skylineX = 0;
+    let seed = 7;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return (seed % 1000) / 1000;
     };
-    cloud(70, 555, 0.9);
-    cloud(TABLE_W - 60, 650, 0.75);
-    cloud(TABLE_W * 0.5, 700, 0.6);
+    while (skylineX < TABLE_W) {
+      const w = 14 + Math.floor(rand() * 10);
+      const h = 10 + Math.floor(rand() * 26);
+      g.rect(skylineX, horizonY - h, w, h).fill(PALETTE.skyDeep);
+      skylineX += w + 3;
+    }
+    g.rect(0, horizonY, TABLE_W, 4).fill(PALETTE.skyDeep);
+
+    const sunX = TABLE_W * 0.82;
+    g.rect(sunX - 16, horizonY - 68, 32, 32).fill(PALETTE.gold);
+    g.rect(sunX - 16, horizonY - 68, 32, 32).stroke({ width: 2, color: PALETTE.ink });
+
+    const cloud = (cx: number, cy: number) => {
+      g.rect(cx - 16, cy, 32, 8).fill(PALETTE.paper);
+      g.rect(cx - 8, cy - 6, 20, 8).fill(PALETTE.paper);
+    };
+    cloud(70, horizonY + 45);
+    cloud(TABLE_W - 70, horizonY + 140);
+    cloud(TABLE_W * 0.5, horizonY + 195);
 
     c.addChild(g);
     return c;

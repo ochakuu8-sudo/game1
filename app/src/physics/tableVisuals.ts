@@ -1,4 +1,6 @@
 import { Container, Graphics } from "pixi.js";
+import { blit, circleBitmap } from "../core/atlas";
+import { PALETTE } from "../core/palette";
 import { OUTER_WALLS, OUTLANE_GUIDES, FLIPPER_HINGE_GUARDS, TABLE_H, type WallRect, type WallSeg } from "./layout";
 
 function rectCorners(cx: number, cy: number, w: number, h: number, angle: number) {
@@ -33,13 +35,13 @@ export function buildTableVisuals(): Container {
   const c = new Container();
   const g = new Graphics();
 
-  const fill = 0xaab1ba;
-  const edge = 0x7d8794;
-  const railFill = 0xc2c8d0;
+  const fill = PALETTE.street;
+  const edge = PALETTE.ink;
+  const railFill = PALETTE.streetLine;
 
   const drawRect = (r: WallRect) => {
     const pts = rectCorners(r.x, r.y, r.w, r.h, r.angle ?? 0);
-    g.poly(pts.flatMap((p) => [p.x, p.y])).fill(fill).stroke({ width: 2, color: edge, alpha: 0.8 });
+    g.poly(pts.flatMap((p) => [p.x, p.y])).fill(fill).stroke({ width: 3, color: edge });
   };
 
   const drawGuide = (raw: WallSeg) => {
@@ -51,16 +53,19 @@ export function buildTableVisuals(): Container {
     const cx = (s.x1 + s.x2) / 2;
     const cy = (s.y1 + s.y2) / 2;
 
-    // Filled with no per-shape stroke, and rounded off at both ends with
-    // plain circles in the same fill colour - a straight-edged rectangle
-    // meeting the round flipper-hinge guard at an angle used to leave a
-    // visibly sharp kink right at the joint. Capsule-style rounding (plus
-    // relying on the hinge guard being large enough to fully absorb the
-    // join, see layout.ts) blends the two into one smooth shape instead.
+    // Filled with a dark outline stroke, and capped at both ends with
+    // blocky pixel-circles in the same fill colour - a straight-edged
+    // rectangle meeting the round flipper-hinge guard at an angle would
+    // otherwise leave a visibly sharp kink right at the joint. These caps
+    // (plus the hinge guard below being large enough to fully absorb the
+    // join, see layout.ts) blend the two into one shape instead. Purely a
+    // visual approximation of the physics circles - the actual collider in
+    // physics/world.ts is still an exact circle.
     const pts = rectCorners(cx, cy, length, s.thickness, angle);
-    g.poly(pts.flatMap((p) => [p.x, p.y])).fill(railFill);
-    g.circle(s.x1, s.y1, s.thickness / 2).fill(railFill);
-    g.circle(s.x2, s.y2, s.thickness / 2).fill(railFill);
+    g.poly(pts.flatMap((p) => [p.x, p.y])).fill(railFill).stroke({ width: 2, color: edge });
+    const capPx = s.thickness / 9;
+    blit(g, circleBitmap(9), capPx, railFill, s.x1 - (9 * capPx) / 2, s.y1 - (9 * capPx) / 2);
+    blit(g, circleBitmap(9), capPx, railFill, s.x2 - (9 * capPx) / 2, s.y2 - (9 * capPx) / 2);
 
     // A bright stripe down the middle of the rail so the slope reads
     // clearly against the dark playfield.
@@ -68,13 +73,14 @@ export function buildTableVisuals(): Container {
     const ny = (dx / length) * (s.thickness / 2 - 3);
     g.moveTo(s.x1 + nx, s.y1 + ny)
       .lineTo(s.x2 + nx, s.y2 + ny)
-      .stroke({ width: 3, color: 0xffcf5c, alpha: 0.85 });
+      .stroke({ width: 3, color: PALETTE.gold, alpha: 0.9 });
   };
 
   for (const w of OUTER_WALLS) drawRect(w);
   for (const s of OUTLANE_GUIDES) drawGuide(s);
   for (const h of FLIPPER_HINGE_GUARDS) {
-    g.circle(h.x, h.y, h.radius).fill(railFill);
+    const px = (h.radius * 2) / 11;
+    blit(g, circleBitmap(11), px, railFill, h.x - (11 * px) / 2, h.y - (11 * px) / 2);
   }
 
   c.addChild(g);

@@ -1,15 +1,16 @@
 import { Container, Sprite } from "pixi.js";
 import type Matter from "matter-js";
 import { buildingSizeKey, type Atlas } from "../core/atlas";
+import { PALETTE } from "../core/palette";
 import { buildingRect, type BuildingSlot } from "../physics/layout";
 
 const REBUILD_TIME = 5.5;
 const HIT_FLASH_TIME = 0.22;
 
-// Cute pastel facade tints - each building instance picks one so the same
-// handful of baked textures (one per footprint size) still reads as a
-// varied, candy-coloured city block rather than identical copies.
-const TINTS = [0xffb3c6, 0xa8e0c8, 0xffd9a0, 0xb3d4ff, 0xd9b8f0, 0xfff0a8];
+// Retro cartridge facade tints - each building instance picks one so the
+// same handful of baked textures (one per footprint size) still reads as a
+// varied city block rather than identical copies.
+const TINTS = [PALETTE.red, PALETTE.orange, PALETTE.gold, PALETTE.green, PALETTE.blue, PALETTE.purple, PALETTE.pink];
 
 export class Building {
   container: Container;

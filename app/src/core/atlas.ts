@@ -1,14 +1,6 @@
-import {
-  Container,
-  Graphics,
-  Rectangle,
-  RenderTexture,
-  Text,
-  TextStyle,
-  Texture,
-  type Renderer,
-} from "pixi.js";
+import { Container, Graphics, Rectangle, RenderTexture, Texture, type Renderer } from "pixi.js";
 import { BUILDING_SLOTS, buildingRect } from "../physics/layout";
+import { PALETTE } from "./palette";
 
 /**
  * Every visual in the game (buildings, humans, ball, flippers, particles,
@@ -17,6 +9,12 @@ import { BUILDING_SLOTS, buildingRect } from "../physics/layout";
  * PixiJS's batch renderer folds them all into a handful of draw calls even
  * when hundreds of humans/particles are on screen at once - important for
  * keeping this smooth on phones.
+ *
+ * Everything is drawn as flat g.rect() blocks (plus a couple of small
+ * helpers that decide *which* cells to fill, e.g. circleBitmap) rather than
+ * circles/arcs/rounded corners or a small texture scaled up - a retro,
+ * Famicom-style "arranged rectangles" dot-art look baked directly at the
+ * atlas's native resolution.
  */
 /** Groups a building's footprint into a texture key - buildings share a
  * texture whenever they're the same pixel size (regardless of which grid
@@ -32,8 +30,8 @@ export interface Atlas {
   /** Keyed by buildingSizeKey(width, height) - one facade texture per
    * distinct building footprint size used in the current layout. */
   buildings: Record<string, Texture>;
-  /** Same keys as `buildings` - a "dizzy" (X-eyed) variant flashed briefly
-   * on a hit for a cartoon reaction. */
+  /** Same keys as `buildings` - a "dizzy" variant flashed briefly on a hit
+   * for a cartoon reaction. */
   buildingsDizzy: Record<string, Texture>;
   human: Texture;
   humanRun: Texture;
@@ -59,6 +57,77 @@ const FLIPPER_H = 72;
 const FLIPPER_HINGE_X = 22;
 const FLIPPER_HINGE_Y = FLIPPER_H / 2;
 
+export type FillColor = number | { color: number; alpha: number };
+export type Bitmap = string[];
+
+/** Draws a bitmap ('1' = filled, anything else = skip) as literal adjacent
+ * g.rect() blocks - the one shared primitive every sprite below is built
+ * from, so the whole atlas reads as one consistent dot-art technique. */
+export function blit(g: Graphics, bitmap: Bitmap, px: number, fill: FillColor, originX?: number, originY?: number) {
+  const cols = bitmap[0].length;
+  const rows = bitmap.length;
+  const ox = originX ?? -(cols * px) / 2;
+  const oy = originY ?? -(rows * px) / 2;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (bitmap[r][c] !== "1") continue;
+      g.rect(ox + c * px, oy + r * px, px, px).fill(fill);
+    }
+  }
+}
+
+/** An n x n bitmap of the cells whose centre falls inside a circle
+ * inscribed in the grid - the standard way to rasterize a circle as blocks
+ * instead of drawing g.circle() and scaling a texture. */
+export function circleBitmap(n: number): Bitmap {
+  const r = n / 2;
+  const rows: string[] = [];
+  for (let y = 0; y < n; y++) {
+    let row = "";
+    for (let x = 0; x < n; x++) {
+      const dx = x - r + 0.5;
+      const dy = y - r + 0.5;
+      row += dx * dx + dy * dy <= r * r ? "1" : "0";
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** Same idea as circleBitmap but hollowed out into a ring. */
+export function ringBitmap(n: number, innerRatio: number): Bitmap {
+  const r = n / 2;
+  const rInner = r * innerRatio;
+  const rows: string[] = [];
+  for (let y = 0; y < n; y++) {
+    let row = "";
+    for (let x = 0; x < n; x++) {
+      const dx = x - r + 0.5;
+      const dy = y - r + 0.5;
+      const d2 = dx * dx + dy * dy;
+      row += d2 <= r * r && d2 >= rInner * rInner ? "1" : "0";
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+// Classic 5x7 dot-matrix digit font.
+const DIGIT_GLYPHS: Bitmap[] = [
+  ["01110", "10001", "10011", "10101", "11001", "10001", "01110"], // 0
+  ["00100", "01100", "00100", "00100", "00100", "00100", "01110"], // 1
+  ["01110", "10001", "00001", "00010", "00100", "01000", "11111"], // 2
+  ["11111", "00010", "00100", "00010", "00001", "10001", "01110"], // 3
+  ["00010", "00110", "01010", "10010", "11111", "00010", "00010"], // 4
+  ["11111", "10000", "11110", "00001", "00001", "10001", "01110"], // 5
+  ["00110", "01000", "10000", "11110", "10001", "10001", "01110"], // 6
+  ["11111", "00001", "00010", "00100", "01000", "01000", "01000"], // 7
+  ["01110", "10001", "10001", "01110", "10001", "10001", "01110"], // 8
+  ["01110", "10001", "10001", "01111", "00001", "00010", "01100"], // 9
+];
+
+const STAR_GLYPH: Bitmap = ["...1...", "..111..", ".11111.", "1111111", ".11111.", "..111..", "...1..."];
+
 export function buildAtlas(renderer: Renderer): Atlas {
   const staging = new Container();
   const frames: Record<string, Rectangle> = {};
@@ -81,76 +150,87 @@ export function buildAtlas(renderer: Renderer): Atlas {
     frames[name] = new Rectangle(x + CELL / 2 - half, y + CELL / 2 - half, size, size);
   };
 
-  // --- Ball: a cute round kaiju face - big googly eyes, blush, a happy
-  // little fang instead of a menacing monster, for the casual/kawaii look. ---
-  place("ball", (g) => {
-    g.circle(-13, -21, 6.5).fill(0x8fe0b0);
-    g.circle(0, -25, 7.5).fill(0x8fe0b0);
-    g.circle(13, -21, 6.5).fill(0x8fe0b0);
-    g.circle(0, 0, 25).fill(0x8fe0b0);
-    g.circle(-16, 7, 5).fill({ color: 0xff9eb9, alpha: 0.75 });
-    g.circle(16, 7, 5).fill({ color: 0xff9eb9, alpha: 0.75 });
-    g.circle(-9, -3, 7.5).fill(0xffffff);
-    g.circle(9, -3, 7.5).fill(0xffffff);
-    g.circle(-7, -1, 4.2).fill(0x2b2b2b);
-    g.circle(11, -1, 4.2).fill(0x2b2b2b);
-    g.circle(-8.5, -4.5, 1.6).fill(0xffffff);
-    g.circle(9.5, -4.5, 1.6).fill(0xffffff);
-    g.arc(0, 8, 9, 0.2, Math.PI - 0.2).stroke({ width: 3, color: 0x3a8f63 });
-    g.poly([-3, 12, 0, 17, 3, 12]).fill(0xffffff);
-    g.circle(0, 0, 25).stroke({ width: 3, color: 0x4bab78 });
-  }, 64);
+  // --- Ball: a chunky pixel-circle kaiju head - square eyes, blush, a
+  // fang, two little back spikes. The outline is a second, slightly larger
+  // circleBitmap pass drawn first so a ring of it peeks out from behind. ---
+  place(
+    "ball",
+    (g) => {
+      const px = 3.6;
+      blit(g, circleBitmap(15), px, PALETTE.ink);
+      blit(g, circleBitmap(13), px, PALETTE.green);
 
-  // --- Flipper: rounded candy-coloured paddle with a glossy highlight,
-  // drawn hinge-anchored in its own reserved strip (see FLIPPER_* constants)
-  // rather than the shared icon grid ---
+      g.rect(-9, -24, 5, 7).fill(PALETTE.mint);
+      g.rect(4, -24, 5, 7).fill(PALETTE.mint);
+
+      g.rect(-11, -7, 6, 6).fill(PALETTE.paper);
+      g.rect(5, -7, 6, 6).fill(PALETTE.paper);
+      g.rect(-9, -5, 3, 3).fill(PALETTE.ink);
+      g.rect(7, -5, 3, 3).fill(PALETTE.ink);
+
+      g.rect(-19, 2, 5, 4).fill({ color: PALETTE.pink, alpha: 0.8 });
+      g.rect(14, 2, 5, 4).fill({ color: PALETTE.pink, alpha: 0.8 });
+
+      g.rect(-4, 9, 8, 4).fill(PALETTE.ink);
+      g.rect(-2, 9, 3, 5).fill(PALETTE.paper);
+    },
+    64,
+  );
+
+  // --- Flipper: a tapered stack of blocky segments (thick at the hinge,
+  // narrow at the tip) instead of one smooth poly, drawn hinge-anchored in
+  // its own reserved strip (see FLIPPER_* constants). ---
   {
     const g = new Graphics();
-    g.poly([0, -13, 66, -8, 70, 0, 66, 8, 0, 13]).fill(0xff6f91);
-    g.circle(0, 0, 13).fill(0xff6f91);
-    g.circle(70, 0, 7).fill(0xff85a3);
-    g.ellipse(24, -5, 24, 4.5).fill({ color: 0xffffff, alpha: 0.5 });
-    g.poly([0, -13, 66, -8, 70, 0, 66, 8, 0, 13]).stroke({ width: 2, color: 0xd94f74 });
-    g.circle(0, 0, 13).stroke({ width: 2, color: 0xd94f74 });
+    const seg = (x: number, w: number, h: number, color: FillColor, pad = 0) => {
+      g.rect(x - pad, -h / 2 - pad, w + pad * 2, h + pad * 2).fill(color);
+    };
+    // Outline pass (oversized, dark) then the body pass on top.
+    seg(0, 20, 30, PALETTE.ink, 2);
+    seg(18, 24, 24, PALETTE.ink, 2);
+    seg(40, 22, 18, PALETTE.ink, 2);
+    seg(60, 16, 12, PALETTE.ink, 2);
+
+    seg(0, 20, 26, PALETTE.red);
+    seg(18, 24, 20, PALETTE.red);
+    seg(40, 22, 15, PALETTE.red);
+    seg(60, 16, 9, PALETTE.red);
+
+    g.rect(-9, -9, 18, 18).fill(PALETTE.ink);
+    g.rect(-7, -7, 14, 14).fill(PALETTE.orange);
+    g.rect(6, -9, 30, 4).fill({ color: PALETTE.paper, alpha: 0.5 });
+
     g.position.set(FLIPPER_HINGE_X, ROWS * CELL + FLIPPER_HINGE_Y);
     staging.addChild(g);
     frames.flipper = new Rectangle(0, ROWS * CELL, FLIPPER_W, FLIPPER_H);
   }
 
   // --- Buildings: one facade texture per distinct footprint size actually
-  // used by the grid layout (physics/layout.ts), rather than fixed
-  // "wide"/"tower" shapes - so 1x1/1x2/2x1/2x2 (and anything else the grid
-  // produces) all get a properly-proportioned window grid. Drawn in white
-  // with near-white windows so each building instance can be recoloured
-  // with a per-Sprite tint (see entities/building.ts) while keeping the
-  // windows reading as a lighter "glass" highlight under any tint.
+  // used by the grid layout (physics/layout.ts). Drawn in white with
+  // near-white windows so each building instance can be recoloured with a
+  // per-Sprite tint (see entities/building.ts) while keeping the windows
+  // reading as a lighter "glass" highlight under any tint.
   const buildingSizes = new Map<string, { w: number; h: number }>();
   for (const slot of BUILDING_SLOTS) {
     const r = buildingRect(slot);
     buildingSizes.set(buildingSizeKey(r.width, r.height), { w: r.width, h: r.height });
   }
 
-  // Retro "arranged rectangles" pixel-art facade - every feature (wall,
-  // windows, face) is a flat g.rect() block, no circles/arcs/rounded
-  // corners, for a blocky dot-art look. A `dizzy` variant (accent-colour
-  // eyes, gap-toothed mouth) is baked alongside the normal one so
-  // entities/building.ts can flash it briefly on a hit, like a classic
-  // cartoon "OW!" reaction. Colliders/positions are untouched - this only
-  // changes what gets drawn into the shared texture.
+  // Blocky pixel-art facade - wall, windows, and face are all flat
+  // g.rect() blocks. A `dizzy` variant (accent-colour eyes, gap-toothed
+  // mouth) is baked alongside the normal one so entities/building.ts can
+  // flash it briefly on a hit, like a classic cartoon "OW!" reaction.
+  // Colliders/positions are untouched - only the drawing changed.
   const drawBuildingFacade = (g: Graphics, w: number, h: number, dizzy: boolean) => {
     const wall = 0xffffff; // tinted per-instance, see entities/building.ts
     const window = 0xdcf3ff;
-    const trim = 0x2b2b2b;
-    const eye = dizzy ? 0xff6f91 : 0x2b2b2b;
-    const mouth = 0x2b2b2b;
+    const trim = PALETTE.ink;
+    const eye = dizzy ? PALETTE.pink : PALETTE.ink;
+    const mouth = PALETTE.ink;
 
     g.rect(-w / 2, -h / 2, w, h).fill(wall);
-
-    // Roofline trim strip along the top edge.
     g.rect(-w / 2, -h / 2, w, h * 0.06).fill(trim);
 
-    // Two rows of square "pixel" windows, gapped in the middle column so
-    // the face beneath has room to read clearly.
     const winSize = Math.min(w, h) * 0.12;
     for (const wy of [-h * 0.32, -h * 0.14]) {
       for (const wx of [-w * 0.3, w * 0.3]) {
@@ -158,7 +238,6 @@ export function buildAtlas(renderer: Renderer): Atlas {
       }
     }
 
-    // Chunky square-eyed pixel face.
     const eyeSize = Math.min(w, h) * 0.13;
     const eyeY = h * 0.05;
     const eyeSpacing = w * 0.2;
@@ -168,7 +247,6 @@ export function buildAtlas(renderer: Renderer): Atlas {
     const mouthY = eyeY + eyeSize * 1.6;
     const mouthH = eyeSize * 0.7;
     if (dizzy) {
-      // Gap-toothed wobble: alternating short blocks instead of one bar.
       const mouthW = eyeSize * 3.2;
       const seg = mouthW / 5;
       for (let i = 0; i < 5; i += 2) {
@@ -179,9 +257,7 @@ export function buildAtlas(renderer: Renderer): Atlas {
       g.rect(-mouthW / 2, mouthY - mouthH / 2, mouthW, mouthH).fill(mouth);
     }
 
-    // Flat rectangular outline (no rounded corners) to keep the silhouette
-    // blocky against the neighbouring tinted facades.
-    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: 0x1c2534, alpha: 0.35 });
+    g.rect(-w / 2, -h / 2, w, h).stroke({ width: 2, color: PALETTE.ink, alpha: 0.35 });
   };
 
   // Packed into their own strip (like the flipper) since some spans (e.g.
@@ -211,91 +287,105 @@ export function buildAtlas(renderer: Renderer): Atlas {
   }
 
   // --- Retro pixel-art panicking pedestrian: every part (head, hair,
-  // torso, arms, legs) is a flat g.rect() block instead of circles/lines,
-  // for the same "arranged rectangles" dot-art look as the buildings.
-  // Two silhouettes (arms/legs swapped via `phase`) are alternated by the
-  // swarm for a bouncy, readable "running in a panic" cycle - hit radius
-  // and physics are untouched, only the drawing changed. ---
+  // torso, arms, legs) is a flat g.rect() block. Two silhouettes
+  // (arms/legs swapped via `phase`) are alternated by the swarm for a
+  // bouncy "running in a panic" cycle - hit radius and physics are
+  // untouched, only the drawing changed. ---
   const drawHuman = (g: Graphics, phase: number) => {
     const skin = 0xffd2ad;
     const hair = 0x3a2a20;
-    const shirt = 0xffffff;
-    const dark = 0x2b2b2b;
-    const limb = 0x3a4a68;
+    const shirt = PALETTE.paper;
+    const dark = PALETTE.ink;
+    const limb = PALETTE.ink;
 
-    // ground shadow
-    g.rect(-5, 10.5, 10, 2).fill({ color: 0x101820, alpha: 0.25 });
+    g.rect(-5, 10.5, 10, 2).fill({ color: PALETTE.ink, alpha: 0.25 });
 
-    // legs, kicked out oppositely each frame
     g.rect(-4 - phase * 2.5, 6.5, 2.4, 5).fill(limb);
     g.rect(1.6 + phase * 2.5, 6.5, 2.4, 5).fill(limb);
 
-    // torso block
     g.rect(-3.6, 2, 7.2, 6).fill(shirt);
     g.rect(-3.6, 2, 7.2, 6).stroke({ width: 1, color: limb });
 
-    // arms thrown straight up in a panic
     g.rect(-7.5, -8 + phase, 3, 8).fill(skin);
     g.rect(4.5, -8 - phase, 3, 8).fill(skin);
 
-    // head block + hair cap
     g.rect(-5.5, -12.5, 11, 9).fill(skin);
     g.rect(-6, -13, 12, 3.5).fill(hair);
 
-    // square eyes
     g.rect(-3.6, -8.5, 2.2, 2.2).fill(dark);
     g.rect(1.4, -8.5, 2.2, 2.2).fill(dark);
 
-    // wide-open scream mouth
     g.rect(-1.6, -4.5, 3.2, 3).fill(0x8a4b38);
   };
   place("human", (g) => drawHuman(g, -1), 32);
   place("humanRun", (g) => drawHuman(g, 1), 32);
 
-  // --- Debris chunk (building destruction) - rounded cartoon rubble ---
-  place("debris", (g) => {
-    g.poly([-7, -5, 6, -7, 8, 5, -5, 7]).fill(0xc9b8a3);
-    g.poly([-7, -5, 6, -7, 8, 5, -5, 7]).stroke({ width: 1.5, color: 0x8a7863 });
-  }, 32);
+  // --- Debris chunk (building destruction) - a small cluster of offset
+  // blocks instead of a rounded poly. ---
+  place(
+    "debris",
+    (g) => {
+      g.rect(-7, -6, 7, 7).fill(0x8a7863);
+      g.rect(-1, -3, 8, 8).fill(0xc9b8a3);
+      g.rect(-6, 1, 6, 6).fill(0xa39070);
+    },
+    32,
+  );
 
-  // --- Spark (hit feedback) ---
-  place("spark", (g) => {
-    g.star(0, 0, 4, 10, 3).fill(0xfff2b0);
-  }, 32);
+  // --- Spark (hit feedback) - a blocky 4-direction burst. ---
+  place(
+    "spark",
+    (g) => {
+      g.rect(-2, -2, 4, 4).fill(PALETTE.paper);
+      g.rect(-9, -2, 5, 4).fill(PALETTE.gold);
+      g.rect(4, -2, 5, 4).fill(PALETTE.gold);
+      g.rect(-2, -9, 4, 5).fill(PALETTE.gold);
+      g.rect(-2, 4, 4, 5).fill(PALETTE.gold);
+    },
+    32,
+  );
 
-  // --- Smoke puff ---
-  place("smoke", (g) => {
-    g.circle(0, 0, 16).fill({ color: 0xcfcfd6, alpha: 0.55 });
-  }, 48);
+  // --- Smoke puff - a soft blocky circle. ---
+  place(
+    "smoke",
+    (g) => {
+      blit(g, circleBitmap(9), 4, { color: 0xaaaab8, alpha: 0.55 });
+    },
+    48,
+  );
 
-  // --- Star (powerup icon) ---
-  place("star", (g) => {
-    g.star(0, 0, 5, 16, 7).fill(0xffe066);
-    g.star(0, 0, 5, 16, 7).stroke({ width: 2, color: 0xc98f00 });
-  }, 48);
+  // --- Star (powerup icon) - a blocky diamond/gem, dark-outlined. ---
+  place(
+    "star",
+    (g) => {
+      blit(g, STAR_GLYPH, 6, PALETTE.ink, -21, -21);
+      blit(g, STAR_GLYPH, 5, PALETTE.gold, -17.5, -17.5);
+    },
+    48,
+  );
 
-  // --- Soft glow ring (used for pop/kick fx) ---
-  place("ring", (g) => {
-    g.circle(0, 0, 20).stroke({ width: 5, color: 0xffffff, alpha: 0.9 });
-  }, 48);
+  // --- Ring (pop/kick fx) - a hollow pixel ring. ---
+  place(
+    "ring",
+    (g) => {
+      blit(g, ringBitmap(13, 0.55), 3.6, { color: PALETTE.paper, alpha: 0.9 });
+    },
+    48,
+  );
 
-  // --- Digits 0-9 for HP labels ---
-  const digitStyle = new TextStyle({
-    fontFamily: "Arial, sans-serif",
-    fontWeight: "900",
-    fontSize: 56,
-    fill: 0xffffff,
-    stroke: { color: 0x14202f, width: 8, join: "round" },
-  });
+  // --- Digits 0-9 for HP labels - a classic 5x7 dot-matrix font on a
+  // small dark backing plate, instead of rendered Text, for a genuine
+  // "LED scoreboard" look. ---
   const digitNames: string[] = [];
   for (let d = 0; d <= 9; d++) {
     const name = `digit${d}`;
     digitNames.push(name);
     const { x, y } = nextCell();
-    const t = new Text({ text: String(d), style: digitStyle });
-    t.anchor.set(0.5);
-    t.position.set(x + CELL / 2, y + CELL / 2);
-    staging.addChild(t);
+    const g = new Graphics();
+    g.rect(-21, -27, 42, 54).fill(PALETTE.ink);
+    blit(g, DIGIT_GLYPHS[d], 7, PALETTE.paper, -17.5, -24.5);
+    g.position.set(x + CELL / 2, y + CELL / 2);
+    staging.addChild(g);
     frames[name] = new Rectangle(x + CELL / 2 - 32, y + CELL / 2 - 32, 64, 64);
   }
 

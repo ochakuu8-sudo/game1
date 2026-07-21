@@ -1,5 +1,6 @@
 import { Particle, ParticleContainer, Texture } from "pixi.js";
 import type { Atlas } from "../core/atlas";
+import { PALETTE } from "../core/palette";
 
 interface Slot {
   particle: Particle;
@@ -161,7 +162,7 @@ export class ParticleFX {
         scale: 0.35 + Math.random() * 0.35,
         spin: (Math.random() - 0.5) * 6,
         life: 0.3 + Math.random() * 0.25,
-        tint: 0xff8888,
+        tint: PALETTE.pink,
       });
     }
   }

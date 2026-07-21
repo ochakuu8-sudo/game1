@@ -1,5 +1,6 @@
 import { Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
 import type { Atlas } from "../core/atlas";
+import { PALETTE } from "../core/palette";
 import { TABLE_W, TABLE_H } from "../physics/layout";
 import type { PowerUpChoice } from "./powerups";
 
@@ -8,21 +9,23 @@ const CARD_H = 150;
 const GAP = 14;
 const MAX_CARDS = 3;
 
+const RETRO_FONT = '"Courier New", ui-monospace, monospace';
+
 const titleStyle = new TextStyle({
-  fontFamily: "Arial, sans-serif",
-  fontWeight: "900",
+  fontFamily: RETRO_FONT,
+  fontWeight: "700",
   fontSize: 26,
-  fill: 0xffe066,
-  stroke: { color: 0x2a1000, width: 6 },
+  fill: PALETTE.gold,
+  stroke: { color: PALETTE.ink, width: 6, join: "miter" },
   align: "center",
 });
 
 const labelStyle = new TextStyle({
-  fontFamily: "Arial, sans-serif",
-  fontWeight: "800",
+  fontFamily: RETRO_FONT,
+  fontWeight: "700",
   fontSize: 13,
-  fill: 0xffffff,
-  stroke: { color: 0x0a0a12, width: 4 },
+  fill: PALETTE.paper,
+  stroke: { color: PALETTE.ink, width: 4, join: "miter" },
   align: "center",
   wordWrap: true,
   wordWrapWidth: CARD_W - 12,
@@ -30,11 +33,11 @@ const labelStyle = new TextStyle({
 });
 
 const descStyle = new TextStyle({
-  fontFamily: "Arial, sans-serif",
-  fontWeight: "600",
+  fontFamily: RETRO_FONT,
+  fontWeight: "700",
   fontSize: 11,
-  fill: 0xd7dbe6,
-  stroke: { color: 0x0a0a12, width: 3 },
+  fill: PALETTE.streetLine,
+  stroke: { color: PALETTE.ink, width: 3, join: "miter" },
   align: "center",
   wordWrap: true,
   wordWrapWidth: CARD_W - 14,
@@ -60,7 +63,11 @@ export class PowerUpSelect {
     this.container = new Container();
     this.container.visible = false;
 
-    const overlay = new Graphics().rect(0, 0, TABLE_W, TABLE_H).fill({ color: 0x05050a, alpha: 0.86 });
+    const overlay = new Graphics()
+      .rect(0, 0, TABLE_W, TABLE_H)
+      .fill({ color: PALETTE.ink, alpha: 0.88 })
+      .rect(10, 10, TABLE_W - 20, TABLE_H - 20)
+      .stroke({ width: 3, color: PALETTE.gold, alpha: 0.6 });
     this.container.addChild(overlay);
 
     const title = new Text({ text: "強化を選べ！", style: titleStyle });
@@ -120,9 +127,10 @@ export class PowerUpSelect {
       card.root.position.set(startX + i * (CARD_W + GAP), y);
       card.bg
         .clear()
-        .roundRect(0, 0, CARD_W, CARD_H, 12)
-        .fill({ color: 0x1c2230, alpha: 0.95 })
-        .stroke({ width: 2, color: choice.color });
+        .rect(0, 0, CARD_W, CARD_H)
+        .fill(PALETTE.skyDeep)
+        .rect(0, 0, CARD_W, CARD_H)
+        .stroke({ width: 3, color: choice.color });
       card.icon.tint = choice.color;
       card.label.text = choice.label;
       card.desc.text = choice.description;

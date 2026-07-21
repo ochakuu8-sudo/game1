@@ -1,51 +1,60 @@
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import { TABLE_W, TABLE_H } from "../physics/layout";
+import { PALETTE } from "../core/palette";
+
+// A blocky monospace stack reads closest to a retro cartridge font without
+// needing a full hand-drawn bitmap glyph set for arbitrary (incl. Japanese)
+// UI text - every other visual in the game is built from rect() blocks,
+// see core/atlas.ts.
+const RETRO_FONT = '"Courier New", ui-monospace, monospace';
 
 const scoreStyle = new TextStyle({
-  fontFamily: "Arial, sans-serif",
-  fontWeight: "800",
+  fontFamily: RETRO_FONT,
+  fontWeight: "700",
   fontSize: 24,
-  fill: 0xffffff,
-  stroke: { color: 0x0a0a12, width: 5 },
+  fill: PALETTE.paper,
+  stroke: { color: PALETTE.ink, width: 5, join: "miter" },
 });
 
 const smallStyle = new TextStyle({
-  fontFamily: "Arial, sans-serif",
+  fontFamily: RETRO_FONT,
   fontWeight: "700",
   fontSize: 14,
-  fill: 0xd7dbe6,
-  stroke: { color: 0x0a0a12, width: 4 },
+  fill: PALETTE.paper,
+  stroke: { color: PALETTE.ink, width: 4, join: "miter" },
 });
 
 const bannerStyle = new TextStyle({
-  fontFamily: "Arial, sans-serif",
-  fontWeight: "900",
+  fontFamily: RETRO_FONT,
+  fontWeight: "700",
   fontSize: 34,
-  fill: 0xffe066,
-  stroke: { color: 0x4a2a00, width: 7 },
+  fill: PALETTE.gold,
+  stroke: { color: PALETTE.ink, width: 7, join: "miter" },
 });
 
 const titleStyle = new TextStyle({
-  fontFamily: "Arial, sans-serif",
-  fontWeight: "900",
-  fontSize: 46,
-  fill: 0xffe066,
-  stroke: { color: 0x2a1000, width: 9 },
+  fontFamily: RETRO_FONT,
+  fontWeight: "700",
+  fontSize: 44,
+  fill: PALETTE.gold,
+  stroke: { color: PALETTE.ink, width: 9, join: "miter" },
   align: "center",
 });
 
 const subStyle = new TextStyle({
-  fontFamily: "Arial, sans-serif",
+  fontFamily: RETRO_FONT,
   fontWeight: "700",
-  fontSize: 17,
-  fill: 0xffffff,
-  stroke: { color: 0x0a0a12, width: 4 },
+  fontSize: 16,
+  fill: PALETTE.paper,
+  stroke: { color: PALETTE.ink, width: 4, join: "miter" },
   align: "center",
   wordWrap: true,
   wordWrapWidth: TABLE_W - 50,
   breakWords: true,
   lineHeight: 26,
 });
+
+const COMBO_SEGMENTS = 10;
 
 export class HUD {
   container: Container;
@@ -66,10 +75,16 @@ export class HUD {
     this.container = new Container();
 
     const topBar = new Graphics()
-      .rect(0, 0, TABLE_W, 48).fill({ color: 0x071219, alpha: 0.9 })
-      .rect(0, 46, TABLE_W, 2).fill({ color: 0x68d7e8, alpha: 0.55 })
-      .roundRect(7, 5, 128, 35, 8).fill({ color: 0x17303c, alpha: 0.9 }).stroke({ width: 1, color: 0x68d7e8, alpha: 0.4 })
-      .roundRect(TABLE_W - 132, 5, 125, 35, 8).fill({ color: 0x17303c, alpha: 0.9 }).stroke({ width: 1, color: 0x68d7e8, alpha: 0.4 });
+      .rect(0, 0, TABLE_W, 48)
+      .fill({ color: PALETTE.ink, alpha: 0.92 })
+      .rect(0, 46, TABLE_W, 3)
+      .fill(PALETTE.gold)
+      .rect(7, 5, 128, 35)
+      .fill({ color: PALETTE.skyDeep, alpha: 0.9 })
+      .stroke({ width: 2, color: PALETTE.blue })
+      .rect(TABLE_W - 132, 5, 125, 35)
+      .fill({ color: PALETTE.skyDeep, alpha: 0.9 })
+      .stroke({ width: 2, color: PALETTE.blue });
     this.container.addChild(topBar);
 
     this.scoreText = new Text({ text: "0", style: scoreStyle });
@@ -112,7 +127,11 @@ export class HUD {
 
   private buildTitleScreen(): Container {
     const c = new Container();
-    const bg = new Graphics().rect(0, 0, TABLE_W, TABLE_H).fill({ color: 0x05050a, alpha: 0.86 });
+    const bg = new Graphics()
+      .rect(0, 0, TABLE_W, TABLE_H)
+      .fill({ color: PALETTE.ink, alpha: 0.88 })
+      .rect(10, 10, TABLE_W - 20, TABLE_H - 20)
+      .stroke({ width: 3, color: PALETTE.gold, alpha: 0.6 });
     c.addChild(bg);
 
     const title = new Text({ text: "KAIJU\nPINBALL", style: titleStyle });
@@ -142,7 +161,11 @@ export class HUD {
 
   private buildGameOverScreen(): Container {
     const c = new Container();
-    const bg = new Graphics().rect(0, 0, TABLE_W, TABLE_H).fill({ color: 0x05050a, alpha: 0.86 });
+    const bg = new Graphics()
+      .rect(0, 0, TABLE_W, TABLE_H)
+      .fill({ color: PALETTE.ink, alpha: 0.88 })
+      .rect(10, 10, TABLE_W - 20, TABLE_H - 20)
+      .stroke({ width: 3, color: PALETTE.red, alpha: 0.6 });
     c.addChild(bg);
 
     const title = new Text({ text: "GAME OVER", style: titleStyle });
@@ -192,12 +215,21 @@ export class HUD {
     this.ballsText.text = active > 1 ? `BALL x${reserve}  (${active} IN PLAY)` : `BALL x${reserve}`;
   }
 
+  /** Drawn as a row of discrete lit/unlit blocks - a classic retro meter -
+   * instead of one smoothly-filled bar. */
   setCombo(current: number, threshold: number) {
     const w = 190;
-    const t = Math.min(1, current / threshold);
-    this.comboBarBg.clear().roundRect(0, 0, w, 8, 4).fill({ color: 0xffffff, alpha: 0.15 });
+    const gap = 2;
+    const segW = (w - gap * (COMBO_SEGMENTS - 1)) / COMBO_SEGMENTS;
+    const lit = Math.floor(Math.min(1, current / threshold) * COMBO_SEGMENTS);
+
+    this.comboBarBg.clear();
     this.comboBarFill.clear();
-    if (t > 0) this.comboBarFill.roundRect(0, 0, Math.max(8, w * t), 8, 4).fill(0xff5a3c);
+    for (let i = 0; i < COMBO_SEGMENTS; i++) {
+      const x = i * (segW + gap);
+      this.comboBarBg.rect(x, 0, segW, 8).fill({ color: PALETTE.ink, alpha: 0.6 });
+      if (i < lit) this.comboBarFill.rect(x, 0, segW, 8).fill(PALETTE.gold);
+    }
     this.comboText.text = `MULTIBALL ${current}/${threshold}`;
   }
 

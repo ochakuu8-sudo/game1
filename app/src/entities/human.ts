@@ -1,5 +1,6 @@
 import { Particle, ParticleContainer } from "pixi.js";
 import type { Atlas } from "../core/atlas";
+import { PALETTE } from "../core/palette";
 import { TABLE_W, TABLE_H, HUMAN_RADIUS } from "../physics/layout";
 
 interface HumanSlot {
@@ -21,7 +22,7 @@ const MARGIN = 30;
 const TOP_MARGIN = 40;
 const BOTTOM_MARGIN = 210; // keep clear of the flipper/drain area
 
-const TINTS = [0xffffff, 0xffe0b2, 0xb2e0ff, 0xffb2d0, 0xc9ffb2];
+const TINTS = [PALETTE.paper, PALETTE.gold, PALETTE.blue, PALETTE.pink, PALETTE.mint];
 
 export class HumanSwarm {
   container: ParticleContainer;
