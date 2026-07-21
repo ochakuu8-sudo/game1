@@ -11,7 +11,7 @@ import { ParticleFX } from "../fx/particles";
 import { PowerUpManager, type PowerUpChoice } from "./powerups";
 import { PowerUpSelect } from "./powerupSelect";
 import { BuildingSelect } from "./buildingSelect";
-import { BUILDING_TYPES, buildingStatLines, layoutBuildingPool, pickBuildingChoices, type BuildingType } from "../entities/buildingTypes";
+import { BUILDING_TYPES, buildingStatLines, findFreeSlot, pickBuildingChoices, type BuildingType } from "../entities/buildingTypes";
 import { HUD } from "./hud";
 import { buildTableVisuals } from "../physics/tableVisuals";
 import {
@@ -33,13 +33,6 @@ const MULTIBALL_START_THRESHOLD = 8;
 const MULTIBALL_GROWTH = 6;
 const MULTIBALL_BALL_CAP = 6;
 const POWERUP_EVERY_N_BUILDINGS = 3;
-// The city starts with only a couple of lots built; the rest trickle in
-// over time (see Game.scheduleBuildingSpawns) instead of the whole grid
-// being full from the first frame.
-const STARTER_BUILDING_MIN = 2;
-const STARTER_BUILDING_MAX = 3;
-const BUILDING_SPAWN_INTERVAL = 2.2;
-const BUILDING_SPAWN_JITTER = 1.1;
 // Score-attack stage quotas: stage N needs this many *total* points to
 // clear. Linear growth for now - tune these two once there's real playtest
 // data on how fast score actually climbs.
@@ -58,11 +51,16 @@ export class Game {
   private powerups: PowerUpManager;
   private powerupSelect: PowerUpSelect;
   private buildingSelect: BuildingSelect;
-  /** Every building type picked so far, as a running list (see
-   * entities/buildingTypes.ts's layoutBuildingPool) - each pick becomes
-   * exactly one independent lot on the board, so picking the same type
-   * twice runs two of its generation cycles in parallel. */
+  /** Every building type picked so far, kept only for the debug/stats
+   * hook below - the actual generation logic lives in `spawners`. */
   private buildingPool: BuildingType[] = [];
+  /** One independent, endlessly-repeating spawner per building card
+   * picked (see onBuildingChosen) - every `type.spawnCooldown` seconds it
+   * tries to drop one new lot of its type into any free spot on the grid
+   * (see trySpawnBuilding), regardless of whether its earlier lots are
+   * still standing. Picking the same type twice adds a second spawner
+   * running in parallel, roughly doubling that type's appearance rate. */
+  private spawners: Array<{ type: BuildingType; timer: number }> = [];
 
   private root: Container;
   private ballLayer: Container;
@@ -241,7 +239,11 @@ export class Game {
 
     if (destroyed) {
       sfx.buildingDestroy();
-      this.world.setBuildingActive(buildingBody, false);
+      // Collision disabled immediately (a ball should pass straight
+      // through the wreckage rather than bounce off it while it's still
+      // visually shrinking away) - the container itself is torn down a
+      // little later, once that shrink animation finishes (see tick()).
+      this.world.removeBuildingBody(buildingBody);
       this.addScore(building.type.score);
       this.fx.buildingCollapse(buildingBody.position.x, buildingBody.position.y);
       const range = building.type.humanMax - building.type.humanMin;
@@ -293,7 +295,10 @@ export class Game {
   private onBuildingChosen(type: BuildingType) {
     sfx.powerupPick();
     this.buildingPool.push(type);
-    this.rebuildCity();
+    // timer: 0 so its very first spawn attempt fires on the next "playing"
+    // tick, right as play resumes - the player sees their pick appear
+    // immediately rather than waiting out a full cooldown first.
+    this.spawners.push({ type, timer: 0 });
     this.hud.showBanner(`次の建物: ${type.label}`);
     this.state = "playing";
     if (this.world.balls.length === 0 && this.ballsReserve > 0) {
@@ -301,30 +306,19 @@ export class Game {
     }
   }
 
-  /** Regenerates the whole city from the accumulated pool of every type
-   * picked so far - each pick places exactly one independent lot (see
-   * entities/buildingTypes.ts's layoutBuildingPool), so the city grows one
-   * lot per pick instead of being replaced by the latest one. Old lots are
-   * fully torn down (containers + physics bodies) and re-placed fresh each
-   * time rather than resized in place, since the whole layout re-scans the
-   * grid from scratch. */
-  private rebuildCity() {
-    for (const b of this.buildings) {
-      this.buildingByBody.delete(b.body);
-      b.container.destroy({ children: true });
-    }
-    this.buildings = [];
-
-    const lots = layoutBuildingPool(this.buildingPool);
-    const bodies = this.world.setBuildingLayout(lots.map((lot) => lot.slot));
-    lots.forEach((lot, i) => {
-      const body = bodies[i];
-      const b = new Building(this.atlas, lot.slot, body, lot.type);
-      this.buildings.push(b);
-      this.buildingByBody.set(body, b);
-      this.buildingLayer.addChild(b.container);
-    });
-    this.scheduleBuildingSpawns();
+  /** One spawner's cooldown just fired - try to drop a fresh lot of its
+   * type into any free spot on the grid (see entities/buildingTypes.ts's
+   * findFreeSlot). If the board has no room for its footprint right now,
+   * this attempt is simply skipped - the spawner already reset its own
+   * timer and will just try again next cooldown. */
+  private trySpawnBuilding(type: BuildingType) {
+    const slot = findFreeSlot(type, this.buildings.map((b) => b.slot));
+    if (!slot) return;
+    const body = this.world.addBuildingBody(slot);
+    const b = new Building(this.atlas, slot, body, type);
+    this.buildings.push(b);
+    this.buildingByBody.set(body, b);
+    this.buildingLayer.addChild(b.container);
   }
 
   /** Hit the current stage's score quota - advance to the next (tougher)
@@ -395,35 +389,18 @@ export class Game {
     this.hud.setBalls(this.ballsReserve, this.world.balls.length);
   }
 
-  /** Picks a couple of random lots to build immediately and staggers the
-   * rest to spawn in one at a time over the following minutes, in a
-   * shuffled (not row-by-row) order, instead of the whole grid starting
-   * full. Reused both on first load and on every subsequent restart. */
-  private scheduleBuildingSpawns() {
-    const order = this.buildings.map((_, i) => i);
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
-    }
-    const starterCount = STARTER_BUILDING_MIN + Math.floor(Math.random() * (STARTER_BUILDING_MAX - STARTER_BUILDING_MIN + 1));
-    order.forEach((buildingIndex, pos) => {
-      const b = this.buildings[buildingIndex];
-      if (pos < starterCount) {
-        b.spawn(1);
-        this.world.setBuildingActive(b.body, true);
-      } else {
-        const delay = (pos - starterCount) * BUILDING_SPAWN_INTERVAL + Math.random() * BUILDING_SPAWN_JITTER;
-        b.scheduleSpawn(delay);
-        this.world.setBuildingActive(b.body, false);
-      }
-    });
-  }
-
   private startGame() {
     for (const body of [...this.world.balls]) this.removeBallEntity(body);
+    for (const b of this.buildings) {
+      this.world.removeBuildingBody(b.body);
+      b.container.destroy({ children: true });
+    }
+    this.buildings = [];
+    this.buildingByBody.clear();
     this.humans.reset();
     this.powerups = new PowerUpManager();
     this.buildingPool = [];
+    this.spawners = [];
 
     this.score = 0;
     this.stage = 1;
@@ -502,8 +479,21 @@ export class Game {
 
     this.fx.update(dt);
 
-    for (const b of this.buildings) {
-      if (b.update(dt) === "rebuilt") this.world.setBuildingActive(b.body, true);
+    for (const sp of this.spawners) {
+      sp.timer -= dt;
+      if (sp.timer <= 0) {
+        sp.timer += sp.type.spawnCooldown;
+        this.trySpawnBuilding(sp.type);
+      }
+    }
+
+    for (const b of [...this.buildings]) {
+      if (b.update(dt) === "removed") {
+        this.buildingByBody.delete(b.body);
+        b.container.destroy({ children: true });
+        const idx = this.buildings.indexOf(b);
+        if (idx >= 0) this.buildings.splice(idx, 1);
+      }
     }
 
     for (const body of this.world.balls) {
@@ -547,7 +537,7 @@ export class Game {
         this.handleBuildingHit(b.body, this.world.balls[0] ?? b.body);
       },
       buildingStats: () => ({ active: this.buildings.filter((b) => !b.destroyed).length, total: this.buildings.length }),
-      forceSpawnAll: () => { for (const b of this.buildings) { b.spawn(1); this.world.setBuildingActive(b.body, true); } },
+      forceSpawnAll: () => { for (const sp of this.spawners) { sp.timer = 0; this.trySpawnBuilding(sp.type); } },
       buildingInfo: (i: number) => { const b = this.buildings[i]; return b ? { hp: b.hp, destroyed: b.destroyed, visible: b.container.visible, alpha: b.container.alpha, scale: b.container.scale.x } : null; },
       stepVelHistory: () => { const h = this.debugStepVel; this.debugStepVel = []; return h; },
       forceMultiball: () => this.triggerMultiball(),

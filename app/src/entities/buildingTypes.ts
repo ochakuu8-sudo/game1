@@ -1,16 +1,17 @@
 import { GRID_COLS, GRID_ROWS, type BuildingSlot } from "../physics/layout";
 
 /**
- * A "blueprint" the city generates lots from. The player picks one of
+ * A "blueprint" a spawner generates lots from. The player picks one of
  * these via a card (see game/buildingSelect.ts) at the start of every
- * stage, and it's added to `Game.buildingPool` - a running list of every
- * type picked so far (see Game.rebuildCity). Each pick becomes exactly one
- * independent lot on the board with its own destroy/cooldown/rebuild
- * cycle (see `layoutBuildingPool` below) - picking the same type twice
- * doesn't make one lot "more likely", it gives that type two separate
- * lots generating in parallel. Each type also gets its own fixed-size
- * facade artwork (see core/atlas.ts's per-type draw functions) instead of
- * a shared shape.
+ * stage, and it spins up an independent spawner (see Game.spawners) that
+ * repeats forever on its own cooldown: every `spawnCooldown` seconds it
+ * tries to drop one new lot of this type into any free spot on the grid,
+ * regardless of whether earlier lots from it have been destroyed yet.
+ * Picking the same type again doesn't touch the first spawner - it starts
+ * a second one running in parallel, so two picks of the same type means
+ * roughly twice the appearance rate for it. Each type also gets its own
+ * fixed-size facade artwork (see core/atlas.ts's per-type draw functions)
+ * instead of a shared shape.
  */
 export interface BuildingType {
   id: string;
@@ -26,13 +27,12 @@ export interface BuildingType {
   score: number;
   /** Score awarded on a hit that doesn't destroy it. */
   hitScore: number;
-  /** Seconds between destruction and rebuilding. */
+  /** Seconds between this type's spawner attempts - see Game.spawners. */
   spawnCooldown: number;
   /** Range of humans spawned when destroyed. */
   humanMin: number;
   humanMax: number;
   hpBase: number;
-  hpPerLevel: number;
 }
 
 export const BUILDING_TYPES: BuildingType[] = [
@@ -49,7 +49,6 @@ export const BUILDING_TYPES: BuildingType[] = [
     humanMin: 1,
     humanMax: 2,
     hpBase: 1,
-    hpPerLevel: 1,
   },
   {
     id: "standard",
@@ -64,7 +63,6 @@ export const BUILDING_TYPES: BuildingType[] = [
     humanMin: 3,
     humanMax: 6,
     hpBase: 2,
-    hpPerLevel: 1,
   },
   {
     id: "apartment",
@@ -79,7 +77,6 @@ export const BUILDING_TYPES: BuildingType[] = [
     humanMin: 6,
     humanMax: 10,
     hpBase: 3,
-    hpPerLevel: 1,
   },
   {
     id: "mansion",
@@ -94,7 +91,6 @@ export const BUILDING_TYPES: BuildingType[] = [
     humanMin: 4,
     humanMax: 8,
     hpBase: 5,
-    hpPerLevel: 2,
   },
   {
     id: "tower",
@@ -109,52 +105,53 @@ export const BUILDING_TYPES: BuildingType[] = [
     humanMin: 10,
     humanMax: 16,
     hpBase: 8,
-    hpPerLevel: 3,
   },
 ];
 
 /** Offers `count` distinct random building types to choose from - not
- * filtered against what's already in the pool, since picking a type
- * that's already there (to run a second independent lot of it) is the
- * whole point. */
+ * filtered against what's already running a spawner, since picking a type
+ * that already has one (to start a second, parallel spawner for it) is
+ * the whole point. */
 export function pickBuildingChoices(count = 3): BuildingType[] {
   const shuffled = [...BUILDING_TYPES].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
 }
 
+/** A lot's fixed max HP - bigger footprints are tougher. Every lot of a
+ * given type is identical (no more per-rebuild growth), since lots are now
+ * one-shot: destroyed means gone, and a future spawner tick creates a
+ * fresh instance rather than this same one coming back stronger. */
+export function buildingMaxHp(type: BuildingType): number {
+  const cellCount = type.spanCols * type.spanRows;
+  return Math.max(1, Math.min(type.hpBase + (cellCount - 1) * 2, 20));
+}
+
 /** Compact stat lines for the building-select card - see game/cardSelect.ts. */
 export function buildingStatLines(type: BuildingType): string[] {
   return [
-    `HP${type.hpBase}〜 / ${type.spanCols}×${type.spanRows}マス`,
+    `HP${buildingMaxHp(type)} / ${type.spanCols}×${type.spanRows}マス`,
     `破壊${type.score}点 被弾${type.hitScore}点`,
     `再建${type.spawnCooldown}秒 人間${type.humanMin}〜${type.humanMax}人`,
   ];
 }
 
-export interface CityLot {
-  slot: BuildingSlot;
-  type: BuildingType;
-}
-
-/** Places exactly one lot per entry in `pool` (see Game.buildingPool) -
- * every pick is its own independent generation cycle, not extra weight in
- * a shared lottery, so picking the same type N times means N of that
- * type's lots ticking down their own destroy/cooldown/rebuild timers in
- * parallel. Placement order is shuffled each call (this runs again from
- * scratch on every new pick - see Game.rebuildCity) purely so the layout
- * doesn't always pack in pick order; it doesn't affect how many lots each
- * type gets. Each entry does a first-fit scan for a free spot for its own
- * footprint, leaving the rest of the grid as bare street - the city is
- * meant to visibly grow lot by lot as more cards get picked, rather than
- * always filling the whole board. If the grid is already full an entry is
- * simply skipped for this rebuild (extremely unlikely at normal pool
- * sizes against a 12x13 grid). */
-export function layoutBuildingPool(pool: BuildingType[]): CityLot[] {
-  if (pool.length === 0) return [];
+/** Finds a free spot on the grid for `type`'s footprint, given the slots
+ * already occupied by every lot currently on the board (`existing`) - used
+ * by a spawner (see Game.trySpawnBuilding) each time its cooldown fires.
+ * Candidate positions are shuffled so repeated spawns don't always pack
+ * into the same corner. Returns null if nothing fits (board full for that
+ * footprint) - the spawner just tries again on its next cooldown. */
+export function findFreeSlot(type: BuildingType, existing: BuildingSlot[]): BuildingSlot | null {
   const occupied: boolean[][] = Array.from({ length: GRID_ROWS }, () => Array<boolean>(GRID_COLS).fill(false));
-  const lots: CityLot[] = [];
+  for (const s of existing) {
+    for (let r = s.row; r < s.row + s.spanRows; r++) {
+      for (let c = s.col; c < s.col + s.spanCols; c++) {
+        occupied[r][c] = true;
+      }
+    }
+  }
 
-  const fits = (col: number, row: number, type: BuildingType): boolean => {
+  const fits = (col: number, row: number): boolean => {
     if (col + type.spanCols > GRID_COLS || row + type.spanRows > GRID_ROWS) return false;
     for (let r = row; r < row + type.spanRows; r++) {
       for (let c = col; c < col + type.spanCols; c++) {
@@ -164,20 +161,21 @@ export function layoutBuildingPool(pool: BuildingType[]): CityLot[] {
     return true;
   };
 
-  const order = [...pool].sort(() => Math.random() - 0.5);
-  for (const type of order) {
-    let placed = false;
-    for (let row = 0; !placed && row + type.spanRows <= GRID_ROWS; row++) {
-      for (let col = 0; col + type.spanCols <= GRID_COLS; col++) {
-        if (!fits(col, row, type)) continue;
-        for (let r = row; r < row + type.spanRows; r++) {
-          for (let c = col; c < col + type.spanCols; c++) occupied[r][c] = true;
-        }
-        lots.push({ slot: { col, row, spanCols: type.spanCols, spanRows: type.spanRows }, type });
-        placed = true;
-        break;
-      }
+  const positions: Array<{ col: number; row: number }> = [];
+  for (let row = 0; row + type.spanRows <= GRID_ROWS; row++) {
+    for (let col = 0; col + type.spanCols <= GRID_COLS; col++) {
+      positions.push({ col, row });
     }
   }
-  return lots;
+  for (let i = positions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [positions[i], positions[j]] = [positions[j], positions[i]];
+  }
+
+  for (const p of positions) {
+    if (fits(p.col, p.row)) {
+      return { col: p.col, row: p.row, spanCols: type.spanCols, spanRows: type.spanRows };
+    }
+  }
+  return null;
 }

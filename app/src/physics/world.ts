@@ -48,27 +48,30 @@ export class PinballWorld {
     World.add(this.world, [this.leftFlipper.body, this.rightFlipper.body]);
   }
 
-  /** (Re)builds the set of building colliders from scratch, matching
-   * `slots` 1:1 (Building instances index into the returned array the same
-   * way) - called once per stage since the whole city's lot size/count
-   * changes with the chosen building type (see Game.rebuildCity). Bodies
-   * are created but not added to the world yet - most lots start dormant
-   * and are added later via setBuildingActive() when the game schedules
-   * their first spawn. */
-  setBuildingLayout(slots: BuildingSlot[]): Matter.Body[] {
-    for (const body of this.buildingBodies) {
-      World.remove(this.world, body);
-    }
-    this.buildingBodies = slots.map((slot) => {
-      const r = buildingRect(slot);
-      return Bodies.rectangle(r.x, r.y, r.width, r.height, {
-        isStatic: true,
-        label: "building",
-        restitution: 0.7,
-        chamfer: { radius: r.cornerRadius },
-      });
+  /** Adds one new building collider for a freshly-spawned lot (see
+   * Game.trySpawnBuilding) - lots come and go individually now (a spawner
+   * fires on its own cooldown, a lot is destroyed and removed on its own),
+   * so bodies are added/removed one at a time rather than the whole set
+   * being rebuilt together. */
+  addBuildingBody(slot: BuildingSlot): Matter.Body {
+    const r = buildingRect(slot);
+    const body = Bodies.rectangle(r.x, r.y, r.width, r.height, {
+      isStatic: true,
+      label: "building",
+      restitution: 0.7,
+      chamfer: { radius: r.cornerRadius },
     });
-    return this.buildingBodies;
+    this.buildingBodies.push(body);
+    World.add(this.world, body);
+    return body;
+  }
+
+  /** Removes one lot's collider for good once it's fully destroyed and its
+   * collapse animation has finished (see Game.tick). */
+  removeBuildingBody(body: Matter.Body) {
+    const i = this.buildingBodies.indexOf(body);
+    if (i >= 0) this.buildingBodies.splice(i, 1);
+    World.remove(this.world, body);
   }
 
   private buildStaticTable() {
@@ -140,14 +143,6 @@ export class PinballWorld {
     const i = this.balls.indexOf(ball);
     if (i >= 0) this.balls.splice(i, 1);
     World.remove(this.world, ball);
-  }
-
-  setBuildingActive(body: Matter.Body, active: boolean) {
-    if (active) {
-      if (!this.world.bodies.includes(body)) World.add(this.world, body);
-    } else {
-      World.remove(this.world, body);
-    }
   }
 
   step(dtMs: number) {
