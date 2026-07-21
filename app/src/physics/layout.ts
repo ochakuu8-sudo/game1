@@ -20,8 +20,11 @@ export interface FlipperLayout {
 // less steeply and sits closer to the outlane rail's own (also flattened,
 // see OUTLANE_GUIDES) slope; active angle shifted by the same amount so
 // the total swing stays 70 deg.
+//
+// Pivots pushed further apart (0.32/0.68 -> 0.29/0.71) so the two tips
+// leave a clearer gap at rest instead of nearly meeting in the middle.
 export const LEFT_FLIPPER: FlipperLayout = {
-  pivot: { x: TABLE_W * 0.32, y: TABLE_H - 100 },
+  pivot: { x: TABLE_W * 0.29, y: TABLE_H - 100 },
   restAngle: deg(20),
   activeAngle: deg(-50),
   length: 70,
@@ -30,7 +33,7 @@ export const LEFT_FLIPPER: FlipperLayout = {
 };
 
 export const RIGHT_FLIPPER: FlipperLayout = {
-  pivot: { x: TABLE_W * 0.68, y: TABLE_H - 100 },
+  pivot: { x: TABLE_W * 0.71, y: TABLE_H - 100 },
   restAngle: deg(160),
   activeAngle: deg(230),
   length: 70,
