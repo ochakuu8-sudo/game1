@@ -10,6 +10,8 @@ import { HumanSwarm } from "../entities/human";
 import { ParticleFX } from "../fx/particles";
 import { PowerUpManager, type PowerUpChoice } from "./powerups";
 import { PowerUpSelect } from "./powerupSelect";
+import { BuildingSelect } from "./buildingSelect";
+import { BUILDING_TYPES, DEFAULT_BUILDING_TYPE, pickBuildingChoices, type BuildingType } from "../entities/buildingTypes";
 import { HUD } from "./hud";
 import { buildTableVisuals } from "../physics/tableVisuals";
 import {
@@ -17,7 +19,7 @@ import {
   GRID_COLS, GRID_ROWS, GRID_LEFT, GRID_TOP, GRID_RIGHT, GRID_BOTTOM,
 } from "../physics/layout";
 
-type GameState = "title" | "playing" | "gameover" | "powerup";
+type GameState = "title" | "playing" | "gameover" | "powerup" | "building";
 
 // Physics runs at 120Hz (double the render rate) so the flipper - which
 // snaps its angle/position directly rather than being driven by forces -
@@ -49,6 +51,8 @@ export class Game {
   private fx: ParticleFX;
   private powerups: PowerUpManager;
   private powerupSelect: PowerUpSelect;
+  private buildingSelect: BuildingSelect;
+  private currentBuildingType: BuildingType = DEFAULT_BUILDING_TYPE;
 
   private root: Container;
   private ballLayer: Container;
@@ -75,6 +79,7 @@ export class Game {
     this.fx = new ParticleFX(this.atlas);
     this.powerups = new PowerUpManager();
     this.powerupSelect = new PowerUpSelect(this.atlas);
+    this.buildingSelect = new BuildingSelect(this.atlas);
     this.hud = new HUD();
 
     this.root = new Container();
@@ -87,7 +92,7 @@ export class Game {
     this.root.addChild(buildingLayer);
     BUILDING_SLOTS.forEach((slot, i) => {
       const body = this.world.buildingBodies[i];
-      const b = new Building(this.atlas, slot, body);
+      const b = new Building(this.atlas, slot, body, () => this.currentBuildingType);
       this.buildings.push(b);
       this.buildingByBody.set(body, b);
       buildingLayer.addChild(b.container);
@@ -111,6 +116,7 @@ export class Game {
 
     this.root.addChild(this.hud.container);
     this.root.addChild(this.powerupSelect.container);
+    this.root.addChild(this.buildingSelect.container);
 
     this.input = new InputManager(app.canvas as HTMLCanvasElement);
     this.input.onTap(() => {
@@ -228,9 +234,10 @@ export class Game {
     if (destroyed) {
       sfx.buildingDestroy();
       this.world.setBuildingActive(buildingBody, false);
-      this.addScore(150);
+      this.addScore(building.type.score);
       this.fx.buildingCollapse(buildingBody.position.x, buildingBody.position.y);
-      const humanCount = Math.min(3 + Math.floor(this.buildingsDestroyedTotal / 3), 8);
+      const range = building.type.humanMax - building.type.humanMin;
+      const humanCount = building.type.humanMin + Math.floor(Math.random() * (range + 1));
       this.humans.spawnGroup(buildingBody.position.x, buildingBody.position.y, humanCount);
       this.buildingsDestroyedTotal++;
       if (this.buildingsDestroyedTotal % POWERUP_EVERY_N_BUILDINGS === 0) {
@@ -238,7 +245,7 @@ export class Game {
       }
     } else {
       sfx.buildingHit();
-      this.addScore(10);
+      this.addScore(building.type.hitScore);
     }
   }
 
@@ -247,6 +254,7 @@ export class Game {
     if (choices.length === 0) {
       // Every buff is already maxed out - fall back to a flat score bonus.
       this.addScore(300);
+      this.awardBuildingChoice();
       return;
     }
     this.state = "powerup";
@@ -261,6 +269,22 @@ export class Game {
       this.hud.setBalls(this.ballsReserve, this.world.balls.length);
     }
     this.hud.showBanner(choice.label);
+    this.awardBuildingChoice();
+  }
+
+  /** Follows the power-up card with a second pick for which house type
+   * future lots build/rebuild as (see entities/buildingTypes.ts) - the
+   * two run on the same "every POWERUP_EVERY_N_BUILDINGS" cadence. */
+  private awardBuildingChoice() {
+    const choices = pickBuildingChoices(3);
+    this.state = "building";
+    this.buildingSelect.show(choices, (type) => this.onBuildingChosen(type));
+  }
+
+  private onBuildingChosen(type: BuildingType) {
+    sfx.powerupPick();
+    this.currentBuildingType = type;
+    this.hud.showBanner(`次の建物: ${type.label}`);
     this.state = "playing";
   }
 
@@ -350,6 +374,7 @@ export class Game {
     this.scheduleBuildingSpawns();
     this.humans.reset();
     this.powerups = new PowerUpManager();
+    this.currentBuildingType = DEFAULT_BUILDING_TYPE;
 
     this.score = 0;
     this.ballsReserve = INITIAL_BALLS;
@@ -466,6 +491,12 @@ export class Game {
       stepVelHistory: () => { const h = this.debugStepVel; this.debugStepVel = []; return h; },
       forceMultiball: () => this.triggerMultiball(),
       setFlipperStacks: (n: number) => { this.powerups.stacks.FLIPPER = n; },
+      currentBuildingType: () => this.currentBuildingType.id,
+      forceBuildingType: (id: string) => {
+        const t = BUILDING_TYPES.find((t) => t.id === id);
+        if (t) this.currentBuildingType = t;
+      },
+      forceBuildingChoice: () => this.awardBuildingChoice(),
       serveBall: () => this.serveBall(),
       forceGameOver: () => this.gameOver(),
       state: () => this.state,

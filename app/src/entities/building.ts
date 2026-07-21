@@ -2,8 +2,8 @@ import { Container, Sprite } from "pixi.js";
 import type Matter from "matter-js";
 import { buildingSizeKey, type Atlas } from "../core/atlas";
 import { buildingRect, type BuildingSlot } from "../physics/layout";
+import type { BuildingType } from "./buildingTypes";
 
-const REBUILD_TIME = 5.5;
 const HIT_FLASH_TIME = 0.22;
 
 // Muted, real-material house colours (terracotta brick, cream stone,
@@ -25,7 +25,11 @@ export class Building {
   private digitSpacing: number;
   private atlas: Atlas;
   private baseTint: number;
-  private cellCount: number;
+  private getType: () => BuildingType;
+  /** Duration `rebuildTimer` was set to at the last destruction - used to
+   * compute the collapse animation's progress independent of how long
+   * this particular type's cooldown actually is. */
+  private rebuildDuration = 0;
   slot: BuildingSlot;
   body: Matter.Body;
 
@@ -35,6 +39,9 @@ export class Building {
   rebuildTimer = 0;
   hitFlash = 0;
   level = 0;
+  /** The building type this lot was last (re)built as - see
+   * entities/buildingTypes.ts and game/buildingSelect.ts. */
+  type: BuildingType;
   /** Counts down to this building's very first appearance. Non-null only
    * before it has ever spawned - a separate concept from `rebuildTimer`
    * (which recovers a *destroyed* building) since a not-yet-built lot can
@@ -42,11 +49,12 @@ export class Building {
    * window that timer's math assumes. */
   private pendingSpawnTimer: number | null = null;
 
-  constructor(atlas: Atlas, slot: BuildingSlot, body: Matter.Body) {
+  constructor(atlas: Atlas, slot: BuildingSlot, body: Matter.Body, getType: () => BuildingType) {
     this.atlas = atlas;
     this.slot = slot;
     this.body = body;
-    this.cellCount = slot.spanCols * slot.spanRows;
+    this.getType = getType;
+    this.type = getType();
 
     const rect = buildingRect(slot);
     this.baseTint = TINTS[(slot.col + slot.row) % TINTS.length];
@@ -70,8 +78,8 @@ export class Building {
     this.container.addChild(this.sprite);
 
     // Scale the HP digits with the building's own footprint, capped small
-    // enough that the number reads clearly without its dark backing plate
-    // blotting out the whole tiny facade underneath (windows/face/tint).
+    // enough that the number reads clearly without blotting out the whole
+    // tiny facade underneath (windows/face/tint).
     const digitScale = Math.min(0.3, Math.max(0.16, rect.width / 90));
     this.digitSpacing = 13 * (digitScale / 0.42);
     // Centered on the facade itself (covering the face is fine) instead of
@@ -124,10 +132,18 @@ export class Building {
     // away or freeing up for its own rebuild.
     this.pendingSpawnTimer = null;
     this.level = level;
-    // A freshly-spawned level-1 lot starts at 1 HP - a single hit down.
-    // Bigger footprints (a 2x2 block vs a 1x1) take more hits to clear, and
-    // each rebuild after a destruction comes back tougher (level + 1).
-    this.maxHp = Math.max(1, Math.min(level + (this.cellCount - 1) * 2, 20));
+    // Always (re)reads the currently-chosen building type (see
+    // game/buildingSelect.ts) - a lot that was, say, a "flat" when it was
+    // destroyed can come back as a "mansion" if the player picked one in
+    // the meantime, matching "future lots use whatever's picked now".
+    this.type = this.getType();
+    // A freshly-spawned level-1 lot starts near its type's base HP - a
+    // handful of hits down. Bigger virtual lots (higher cellUnits) and
+    // higher rebuild levels both make it tougher.
+    this.maxHp = Math.max(
+      1,
+      Math.min(this.type.hpBase + (level - 1) * this.type.hpPerLevel + (this.type.cellUnits - 1) * 2, 20),
+    );
     this.hp = this.maxHp;
     this.destroyed = false;
     this.rebuildTimer = 0;
@@ -157,7 +173,8 @@ export class Building {
     this.refreshDigits();
     if (this.hp <= 0) {
       this.destroyed = true;
-      this.rebuildTimer = REBUILD_TIME;
+      this.rebuildDuration = this.type.spawnCooldown;
+      this.rebuildTimer = this.rebuildDuration;
       return true;
     }
     return false;
@@ -188,7 +205,7 @@ export class Building {
 
     if (this.destroyed) {
       this.rebuildTimer -= dt;
-      const collapseT = Math.min(1, (REBUILD_TIME - this.rebuildTimer) / 0.5);
+      const collapseT = Math.min(1, (this.rebuildDuration - this.rebuildTimer) / 0.5);
       this.container.scale.set(Math.max(0.05, 1 - collapseT));
       this.container.alpha = 1 - collapseT * 0.9;
       // Once the shrink is done, hide it outright instead of leaving a

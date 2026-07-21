@@ -33,6 +33,8 @@ export interface Atlas {
   /** Same keys as `buildings` - a "dizzy" variant flashed briefly on a hit
    * for a cartoon reaction. */
   buildingsDizzy: Record<string, Texture>;
+  /** Generic fixed-size house icon for the building-type picker card UI. */
+  houseIcon: Texture;
   human: Texture;
   humanRun: Texture;
   debris: Texture;
@@ -300,6 +302,11 @@ export function buildAtlas(renderer: Renderer): Atlas {
     buildingStripH = Math.max(buildingStripH, h);
   }
 
+  // A generic, fixed-size house icon (same facade drawing, just re-run at
+  // icon scale) for the building-type picker card UI - see
+  // game/buildingSelect.ts.
+  place("houseIcon", (g) => drawBuildingFacade(g, 44, 44, false), 48);
+
   // --- Retro pixel-art panicking pedestrian: every part (head, hair,
   // torso, arms, legs) is a flat g.rect() block. Two silhouettes
   // (legs swapped via `phase`) are alternated by the swarm for a
@@ -420,6 +427,7 @@ export function buildAtlas(renderer: Renderer): Atlas {
     flipper: slice("flipper"),
     buildings,
     buildingsDizzy,
+    houseIcon: slice("houseIcon"),
     human: slice("human"),
     humanRun: slice("humanRun"),
     debris: slice("debris"),
