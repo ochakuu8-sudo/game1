@@ -15,18 +15,20 @@ const RETURN_ANGULAR_STEP = 0.03; // slower relax back to rest
 
 // Scales the velocity/angularVelocity reported to Matter for collision
 // purposes (see step() below), which is what the ball's kick strength is
-// actually computed from. A slower MAX_ANGULAR_STEP means less raw
-// per-step displacement to report, so this was raised from the original
-// 0.65 by roughly the same factor MAX_ANGULAR_STEP was lowered by (~3.25x)
-// to land back in the same kick-strength range a faster swing used to
-// produce (verified empirically - see the sim in this file's own history/
-// PR - rather than assumed, since a slower swing also keeps the ball in
-// contact across more substeps, which by itself already recovers some
-// kick, so a naively "inverse-proportional" scale alone slightly
-// overshoots). The FLIPPER powerup's speedMultiplier still scales the
-// *unscaled* swing speed on top of this, so a stronger solenoid still
-// hits harder the same way a real one would.
-const KICK_SCALE = 1.85;
+// actually computed from. Raised twice from the original 0.65, both times
+// verified empirically (a synthetic tip-hit sim in a scratch script, not
+// assumed from theory) rather than computed from a single clean ratio:
+// once to offset MAX_ANGULAR_STEP being lowered (a slower swing reports
+// less raw per-step displacement, but also keeps the ball in contact
+// across more substeps, which by itself already recovers some kick, so a
+// naively "inverse-proportional" scale alone overshoots), and again to
+// offset the ball's own restitution being lowered in physics/world.ts
+// (see spawnBall) to stop it bouncing off the flipper/slopes - restitution
+// turned out to still be a real (if smaller than swing speed) contributor
+// to kick strength. The FLIPPER powerup's speedMultiplier still scales the
+// *unscaled* swing speed on top of this, so a stronger solenoid still hits
+// harder the same way a real one would.
+const KICK_SCALE = 2.5;
 
 // The collider's tip end is this fraction as wide as its hinge end - a
 // real flipper's asymmetric wedge (flat top edge, tapered bottom edge),

@@ -39,6 +39,18 @@ const MAX_BALL_SPEED = 34;
 // step gaps.
 const FLIPPER_SUBSTEPS = 4;
 
+// Explicitly restored on the outer walls after construction (see
+// buildStaticTable's own comment for why a plain `restitution: 0.7` in the
+// constructor options wouldn't stick) - close to the ball's old uniform
+// 0.42 so wall bounce keeps its existing feel now that the ball's own
+// restitution (see spawnBall) has been lowered to make slopes/the flipper
+// non-bouncy instead.
+const WALL_RESTITUTION = 0.42;
+// Same restoration on buildings, for the same reason - a satisfying bounce
+// off a building being hit is still wanted, only the flipper/slopes needed
+// to stop bouncing.
+const BUILDING_RESTITUTION = 0.7;
+
 export class PinballWorld {
   engine: Matter.Engine;
   world: Matter.World;
@@ -73,9 +85,12 @@ export class PinballWorld {
     const body = Bodies.rectangle(r.x, r.y, r.width, r.height, {
       isStatic: true,
       label: "building",
-      restitution: 0.7,
       chamfer: { radius: r.cornerRadius },
     });
+    // Set after construction, not in the options above - see
+    // buildStaticTable's comment on WALL_RESTITUTION for why a restitution
+    // passed alongside isStatic: true there gets silently discarded.
+    body.restitution = BUILDING_RESTITUTION;
     this.buildingBodies.push(body);
     World.add(this.world, body);
     return body;
@@ -91,26 +106,39 @@ export class PinballWorld {
 
   private buildStaticTable() {
     const walls: Matter.Body[] = [];
-    // No restitution/friction set here on purpose - Matter.Body.setStatic
-    // (called internally the moment a body is created with isStatic: true,
-    // see matter-js/src/body/Body.js's _initProperties) unconditionally
-    // overwrites restitution to 0 and friction to 1 on every static body,
-    // regardless of whatever's passed in these options - so a value here
-    // would silently do nothing. That's harmless for restitution (Matter
-    // uses the *higher* of a pair's two values, and the ball's own 0.42
-    // already wins that comparison against this wall's forced 0) and for
-    // friction it actually works in our favour (Matter uses the *lower* of
-    // the two, and a static body being forced to a max-strength 1 just
-    // means the ball's own friction - see spawnBall below - is what
-    // actually decides every wall/rail/flipper contact).
+    // No friction set here on purpose - Matter.Body.setStatic (called
+    // internally the moment a body is created with isStatic: true, see
+    // matter-js/src/body/Body.js's _initProperties) unconditionally
+    // overwrites friction to 1 on every static body regardless of whatever's
+    // passed in these options, so a value here would silently do nothing.
+    // That works in our favour: Matter uses the *lower* of a pair's two
+    // friction values, and a static body being forced to a max-strength 1
+    // just means the ball's own friction (see spawnBall below) is what
+    // actually decides every wall/rail/flipper contact.
+    //
+    // Restitution is a different story - setStatic forces it to 0 the same
+    // way, but *after* construction there's nothing stopping a plain
+    // `body.restitution = x` write from sticking (Pair.update reads it
+    // fresh every step, see physics/world.ts's own history/PR notes), and
+    // Matter pairs on the *higher* of the two bodies' values - so the outer
+    // walls get it explicitly restored to WALL_RESTITUTION right below,
+    // while the outlane guides/hinge guards deliberately do NOT get it
+    // restored: leaving them at the forced 0 means their pair restitution
+    // is whatever the ball itself carries (see spawnBall's low value), so
+    // the ball hugs the slope into the flipper instead of bouncing down it.
     const opts: Matter.IChamferableBodyDefinition = { isStatic: true, label: "wall" };
 
     for (const w of OUTER_WALLS) {
-      walls.push(Bodies.rectangle(w.x, w.y, w.w, w.h, { ...opts, angle: w.angle ?? 0 }));
+      const body = Bodies.rectangle(w.x, w.y, w.w, w.h, { ...opts, angle: w.angle ?? 0 });
+      body.restitution = WALL_RESTITUTION;
+      walls.push(body);
     }
 
     // Outlane guides feeding each flipper - see layout.ts for why these are
-    // single overlapping segments rather than multiple joined ones.
+    // single overlapping segments rather than multiple joined ones. No
+    // restitution restored here - see this method's own top comment - so a
+    // ball riding down toward the flipper stays on the slope instead of
+    // bouncing off it.
     for (const s of OUTLANE_GUIDES) {
       const dx = s.x2 - s.x1;
       const dy = s.y2 - s.y1;
@@ -123,7 +151,9 @@ export class PinballWorld {
 
     // Rounded caps bridging each rail to its flipper's hinge - see
     // layout.ts for why these need to be round rather than another flat
-    // segment (a ball can wedge into a flat-meets-circle corner).
+    // segment (a ball can wedge into a flat-meets-circle corner). Same
+    // no-restitution-restored treatment as the guides they bridge, for the
+    // same reason.
     for (const g of FLIPPER_HINGE_GUARDS) {
       walls.push(Bodies.circle(g.x, g.y, g.radius, opts));
     }
@@ -133,19 +163,21 @@ export class PinballWorld {
 
   spawnBall(x = TABLE_W / 2, y = 60): Matter.Body {
     const ball = Bodies.circle(x, y, BALL_RADIUS, {
-      // A normal, fairly lively pinball-ball value. This used to be pinned
-      // much lower (0.12) as a workaround: the flipper was a fully inert
-      // static body (zeroed velocity every step) with a scripted "kick" on
-      // top, and any bounce off it or the walls kept re-triggering that
-      // low-restitution-with-explicit-boost combination in ways that read
-      // as judder. Now that the flipper reports its own real instantaneous
-      // velocity (see physics/flipper.ts) and there's no separate kick
-      // system to misfire, restitution is free to be a normal value again
-      // - resting/rolling contact settles cleanly regardless (verified:
-      // stays at an exact standstill for 7+s after landing on a stopped,
-      // held flipper), since that settling was never really about this
-      // number in the first place.
-      restitution: 0.42,
+      // Kept low so the ball hugs a slope or a resting flipper - lands and
+      // rolls along it - instead of bouncing back off on contact, which
+      // read as unpredictable and made lining up a return hit hard. Matter
+      // pairs on the *higher* of a pair's two restitution values, so this
+      // number alone decides bounce against anything that doesn't restore
+      // its own restitution after construction (the flipper, the outlane
+      // guides, the hinge guards - see buildStaticTable) - the outer walls
+      // and buildings *do* restore theirs (WALL_RESTITUTION/
+      // BUILDING_RESTITUTION above), so they still bounce the way they
+      // always have. This used to be a single uniform 0.42 for every
+      // surface (before that, 0.12, back when the flipper was a fully
+      // inert body with a scripted "kick" bolted on top - long gone, see
+      // physics/flipper.ts) - this is the first time bounce has actually
+      // differed by surface rather than being one shared number.
+      restitution: 0.02,
       // Matter uses the *lower* of a pair's two friction values, and every
       // wall/rail/flipper is forced to a max-strength 1 by Matter itself
       // (see buildStaticTable above), so this number alone is what decides
