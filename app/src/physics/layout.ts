@@ -23,12 +23,15 @@ export interface FlipperLayout {
 //
 // Pivots pushed further apart (0.32/0.68 -> 0.29/0.71) so the two tips
 // leave a clearer gap at rest instead of nearly meeting in the middle.
+// Width trimmed from 20 to 14 (see physics/flipper.ts's TIP_WIDTH_RATIO
+// too) so the wedge reads as a clean, thin triangle rather than a stubby
+// block.
 export const LEFT_FLIPPER: FlipperLayout = {
   pivot: { x: TABLE_W * 0.29, y: TABLE_H - 100 },
   restAngle: deg(20),
   activeAngle: deg(-50),
   length: 70,
-  width: 20,
+  width: 14,
   side: "left",
 };
 
@@ -37,7 +40,7 @@ export const RIGHT_FLIPPER: FlipperLayout = {
   restAngle: deg(160),
   activeAngle: deg(230),
   length: 70,
-  width: 20,
+  width: 14,
   side: "right",
 };
 

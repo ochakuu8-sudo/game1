@@ -1,6 +1,6 @@
 import { Container, Graphics, Rectangle, RenderTexture, Texture, type Renderer } from "pixi.js";
 import { buildingRect, LEFT_FLIPPER } from "../physics/layout";
-import { TIP_WIDTH_RATIO } from "../physics/flipper";
+import { buildFlipperShape } from "../physics/flipper";
 import { BUILDING_TYPES } from "../entities/buildingTypes";
 import { PALETTE } from "./palette";
 
@@ -176,36 +176,24 @@ export function buildAtlas(renderer: Renderer): Atlas {
 
   // --- Flipper: a real flipper's asymmetric wedge - a flat top edge the
   // full length, and a bottom edge tapering from full width at the hinge
-  // down to a narrow tip - approximated as a stack of blocky segments
-  // (Famicom dot-art style) rather than a smooth diagonal. Traces the
-  // *exact* footprint of the physics collider (physics/flipper.ts), which
-  // is built from the same halfW/tipHalfW/TIP_WIDTH_RATIO numbers, instead
-  // of a shape drawn independently of what actually collides - what you
-  // see is what can hit the ball. ---
+  // down to a narrow tip - drawn from buildFlipperShape() in
+  // physics/flipper.ts, the exact same function call that builds the
+  // physics collider, rather than a hand-tuned approximation of it that
+  // could quietly drift out of sync with the real hitbox. Same smooth-
+  // polygon-plus-stroke technique physics/tableVisuals.ts already uses for
+  // the other physics-matched shapes (walls/rails), not the blocky
+  // Famicom-style rects used for the game's non-physics sprites. ---
   {
     const g = new Graphics();
+    const halfLen = LEFT_FLIPPER.length / 2;
     const halfW = LEFT_FLIPPER.width / 2;
-    const tipHalfW = halfW * TIP_WIDTH_RATIO;
-    const tipX = LEFT_FLIPPER.length;
-    // Segment boundaries along the hinge(x=0)-to-tip(x=length) axis, each
-    // with the bottom edge's offset from the (fixed, flat) top at that
-    // point - a stepped approximation of the true linear taper.
-    const bounds = [0, 18, 40, 60, tipX];
-    const bottomAt = [halfW, 8, 6, tipHalfW];
 
-    const seg = (i: number, top: number, bottom: number, color: FillColor, pad = 0) => {
-      const x0 = bounds[i];
-      const x1 = bounds[i + 1];
-      g.rect(x0 - pad, top - pad, x1 - x0 + pad * 2, bottom - top + pad * 2).fill(color);
-    };
-    // Outline pass (oversized, dark) then the body pass on top - top edge
-    // stays flat (-halfW) for every segment on both passes, only the
-    // bottom steps down toward the tip.
-    for (let i = 0; i < bottomAt.length; i++) seg(i, -halfW, bottomAt[i], PALETTE.ink, 2);
-    for (let i = 0; i < bottomAt.length; i++) seg(i, -halfW + 2, bottomAt[i] - 2, PALETTE.red);
+    const outline = buildFlipperShape(LEFT_FLIPPER.length, LEFT_FLIPPER.width);
+    const pts = outline.vertices.flatMap((v) => [v.x + halfLen, v.y]);
+    g.poly(pts).fill(PALETTE.red).stroke({ width: 3, color: PALETTE.ink });
 
-    g.rect(-7, -7, 14, 14).fill(PALETTE.ink);
-    g.rect(-5, -5, 10, 10).fill(PALETTE.orange);
+    g.rect(-5, -5, 10, 10).fill(PALETTE.ink);
+    g.rect(-3.5, -3.5, 7, 7).fill(PALETTE.orange);
     g.rect(6, -halfW + 2, 30, 3).fill({ color: PALETTE.paper, alpha: 0.5 });
 
     g.position.set(FLIPPER_HINGE_X, ROWS * CELL + FLIPPER_HINGE_Y);

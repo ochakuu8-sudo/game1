@@ -22,11 +22,56 @@ const KICK_SCALE = 0.65;
 
 // The collider's tip end is this fraction as wide as its hinge end - a
 // real flipper's asymmetric wedge (flat top edge, tapered bottom edge),
-// matched exactly by the sprite drawn in core/atlas.ts (which imports
-// this same constant, so the drawn shape and the hitbox can never drift
-// out of sync), rather than a plain rectangle or a shape that narrows
-// evenly on both sides into an isosceles triangle.
-export const TIP_WIDTH_RATIO = 0.3;
+// matched exactly by the sprite drawn in core/atlas.ts (which calls
+// buildFlipperShape() below - the same function this class uses to build
+// its own collider - rather than redrawing an independent approximation
+// of it), narrow enough to read as a clean, thin triangle rather than the
+// old stubby wedge.
+export const TIP_WIDTH_RATIO = 0.14;
+
+export interface FlipperShape {
+  /** Local, pre-rotation, chamfered outline - hinge end centred on
+   * x=-length/2, tip end on x=+length/2. The single source both this
+   * class's Matter collider and core/atlas.ts's sprite are built from, so
+   * the two can never draw two different shapes for the same flipper. */
+  vertices: { x: number; y: number }[];
+  /** See Flipper.anchorOffset's own comment - same meaning here. */
+  anchorOffset: { x: number; y: number };
+}
+
+/** Builds the wedge outline for a flipper of the given length/width - a
+ * flat top edge the full length, and a bottom edge tapering from the full
+ * half-width at the hinge down to `tipWidthRatio` of it at the tip, with
+ * each end rounded to its own half-width rather than one shared radius.
+ * `pad` grows the whole outline (length and width alike) by a fixed
+ * amount before rounding, for drawing a slightly oversized outline pass
+ * behind the true shape - it is never passed when building the actual
+ * collider. */
+export function buildFlipperShape(length: number, width: number, tipWidthRatio = TIP_WIDTH_RATIO, pad = 0): FlipperShape {
+  const halfLen = length / 2 + pad;
+  const halfW = width / 2 + pad;
+  const tipHalfW = (width / 2) * tipWidthRatio + pad;
+
+  // Local, pre-rotation vertices, hinge at x=-halfLen and tip at
+  // x=+halfLen: a flat top edge the full length (constant -halfW), and
+  // a bottom edge tapering from the full half-width at the hinge down
+  // to the narrow tip half-width.
+  const rawVertices = [
+    { x: -halfLen, y: -halfW }, // hinge, top
+    { x: halfLen, y: -halfW }, // tip, top
+    { x: halfLen, y: tipHalfW }, // tip, bottom
+    { x: -halfLen, y: halfW }, // hinge, bottom
+  ];
+  const hingePoint = { x: -halfLen, y: 0 };
+  const centroid = Matter.Vertices.centre(rawVertices);
+  const anchorOffset = { x: centroid.x - hingePoint.x, y: centroid.y - hingePoint.y };
+
+  // Quality forced high rather than left to Matter's auto choice, which
+  // for a corner this small leaves a visibly faceted "circle" a rolling
+  // ball can catch on.
+  const vertices = Matter.Vertices.chamfer(rawVertices, [halfW, tipHalfW, tipHalfW, halfW], 12, 2, 14);
+  return { vertices, anchorOffset };
+}
 
 export class Flipper {
   body: Matter.Body;
@@ -53,31 +98,8 @@ export class Flipper {
     this.currentAngle = layout.restAngle;
 
     const { pivot, length, width, restAngle } = layout;
-    const halfLen = length / 2;
-    const halfW = width / 2;
-    const tipHalfW = halfW * TIP_WIDTH_RATIO;
-
-    // Local, pre-rotation vertices, hinge at x=-halfLen and tip at
-    // x=+halfLen: a flat top edge the full length (constant -halfW), and
-    // a bottom edge tapering from the full half-width at the hinge down
-    // to the narrow tip half-width.
-    const rawVertices = [
-      { x: -halfLen, y: -halfW }, // hinge, top
-      { x: halfLen, y: -halfW }, // tip, top
-      { x: halfLen, y: tipHalfW }, // tip, bottom
-      { x: -halfLen, y: halfW }, // hinge, bottom
-    ];
-    const hingePoint = { x: -halfLen, y: 0 };
-    const centroid = Matter.Vertices.centre(rawVertices);
-    this.anchorOffset = { x: centroid.x - hingePoint.x, y: centroid.y - hingePoint.y };
-
-    // Each end rounded to its own half-width rather than one shared
-    // radius - the hinge cap matches the old rectangle's rounding exactly
-    // (radius = halfW), and the tip gets its own smaller cap to match.
-    // Quality forced high for the same reason as before: the auto quality
-    // Matter picks for a corner this small leaves a visibly faceted
-    // "circle" a rolling ball can catch on.
-    const vertices = Matter.Vertices.chamfer(rawVertices, [halfW, tipHalfW, tipHalfW, halfW], 12, 2, 14);
+    const { vertices, anchorOffset } = buildFlipperShape(length, width);
+    this.anchorOffset = anchorOffset;
 
     this.body = Matter.Body.create({
       position: this.centreFor(pivot, restAngle),
