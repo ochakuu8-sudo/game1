@@ -8,6 +8,18 @@ import type { FlipperLayout } from "./layout";
 const MAX_ANGULAR_STEP = 0.16; // radians per physics step while active
 const RETURN_ANGULAR_STEP = 0.1; // slower relax back to rest
 
+// Scales only the velocity/angularVelocity reported to Matter for
+// collision purposes (see step() below) - the body's actual
+// position/angle still snap at full MAX_ANGULAR_STEP speed, so the flip
+// itself still looks and feels instant. This is what the ball's kick
+// strength is computed from, so scaling it down here (while the FLIPPER
+// powerup's speedMultiplier is left to scale the *unscaled* swing speed
+// on top of it) keeps a stock flipper's kick modest while leaving real
+// headroom for the powerup to make a noticeably harder-hitting flipper,
+// instead of every hit already sitting near a shared ceiling from the
+// start.
+const KICK_SCALE = 0.65;
+
 export class Flipper {
   body: Matter.Body;
   layout: FlipperLayout;
@@ -90,13 +102,15 @@ export class Flipper {
     // The body's velocity, for collision-response purposes (see the static
     // note above): this step's actual displacement/rotation, in exactly
     // the "per step" units Matter's own Verlet integration uses internally
-    // (position delta, no separate time division needed) - not zeroed.
-    // This is what lets a ball genuinely get flung harder the faster the
-    // flipper is actually swinging when it makes contact, and get nothing
-    // extra from a flipper that's just sitting there raised and
-    // stationary, purely through normal physics rather than any bespoke
-    // "was this contact within some window" bookkeeping.
-    Matter.Body.setVelocity(this.body, { x: cx - prevX, y: cy - prevY });
-    Matter.Body.setAngularVelocity(this.body, diff);
+    // (position delta, no separate time division needed) - not zeroed,
+    // and scaled by KICK_SCALE (see above) so the reported kick is gentler
+    // than the arm's real snap speed. This is what lets a ball genuinely
+    // get flung harder the faster the flipper is actually swinging when it
+    // makes contact, and get nothing extra from a flipper that's just
+    // sitting there raised and stationary, purely through normal physics
+    // rather than any bespoke "was this contact within some window"
+    // bookkeeping.
+    Matter.Body.setVelocity(this.body, { x: (cx - prevX) * KICK_SCALE, y: (cy - prevY) * KICK_SCALE });
+    Matter.Body.setAngularVelocity(this.body, diff * KICK_SCALE);
   }
 }
