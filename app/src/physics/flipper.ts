@@ -20,6 +20,14 @@ const RETURN_ANGULAR_STEP = 0.1; // slower relax back to rest
 // start.
 const KICK_SCALE = 0.65;
 
+// The collider's tip end is this fraction as wide as its hinge end - a
+// real flipper's asymmetric wedge (flat top edge, tapered bottom edge),
+// matched exactly by the sprite drawn in core/atlas.ts (which imports
+// this same constant, so the drawn shape and the hitbox can never drift
+// out of sync), rather than a plain rectangle or a shape that narrows
+// evenly on both sides into an isosceles triangle.
+export const TIP_WIDTH_RATIO = 0.3;
+
 export class Flipper {
   body: Matter.Body;
   layout: FlipperLayout;
@@ -30,23 +38,51 @@ export class Flipper {
    * real collision physics, not a scripted boost) hits the ball harder on
    * its own, the same way a real stronger solenoid would. */
   speedMultiplier = 1;
+  /** Local-space vector from the hinge point to this shape's true
+   * centroid. Matter always centres a body's `position` on its centroid,
+   * not on whatever point we'd like to treat as the hinge - for the old
+   * plain rectangle those happened to be the same point, but this
+   * asymmetric wedge has more of its area toward the wide hinge end, so
+   * the centroid sits off to one side of the hinge-to-tip midline. Every
+   * position update below has to correct for this fixed offset, or the
+   * hinge would visibly drift off `layout.pivot` as the flipper rotates. */
+  private readonly anchorOffset: { x: number; y: number };
 
   constructor(layout: FlipperLayout) {
     this.layout = layout;
     this.currentAngle = layout.restAngle;
 
     const { pivot, length, width, restAngle } = layout;
-    const cx = pivot.x + Math.cos(restAngle) * (length / 2);
-    const cy = pivot.y + Math.sin(restAngle) * (length / 2);
+    const halfLen = length / 2;
+    const halfW = width / 2;
+    const tipHalfW = halfW * TIP_WIDTH_RATIO;
 
-    this.body = Matter.Bodies.rectangle(cx, cy, length, width, {
+    // Local, pre-rotation vertices, hinge at x=-halfLen and tip at
+    // x=+halfLen: a flat top edge the full length (constant -halfW), and
+    // a bottom edge tapering from the full half-width at the hinge down
+    // to the narrow tip half-width.
+    const rawVertices = [
+      { x: -halfLen, y: -halfW }, // hinge, top
+      { x: halfLen, y: -halfW }, // tip, top
+      { x: halfLen, y: tipHalfW }, // tip, bottom
+      { x: -halfLen, y: halfW }, // hinge, bottom
+    ];
+    const hingePoint = { x: -halfLen, y: 0 };
+    const centroid = Matter.Vertices.centre(rawVertices);
+    this.anchorOffset = { x: centroid.x - hingePoint.x, y: centroid.y - hingePoint.y };
+
+    // Each end rounded to its own half-width rather than one shared
+    // radius - the hinge cap matches the old rectangle's rounding exactly
+    // (radius = halfW), and the tip gets its own smaller cap to match.
+    // Quality forced high for the same reason as before: the auto quality
+    // Matter picks for a corner this small leaves a visibly faceted
+    // "circle" a rolling ball can catch on.
+    const vertices = Matter.Vertices.chamfer(rawVertices, [halfW, tipHalfW, tipHalfW, halfW], 12, 2, 14);
+
+    this.body = Matter.Body.create({
+      position: this.centreFor(pivot, restAngle),
+      vertices,
       angle: restAngle,
-      // Matter's auto quality for a rounded corner this small (radius 10)
-      // works out to only ~4 straight segments per end - a visibly
-      // faceted "circle" a rolling ball can catch on as it crosses each
-      // facet's edge. Forcing a higher quality gives a much closer
-      // approximation to an actual circular cap.
-      chamfer: { radius: width / 2, quality: 12 },
       label: "flipper",
       density: 0.02,
     });
@@ -110,11 +146,10 @@ export class Flipper {
     // collision-perturbed) position, which caused unbounded drift in an
     // earlier version. Recomputing from scratch each step makes that
     // impossible - there's nothing to compound.
-    const { pivot, length } = this.layout;
+    const { pivot } = this.layout;
     const prevX = this.body.position.x;
     const prevY = this.body.position.y;
-    const cx = pivot.x + Math.cos(this.currentAngle) * (length / 2);
-    const cy = pivot.y + Math.sin(this.currentAngle) * (length / 2);
+    const { x: cx, y: cy } = this.centreFor(pivot, this.currentAngle);
     // Omitting the 3rd (updateVelocity) arg leaves it undefined/falsy, same
     // as passing false - @types/matter-js doesn't declare that parameter.
     Matter.Body.setPosition(this.body, { x: cx, y: cy });
@@ -142,5 +177,19 @@ export class Flipper {
     // MAX_BALL_SPEED) instead of the intended dynamic range.
     Matter.Body.setVelocity(this.body, { x: (cx - prevX) * KICK_SCALE, y: (cy - prevY) * KICK_SCALE });
     Matter.Body.setAngularVelocity(this.body, diff * KICK_SCALE);
+  }
+
+  /** Where the body's centroid (what Matter treats as its `position`)
+   * needs to be so that the hinge point itself lands exactly on `pivot`
+   * at the given angle - `anchorOffset` rotated by the current angle,
+   * added to the pivot. See the field's own comment for why this isn't
+   * simply `pivot + length/2` the way it was for the old symmetric shape. */
+  private centreFor(pivot: { x: number; y: number }, angle: number): { x: number; y: number } {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return {
+      x: pivot.x + this.anchorOffset.x * cos - this.anchorOffset.y * sin,
+      y: pivot.y + this.anchorOffset.x * sin + this.anchorOffset.y * cos,
+    };
   }
 }

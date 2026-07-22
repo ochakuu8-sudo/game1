@@ -1,5 +1,6 @@
 import { Container, Graphics, Rectangle, RenderTexture, Texture, type Renderer } from "pixi.js";
-import { buildingRect } from "../physics/layout";
+import { buildingRect, LEFT_FLIPPER } from "../physics/layout";
+import { TIP_WIDTH_RATIO } from "../physics/flipper";
 import { BUILDING_TYPES } from "../entities/buildingTypes";
 import { PALETTE } from "./palette";
 
@@ -173,28 +174,39 @@ export function buildAtlas(renderer: Renderer): Atlas {
     64,
   );
 
-  // --- Flipper: a tapered stack of blocky segments (thick at the hinge,
-  // narrow at the tip) instead of one smooth poly, drawn hinge-anchored in
-  // its own reserved strip (see FLIPPER_* constants). ---
+  // --- Flipper: a real flipper's asymmetric wedge - a flat top edge the
+  // full length, and a bottom edge tapering from full width at the hinge
+  // down to a narrow tip - approximated as a stack of blocky segments
+  // (Famicom dot-art style) rather than a smooth diagonal. Traces the
+  // *exact* footprint of the physics collider (physics/flipper.ts), which
+  // is built from the same halfW/tipHalfW/TIP_WIDTH_RATIO numbers, instead
+  // of a shape drawn independently of what actually collides - what you
+  // see is what can hit the ball. ---
   {
     const g = new Graphics();
-    const seg = (x: number, w: number, h: number, color: FillColor, pad = 0) => {
-      g.rect(x - pad, -h / 2 - pad, w + pad * 2, h + pad * 2).fill(color);
+    const halfW = LEFT_FLIPPER.width / 2;
+    const tipHalfW = halfW * TIP_WIDTH_RATIO;
+    const tipX = LEFT_FLIPPER.length;
+    // Segment boundaries along the hinge(x=0)-to-tip(x=length) axis, each
+    // with the bottom edge's offset from the (fixed, flat) top at that
+    // point - a stepped approximation of the true linear taper.
+    const bounds = [0, 18, 40, 60, tipX];
+    const bottomAt = [halfW, 8, 6, tipHalfW];
+
+    const seg = (i: number, top: number, bottom: number, color: FillColor, pad = 0) => {
+      const x0 = bounds[i];
+      const x1 = bounds[i + 1];
+      g.rect(x0 - pad, top - pad, x1 - x0 + pad * 2, bottom - top + pad * 2).fill(color);
     };
-    // Outline pass (oversized, dark) then the body pass on top.
-    seg(0, 20, 30, PALETTE.ink, 2);
-    seg(18, 24, 24, PALETTE.ink, 2);
-    seg(40, 22, 18, PALETTE.ink, 2);
-    seg(60, 16, 12, PALETTE.ink, 2);
+    // Outline pass (oversized, dark) then the body pass on top - top edge
+    // stays flat (-halfW) for every segment on both passes, only the
+    // bottom steps down toward the tip.
+    for (let i = 0; i < bottomAt.length; i++) seg(i, -halfW, bottomAt[i], PALETTE.ink, 2);
+    for (let i = 0; i < bottomAt.length; i++) seg(i, -halfW + 2, bottomAt[i] - 2, PALETTE.red);
 
-    seg(0, 20, 26, PALETTE.red);
-    seg(18, 24, 20, PALETTE.red);
-    seg(40, 22, 15, PALETTE.red);
-    seg(60, 16, 9, PALETTE.red);
-
-    g.rect(-9, -9, 18, 18).fill(PALETTE.ink);
-    g.rect(-7, -7, 14, 14).fill(PALETTE.orange);
-    g.rect(6, -9, 30, 4).fill({ color: PALETTE.paper, alpha: 0.5 });
+    g.rect(-7, -7, 14, 14).fill(PALETTE.ink);
+    g.rect(-5, -5, 10, 10).fill(PALETTE.orange);
+    g.rect(6, -halfW + 2, 30, 3).fill({ color: PALETTE.paper, alpha: 0.5 });
 
     g.position.set(FLIPPER_HINGE_X, ROWS * CELL + FLIPPER_HINGE_Y);
     staging.addChild(g);
