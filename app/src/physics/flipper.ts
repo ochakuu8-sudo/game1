@@ -5,7 +5,7 @@ import type { FlipperLayout } from "./layout";
 // step, so they're half of what they'd be at 60Hz to keep the same
 // real-world angular speed while moving in smaller, tunnelling-resistant
 // increments.
-const MAX_ANGULAR_STEP = 0.16; // radians per physics step while active
+const MAX_ANGULAR_STEP = 0.13; // radians per physics step while active
 const RETURN_ANGULAR_STEP = 0.1; // slower relax back to rest
 
 // Scales only the velocity/angularVelocity reported to Matter for
