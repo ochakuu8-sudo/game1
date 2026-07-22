@@ -63,13 +63,23 @@ export function buildFlipperShape(length: number, width: number, tipWidthRatio =
     { x: -halfLen, y: halfW }, // hinge, bottom
   ];
   const hingePoint = { x: -halfLen, y: 0 };
-  const centroid = Matter.Vertices.centre(rawVertices);
-  const anchorOffset = { x: centroid.x - hingePoint.x, y: centroid.y - hingePoint.y };
-
   // Quality forced high rather than left to Matter's auto choice, which
   // for a corner this small leaves a visibly faceted "circle" a rolling
   // ball can catch on.
   const vertices = Matter.Vertices.chamfer(rawVertices, [halfW, tipHalfW, tipHalfW, halfW], 12, 2, 14);
+  // Centroid of the *chamfered* vertices, not the raw pre-chamfer quad -
+  // Matter.Body.setVertices computes a body's true centroid from exactly
+  // the vertex array it's given (see matter-js/src/body/Body.js's own
+  // `Vertices.centre(body.vertices)` call), and chamfering shaves off
+  // asymmetric amounts of area at the hinge end (large radius) vs. the tip
+  // end (tiny radius), so the raw quad's centroid sits measurably off
+  // (~0.7px here) from where the body's centroid actually ends up. Basing
+  // anchorOffset on the raw quad used to leave that gap as a small
+  // rotation-dependent drift between the collider and the hinge-anchored
+  // sprite (which places the hinge itself, not this centroid, at `pivot`) -
+  // using the same vertices Matter itself measures from closes it exactly.
+  const centroid = Matter.Vertices.centre(vertices);
+  const anchorOffset = { x: centroid.x - hingePoint.x, y: centroid.y - hingePoint.y };
   return { vertices, anchorOffset };
 }
 
