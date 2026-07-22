@@ -1,24 +1,32 @@
 import Matter from "matter-js";
 import type { FlipperLayout } from "./layout";
 
-// Physics steps at 120Hz (see game.ts STEP_MS) - these are radians per
-// step, so they're half of what they'd be at 60Hz to keep the same
-// real-world angular speed while moving in smaller, tunnelling-resistant
-// increments.
-const MAX_ANGULAR_STEP = 0.13; // radians per physics step while active
-const RETURN_ANGULAR_STEP = 0.1; // slower relax back to rest
+// Physics steps at 120Hz (see game.ts STEP_MS), so these are radians per
+// ~8.3ms step - a full ~70deg (1.22 rad) swing takes ~1.22/MAX_ANGULAR_STEP
+// steps. Deliberately slow (a real solenoid-driven flipper snaps in
+// ~1-2 physics steps worth of real time; this instead takes ~30, roughly
+// 250ms) so the lift reads as a visible, springy flick across several
+// rendered frames rather than an instant snap - matches the sprite/collider
+// 1:1 either way (see buildFlipperShape()), so slowing this down doesn't
+// reopen any sprite/hitbox gap, it only stretches out how many frames the
+// swing plays over.
+const MAX_ANGULAR_STEP = 0.04; // radians per physics step while active
+const RETURN_ANGULAR_STEP = 0.03; // slower relax back to rest
 
-// Scales only the velocity/angularVelocity reported to Matter for
-// collision purposes (see step() below) - the body's actual
-// position/angle still snap at full MAX_ANGULAR_STEP speed, so the flip
-// itself still looks and feels instant. This is what the ball's kick
-// strength is computed from, so scaling it down here (while the FLIPPER
-// powerup's speedMultiplier is left to scale the *unscaled* swing speed
-// on top of it) keeps a stock flipper's kick modest while leaving real
-// headroom for the powerup to make a noticeably harder-hitting flipper,
-// instead of every hit already sitting near a shared ceiling from the
-// start.
-const KICK_SCALE = 0.65;
+// Scales the velocity/angularVelocity reported to Matter for collision
+// purposes (see step() below), which is what the ball's kick strength is
+// actually computed from. A slower MAX_ANGULAR_STEP means less raw
+// per-step displacement to report, so this was raised from the original
+// 0.65 by roughly the same factor MAX_ANGULAR_STEP was lowered by (~3.25x)
+// to land back in the same kick-strength range a faster swing used to
+// produce (verified empirically - see the sim in this file's own history/
+// PR - rather than assumed, since a slower swing also keeps the ball in
+// contact across more substeps, which by itself already recovers some
+// kick, so a naively "inverse-proportional" scale alone slightly
+// overshoots). The FLIPPER powerup's speedMultiplier still scales the
+// *unscaled* swing speed on top of this, so a stronger solenoid still
+// hits harder the same way a real one would.
+const KICK_SCALE = 1.85;
 
 // The collider's tip end is this fraction as wide as its hinge end - a
 // real flipper's asymmetric wedge (flat top edge, tapered bottom edge),
@@ -190,8 +198,9 @@ export class Flipper {
     // note above): this step's actual displacement/rotation, in exactly
     // the "per step" units Matter's own Verlet integration uses internally
     // (position delta, no separate time division needed) - not zeroed,
-    // and scaled by KICK_SCALE (see above) so the reported kick is gentler
-    // than the arm's real snap speed. This is what lets a ball genuinely
+    // and scaled by KICK_SCALE (see above) to land the reported kick back
+    // in the intended strength range now that the swing itself is slower.
+    // This is what lets a ball genuinely
     // get flung harder the faster the flipper is actually swinging when it
     // makes contact, and get nothing extra from a flipper that's just
     // sitting there raised and stationary, purely through normal physics
