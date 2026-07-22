@@ -48,8 +48,6 @@ export class Flipper {
       // approximation to an actual circular cap.
       chamfer: { radius: width / 2, quality: 12 },
       label: "flipper",
-      friction: 0.05,
-      restitution: 0.35,
       density: 0.02,
     });
     // Static: position/angle are always externally set in step() below,
@@ -66,6 +64,16 @@ export class Flipper {
     // own native collision response transfer realistic momentum to the
     // ball, the same way a real moving flipper arm would, with no scripted
     // "kick" needed at all.
+    //
+    // No friction/restitution passed above, on purpose - setStatic (called
+    // right below) unconditionally overwrites both (friction -> 1,
+    // restitution -> 0) on every static body no matter what's in the
+    // constructor options, so a value up there would silently never apply.
+    // Harmless here too: friction pairs on the *lower* of the two values,
+    // so the flipper being forced to max strength just means the ball's
+    // own friction (see physics/world.ts's spawnBall) decides the contact;
+    // restitution pairs on the *higher* value, and the ball's 0.42 already
+    // wins against the flipper's forced 0.
     Matter.Body.setStatic(this.body, true);
   }
 

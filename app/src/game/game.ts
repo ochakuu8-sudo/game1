@@ -80,7 +80,7 @@ export class Game {
   private buildingsDestroyedTotal = 0;
   private accumulator = 0;
   private debugFlipperCollisions = 0;
-  private debugStepVel: Array<{ x: number; y: number; px: number; py: number }> = [];
+  private debugStepVel: Array<{ x: number; y: number; px: number; py: number; angle: number; angularVelocity: number }> = [];
 
   constructor(app: Application) {
     this.app = app;
@@ -464,7 +464,7 @@ export class Game {
       if (import.meta.env.DEV) {
         const b = this.world.balls[0];
         if (b) {
-          this.debugStepVel.push({ x: b.velocity.x, y: b.velocity.y, px: b.position.x, py: b.position.y });
+          this.debugStepVel.push({ x: b.velocity.x, y: b.velocity.y, px: b.position.x, py: b.position.y, angle: b.angle, angularVelocity: b.angularVelocity });
           if (this.debugStepVel.length > 2000) this.debugStepVel.shift();
         }
       }

@@ -84,16 +84,19 @@ export class PinballWorld {
 
   private buildStaticTable() {
     const walls: Matter.Body[] = [];
-    // Matter always uses the *higher* of a pair's two restitution values
-    // (see the ball's own restitution comment in spawnBall below), so this
-    // value alone governs how bouncy the ball is against every wall here -
-    // the outer walls, outlane rails, AND the flipper hinge guards, which
-    // is exactly the surface a ball settling near a flipper spends the
-    // most time grazing. Lowering the ball's restitution alone didn't fix
-    // resting/rolling judder against these because 0.4 kept winning the
-    // max() every time; kept low here too so a ball resting or rolling
-    // along any wall - not just the flipper itself - actually settles.
-    const opts: Matter.IChamferableBodyDefinition = { isStatic: true, label: "wall", restitution: 0.12 };
+    // No restitution/friction set here on purpose - Matter.Body.setStatic
+    // (called internally the moment a body is created with isStatic: true,
+    // see matter-js/src/body/Body.js's _initProperties) unconditionally
+    // overwrites restitution to 0 and friction to 1 on every static body,
+    // regardless of whatever's passed in these options - so a value here
+    // would silently do nothing. That's harmless for restitution (Matter
+    // uses the *higher* of a pair's two values, and the ball's own 0.42
+    // already wins that comparison against this wall's forced 0) and for
+    // friction it actually works in our favour (Matter uses the *lower* of
+    // the two, and a static body being forced to a max-strength 1 just
+    // means the ball's own friction - see spawnBall below - is what
+    // actually decides every wall/rail/flipper contact).
+    const opts: Matter.IChamferableBodyDefinition = { isStatic: true, label: "wall" };
 
     for (const w of OUTER_WALLS) {
       walls.push(Bodies.rectangle(w.x, w.y, w.w, w.h, { ...opts, angle: w.angle ?? 0 }));
@@ -136,9 +139,28 @@ export class PinballWorld {
       // held flipper), since that settling was never really about this
       // number in the first place.
       restitution: 0.42,
-      friction: 0.02,
+      // Matter uses the *lower* of a pair's two friction values, and every
+      // wall/rail/flipper is forced to a max-strength 1 by Matter itself
+      // (see buildStaticTable above), so this number alone is what decides
+      // how well the ball grips everything it touches. A modest bump from
+      // the old 0.02 - see the `inertia` override below for the change
+      // that actually mattered for rolling.
+      friction: 0.2,
       frictionAir: 0.0012,
       density: 0.04,
+      // Matter auto-computes a circle's moment of inertia from its density
+      // like a *disc*, which came out roughly 4x higher than a real ball
+      // of this mass should have - with that much rotational inertia, the
+      // available friction torque could barely spin the ball up at all, so
+      // it visibly slid/skidded down slopes and along the flipper instead
+      // of rolling, no matter how much friction was dialled in (verified:
+      // raising friction alone, 0.02 up to 5, changed nothing - only
+      // lowering inertia did). This explicit override is close to a solid
+      // sphere's real inertia (0.4 * mass * radius^2 ~= 1388 here) rather
+      // than the disc default, and picking something a bit below even that
+      // makes the catch-up-to-rolling transition read as instant rather
+      // than a visible beat of skidding first.
+      inertia: 500,
       label: "ball",
     });
     Matter.Body.setVelocity(ball, { x: (Math.random() - 0.5) * 2, y: 0 });
