@@ -32,6 +32,13 @@ export const CATEGORY_BUILDING = 0x0004;
 // flipper kicks.
 const MAX_BALL_SPEED = 34;
 
+// How many slices each physics step's flipper motion is broken into for
+// collision purposes (see step() below and Flipper.step()'s own comment) -
+// 4 was enough to stop a ball parked right in a fast swing's path from
+// ever tunnelling clean through in repeated testing, without still-visible
+// step gaps.
+const FLIPPER_SUBSTEPS = 4;
+
 export class PinballWorld {
   engine: Matter.Engine;
   world: Matter.World;
@@ -176,9 +183,16 @@ export class PinballWorld {
   }
 
   step(dtMs: number) {
-    this.leftFlipper.step();
-    this.rightFlipper.step();
-    Engine.update(this.engine, dtMs);
+    // Sub-stepped rather than one big move + one Engine.update() - see
+    // Flipper.step()'s own comment for why a single full-speed swing per
+    // physics tick could let the paddle skip clean over a ball without
+    // Matter ever detecting the overlap.
+    const subDt = dtMs / FLIPPER_SUBSTEPS;
+    for (let i = 0; i < FLIPPER_SUBSTEPS; i++) {
+      this.leftFlipper.step(1 / FLIPPER_SUBSTEPS);
+      this.rightFlipper.step(1 / FLIPPER_SUBSTEPS);
+      Engine.update(this.engine, subDt);
+    }
 
     for (const ball of this.balls) {
       const { x, y } = ball.velocity;

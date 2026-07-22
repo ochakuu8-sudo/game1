@@ -81,10 +81,22 @@ export class Flipper {
     this.held = held;
   }
 
-  /** Advance one fixed physics step. Call once per Engine.update(). */
-  step() {
+  /** Advance one fixed physics step, or a `fraction` of one when the
+   * caller is sub-stepping the swing (see physics/world.ts's step()) -
+   * pass e.g. 0.25 to move a quarter as far this call, matched with a
+   * quarter-size Engine.update() dt, so a fast swing gets checked for
+   * collisions several times along its arc instead of just at the two
+   * endpoints. A full-speed swing can cover several ball-diameters of
+   * paddle travel in one un-substepped tick, and Matter has no continuous
+   * collision detection, so the ball could end up on the far side of the
+   * paddle at the next check without ever registering contact in between
+   * - substepping is what actually closes that gap, not just running
+   * physics at a higher fixed rate (already tried; helped but didn't
+   * eliminate it, since it doesn't shrink the *paddle's* own per-check
+   * displacement specifically). Call once per Engine.update(). */
+  step(fraction = 1) {
     const target = this.held ? this.layout.activeAngle : this.layout.restAngle;
-    const maxStep = this.held ? MAX_ANGULAR_STEP * this.speedMultiplier : RETURN_ANGULAR_STEP;
+    const maxStep = (this.held ? MAX_ANGULAR_STEP * this.speedMultiplier : RETURN_ANGULAR_STEP) * fraction;
 
     let diff = target - this.currentAngle;
     if (Math.abs(diff) > maxStep) {
@@ -117,7 +129,17 @@ export class Flipper {
     // makes contact, and get nothing extra from a flipper that's just
     // sitting there raised and stationary, purely through normal physics
     // rather than any bespoke "was this contact within some window"
-    // bookkeeping.
+    // bookkeeping. Deliberately NOT rescaled back up to a full-step-
+    // equivalent rate when substepping (fraction < 1) despite each
+    // substep's raw displacement being proportionally smaller - a ball
+    // that stays in contact across several consecutive substeps (common
+    // once the swing is fine-grained enough to avoid tunnelling, see
+    // FLIPPER_SUBSTEPS in physics/world.ts) picks up a fraction of the
+    // kick on *each* of those substeps, and those fractions add up over
+    // the contact window to roughly the same total as one full-strength
+    // hit - rescaling each one back up on top of that compounded into a
+    // wildly over-strength kick in testing (every solid hit maxed out
+    // MAX_BALL_SPEED) instead of the intended dynamic range.
     Matter.Body.setVelocity(this.body, { x: (cx - prevX) * KICK_SCALE, y: (cy - prevY) * KICK_SCALE });
     Matter.Body.setAngularVelocity(this.body, diff * KICK_SCALE);
   }
