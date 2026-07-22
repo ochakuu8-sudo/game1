@@ -19,10 +19,18 @@ export const CATEGORY_WORLD = 0x0001;
 export const CATEGORY_BUILDING = 0x0004;
 
 // A normal roll/fall/bounce never gets near this (typically under ~12).
-// Only a hard flipper slam or a lucky chain of kicks spikes past it, so
-// this trims just those jarring bursts instead of slowing the game down
-// across the board.
-const MAX_BALL_SPEED = 15;
+// A genuine flipper hit is *supposed* to spike well past that - measured
+// 19-26 depending on contact point (tip hits carry more swing speed than
+// hits near the pivot), up to ~30 with the FLIPPER powerup maxed out -
+// that variation by timing/contact point is exactly what makes a flip
+// feel dynamic rather than a fixed-strength bump. This used to be set to
+// 15, which sat *below* that whole natural range and silently flattened
+// every solid flip to the same capped speed regardless of how it was
+// actually hit - it looked like the collision response wasn't reacting to
+// the swing at all. Kept only as a safety net a good deal above the real
+// range, for the rare compounding multi-bounce spike, not to tame normal
+// flipper kicks.
+const MAX_BALL_SPEED = 34;
 
 export class PinballWorld {
   engine: Matter.Engine;
